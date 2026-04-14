@@ -108,28 +108,164 @@
   const gpsPoints = ts.filter(r => r[LAT] !== 0 && r[LON] !== 0);
   const hasGps = gpsPoints.length > 1;
 
+  // Basemap themes — each builds a {source, layer} pair inserted below the track.
+  const OSM_TILES = [
+    "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+  ];
+  const MAP_THEMES = {
+    dark: {
+      source: { type: "raster", tiles: OSM_TILES, tileSize: 256, attribution: "\u00a9 OpenStreetMap" },
+      paint: { "raster-brightness-min": 0.1, "raster-brightness-max": 0.85, "raster-contrast": 0.15, "raster-saturation": -0.2 }
+    },
+    light: {
+      source: { type: "raster", tiles: OSM_TILES, tileSize: 256, attribution: "\u00a9 OpenStreetMap" },
+      paint: {}
+    },
+    satellite: {
+      source: {
+        type: "raster",
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+        attribution: "Tiles \u00a9 Esri"
+      },
+      paint: {}
+    }
+  };
+
+  // Color-by configs: invert=true means high value is "good" (green end of palette).
+  const COLOR_MODES = {
+    speed:    { idx: SPD,  unit: "km/h", invert: false },
+    battery:  { idx: BATT, unit: "%",    invert: true  },
+    voltage:  { idx: VOLT, unit: "V",    invert: true  },
+    temp:     { idx: TEMP, unit: "\u00b0C", invert: false },
+    altitude: { idx: ALT,  unit: "m",    invert: false }
+  };
+  // Palette low → high; inverted modes reverse stops.
+  const PALETTE = ["#2962ff", "#00e5ff", "#69f0ae", "#ffeb3b", "#ff5252"];
+
   let map = null, riderMarker = null, followCamera = true;
+  let coords = [];
+  let currentTheme = "dark";
+  let currentColorMode = "fixed";
+
+  function applyTheme(name) {
+    if (!map || !map.isStyleLoaded()) return;
+    const theme = MAP_THEMES[name];
+    if (!theme) return;
+    if (map.getLayer("basemap")) map.removeLayer("basemap");
+    if (map.getSource("basemap")) map.removeSource("basemap");
+    map.addSource("basemap", theme.source);
+    const before = map.getLayer("track-line") ? "track-line" : undefined;
+    map.addLayer({ id: "basemap", type: "raster", source: "basemap", paint: theme.paint }, before);
+    currentTheme = name;
+  }
+
+  function buildGradientExpr(mode) {
+    const cfg = COLOR_MODES[mode];
+    if (!cfg || coords.length < 2) return null;
+    // Cumulative distance along the GPS-filtered coords to compute line-progress per vertex.
+    let total = 0;
+    const cum = new Float64Array(coords.length);
+    for (let i = 1; i < coords.length; i++) {
+      total += haversineKm(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+      cum[i] = total;
+    }
+    if (total <= 0) return null;
+
+    // Metric values aligned with coords (same filter: LAT/LON !== 0).
+    const vals = [];
+    for (let i = 0; i < ts.length; i++) {
+      if (ts[i][LAT] !== 0 || ts[i][LON] !== 0) vals.push(ts[i][cfg.idx]);
+    }
+    let minV = Infinity, maxV = -Infinity;
+    for (const v of vals) { if (v < minV) minV = v; if (v > maxV) maxV = v; }
+    if (minV === maxV) { maxV = minV + 1; }
+
+    const stops = cfg.invert ? PALETTE.slice().reverse() : PALETTE;
+    function colorAt(v) {
+      const t = Math.max(0, Math.min(1, (v - minV) / (maxV - minV)));
+      const pos = t * (stops.length - 1);
+      const i = Math.floor(pos);
+      const f = pos - i;
+      if (i >= stops.length - 1) return stops[stops.length - 1];
+      return lerpColor(stops[i], stops[i + 1], f);
+    }
+
+    const expr = ["interpolate", ["linear"], ["line-progress"]];
+    // Downsample to keep expression size reasonable (cap ~150 stops).
+    const n = vals.length;
+    const step = Math.max(1, Math.floor(n / 150));
+    let lastP = -1;
+    for (let i = 0; i < n; i += step) {
+      const p = cum[i] / total;
+      if (p <= lastP) continue;
+      expr.push(p, colorAt(vals[i]));
+      lastP = p;
+    }
+    // Always include final vertex.
+    const lastIdx = n - 1;
+    if (lastP < 1) {
+      expr.push(1, colorAt(vals[lastIdx]));
+    }
+    return { expr, min: minV, max: maxV, invert: cfg.invert, unit: cfg.unit };
+  }
+
+  function lerpColor(a, b, t) {
+    const pa = parseHex(a), pb = parseHex(b);
+    const r = Math.round(pa[0] + (pb[0] - pa[0]) * t);
+    const g = Math.round(pa[1] + (pb[1] - pa[1]) * t);
+    const bl = Math.round(pa[2] + (pb[2] - pa[2]) * t);
+    return "rgb(" + r + "," + g + "," + bl + ")";
+  }
+  function parseHex(h) {
+    return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  }
+
+  function applyColorMode(mode) {
+    if (!map || !map.getLayer("track-line")) return;
+    currentColorMode = mode;
+    const legend = document.getElementById("color-legend");
+    const legendBar = legend.querySelector(".legend-bar");
+    const legendMin = legend.querySelector("[data-legend-min]");
+    const legendMax = legend.querySelector("[data-legend-max]");
+
+    if (mode === "fixed") {
+      map.setPaintProperty("track-line", "line-gradient", undefined);
+      map.setPaintProperty("track-line", "line-color", "#00e5ff");
+      if (map.getLayer("traveled-line")) map.setLayoutProperty("traveled-line", "visibility", "visible");
+      legend.classList.add("hidden");
+      return;
+    }
+    const built = buildGradientExpr(mode);
+    if (!built) return;
+    map.setPaintProperty("track-line", "line-gradient", built.expr);
+    // line-gradient requires line-color to be unset.
+    map.setPaintProperty("track-line", "line-color", "#ffffff");
+    // Hide the orange traveled overlay so it doesn't obscure the gradient.
+    if (map.getLayer("traveled-line")) map.setLayoutProperty("traveled-line", "visibility", "none");
+
+    legendBar.classList.toggle("inverted", !!built.invert);
+    const fmt = (v) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1)) + " " + built.unit;
+    legendMin.textContent = fmt(built.min);
+    legendMax.textContent = fmt(built.max);
+    legend.classList.remove("hidden");
+  }
+
   if (hasGps) {
     const lats = gpsPoints.map(r => r[LAT]);
     const lons = gpsPoints.map(r => r[LON]);
     const center = [(Math.min(...lons) + Math.max(...lons)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
 
+    const initialTheme = MAP_THEMES.dark;
     map = new maplibregl.Map({
       container: "map",
       style: {
         version: 8,
         glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
         sources: {
-          "osm": {
-            type: "raster",
-            tiles: [
-              "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-              "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-              "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            ],
-            tileSize: 256,
-            attribution: "\u00a9 OpenStreetMap"
-          },
+          "basemap": initialTheme.source,
           "terrain-dem": {
             type: "raster-dem",
             tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
@@ -140,8 +276,7 @@
         },
         layers: [
           { id: "bg", type: "background", paint: { "background-color": "#0a0a0a" } },
-          { id: "osm", type: "raster", source: "osm",
-            paint: { "raster-brightness-min": 0.1, "raster-brightness-max": 0.85, "raster-contrast": 0.15, "raster-saturation": -0.2 } }
+          { id: "basemap", type: "raster", source: "basemap", paint: initialTheme.paint }
         ]
       },
       center,
@@ -157,10 +292,10 @@
     map.on("load", () => {
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.5 });
 
-      // Track line
-      const coords = ts.filter(r => r[LAT] !== 0 && r[LON] !== 0).map(r => [r[LON], r[LAT]]);
+      coords = ts.filter(r => r[LAT] !== 0 && r[LON] !== 0).map(r => [r[LON], r[LAT]]);
       map.addSource("track", {
         type: "geojson",
+        lineMetrics: true,
         data: { type: "Feature", geometry: { type: "LineString", coordinates: coords } }
       });
       map.addLayer({
@@ -174,7 +309,6 @@
         }
       });
 
-      // Traveled portion (updated during playback)
       map.addSource("traveled", {
         type: "geojson",
         data: { type: "Feature", geometry: { type: "LineString", coordinates: [coords[0]] } }
@@ -190,22 +324,24 @@
         }
       });
 
-      // Fit bounds
       const b = new maplibregl.LngLatBounds();
       coords.forEach(c => b.extend(c));
       map.fitBounds(b, { padding: 40, pitch: 60, duration: 0 });
 
-      // Rider marker
       const el = document.createElement("div");
       el.className = "rider-dot";
       riderMarker = new maplibregl.Marker({ element: el })
         .setLngLat(coords[0])
         .addTo(map);
 
-      // Disable auto-follow when user drags
       map.on("dragstart", () => { followCamera = false; });
 
-      // Sync any scrubbing that happened before map load
+      // Show controls now that the style + track are ready.
+      const controls = document.getElementById("map-controls");
+      controls.classList.remove("hidden");
+      document.getElementById("theme-select").addEventListener("change", (e) => applyTheme(e.target.value));
+      document.getElementById("color-select").addEventListener("change", (e) => applyColorMode(e.target.value));
+
       updateUI();
     });
   } else {

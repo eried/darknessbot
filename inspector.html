@@ -6,7 +6,7 @@
     <title>Trip Inspector &mdash; DarknessBot</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="static/css/inspector.css?v=1" />
+    <link rel="stylesheet" href="static/css/inspector.css?v=3" />
 </head>
 <body>
     <div id="inspector">
@@ -65,7 +65,36 @@
         </header>
 
         <main id="stage">
-            <div id="map"></div>
+            <div id="map">
+                <div id="map-controls" class="hidden">
+                    <label>
+                        <span>Map</span>
+                        <select id="theme-select">
+                            <option value="dark" selected>Dark</option>
+                            <option value="light">Light</option>
+                            <option value="satellite">Satellite</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Color by</span>
+                        <select id="color-select">
+                            <option value="fixed" selected>Fixed</option>
+                            <option value="speed">Speed</option>
+                            <option value="battery">Battery</option>
+                            <option value="voltage">Voltage</option>
+                            <option value="temp">Temp</option>
+                            <option value="altitude">Altitude</option>
+                        </select>
+                    </label>
+                    <div id="color-legend" class="hidden">
+                        <div class="legend-bar"></div>
+                        <div class="legend-scale">
+                            <span data-legend-min>&mdash;</span>
+                            <span data-legend-max>&mdash;</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <aside id="charts">
                 <div class="chart-block" data-key="speed">
@@ -112,6 +141,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=2"></script>
+    <script src="static/js/inspector.js?v=3"></script>
 </body>
 </html>

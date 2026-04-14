@@ -9,7 +9,12 @@
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "mcp__plugin_playwright_playwright__browser_console_messages",
-      "mcp__plugin_playwright_playwright__browser_close"
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(cp D:/GitHub/darknessbot/inspector.html D:/GitHub/darknessbot-trip-viewer/web/inspector.html)",
+      "Bash(cp D:/GitHub/darknessbot/static/css/inspector.css D:/GitHub/darknessbot-trip-viewer/web/static/css/inspector.css)",
+      "Bash(cp D:/GitHub/darknessbot/static/js/inspector.js D:/GitHub/darknessbot-trip-viewer/web/static/js/inspector.js)",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_select_option"
     ]
   }
 }

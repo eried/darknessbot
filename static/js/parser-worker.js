@@ -5,6 +5,20 @@ importScripts("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
 const DATE_RE = /(\d{2}\.\d{2}\.\d{4})/;
 const TIMESERIES_LIMIT = 500;
 
+// Convert "DD.MM.YYYY" or "DD.MM.YYYY HH:mm:ss[.SSS]" to a millisecond timestamp.
+// Returns NaN if the string doesn't match either pattern.
+function parseDateMs(str) {
+  // Fast path for ISO-like strings that Date.parse already handles.
+  // Try the European format: DD.MM.YYYY [HH:mm:ss[.SSS]]
+  const m = str.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:[T ]((\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?))?\ *$/);
+  if (m) {
+    const iso = `${m[3]}-${m[2]}-${m[1]}` +
+      (m[4] ? `T${m[4].trim()}${m[8] ? '' : '.000'}Z` : 'T00:00:00.000Z');
+    return Date.parse(iso);
+  }
+  return Date.parse(str);
+}
+
 self.addEventListener("message", async (event) => {
   const { type, file } = event.data || {};
   if (type !== "parse" || !file) return;
@@ -90,7 +104,7 @@ function parseCsvText(text, name) {
 
     let sec = 0;
     if (date) {
-      const dt = Date.parse(date);
+      const dt = parseDateMs(date);
       if (!Number.isNaN(dt)) {
         if (t0 === null) t0 = dt;
         sec = (dt - t0) / 1000;

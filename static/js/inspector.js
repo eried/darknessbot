@@ -86,7 +86,7 @@
   }
   let totalKm = total;
 
-  // Fallback: no GPS but CSV provides "Total mileage" odometer → use it.
+  // Fallback #1: no GPS but CSV provides "Total mileage" odometer → use it.
   if (totalKm === 0 && ts[0].length > MILEAGE) {
     let lastMi = 0;
     for (let i = 0; i < ts.length; i++) {
@@ -95,6 +95,20 @@
       cumKm[i] = lastMi;
     }
     totalKm = lastMi;
+  }
+
+  // Fallback #2: still nothing → integrate speed (km/h) over elapsed time.
+  // Works for legacy cached tracks that don't carry the mileage column.
+  if (totalKm === 0) {
+    let running = 0;
+    cumKm[0] = 0;
+    for (let i = 1; i < ts.length; i++) {
+      const dtSec = Math.max(0, ts[i][SEC] - ts[i - 1][SEC]);
+      const avgSpd = (ts[i][SPD] + ts[i - 1][SPD]) / 2; // km/h
+      running += (avgSpd * dtSec) / 3600;
+      cumKm[i] = running;
+    }
+    totalKm = running;
   }
 
   // ---------- Header info ----------

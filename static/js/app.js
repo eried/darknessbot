@@ -826,6 +826,26 @@ document.addEventListener("DOMContentLoaded", function () {
       const pb = (b.dateStart || b.date.split(".").reverse().join("-"));
       return pb.localeCompare(pa);
     });
+    // Patch distanceKm for legacy tracks with no GPS (and no cached mileage column):
+    // integrate speed (km/h) over elapsed seconds from timeseries.
+    for (const t of tracks) {
+      if (!t || !t.stats || t.stats.distanceKm > 0) continue;
+      const ts = t.timeseries;
+      if (!Array.isArray(ts) || ts.length < 2) continue;
+      // Prefer mileage column if present (index 8).
+      if (ts[0].length > 8) {
+        let last = 0;
+        for (let i = 0; i < ts.length; i++) { const mi = ts[i][8] || 0; if (mi > last) last = mi; }
+        if (last > 0) { t.stats.distanceKm = Math.round(last * 100) / 100; continue; }
+      }
+      let running = 0;
+      for (let i = 1; i < ts.length; i++) {
+        const dtSec = Math.max(0, ts[i][0] - ts[i - 1][0]);
+        const avgSpd = (ts[i][1] + ts[i - 1][1]) / 2;
+        running += (avgSpd * dtSec) / 3600;
+      }
+      if (running > 0) t.stats.distanceKm = Math.round(running * 100) / 100;
+    }
     allTracks = tracks;
     selectedIdx = -1;
     trackVisible = new Set(tracks.map((_, i) => i));

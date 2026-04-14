@@ -494,7 +494,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createParserWorker() {
-    return new Worker("static/js/parser-worker.js?v=3");
+    return new Worker("static/js/parser-worker.js?v=4");
   }
 
   function createRecentFilesUi() {

@@ -5,18 +5,22 @@ importScripts("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
 const DATE_RE = /(\d{2}\.\d{2}\.\d{4})/;
 const TIMESERIES_LIMIT = 500;
 
-// Convert "DD.MM.YYYY" or "DD.MM.YYYY HH:mm:ss[.SSS]" to a millisecond timestamp.
-// Returns NaN if the string doesn't match either pattern.
-function parseDateMs(str) {
-  // Fast path for ISO-like strings that Date.parse already handles.
-  // Try the European format: DD.MM.YYYY [HH:mm:ss[.SSS]]
-  const m = str.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:[T ]((\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?))?\ *$/);
+// Parse European "DD.MM.YYYY [HH:mm:ss[.SSS]]" or fall back to native Date.parse.
+// Returns { ms, iso } where ms is milliseconds and iso is a local ISO-8601 string
+// (no trailing Z, so downstream new Date(iso) treats it as local time).
+function parseDateParts(str) {
+  const m = str.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?)?\s*$/);
   if (m) {
     const iso = `${m[3]}-${m[2]}-${m[1]}` +
-      (m[4] ? `T${m[4].trim()}${m[8] ? '' : '.000'}Z` : 'T00:00:00.000Z');
-    return Date.parse(iso);
+      (m[4] !== undefined ? `T${m[4]}:${m[5]}:${m[6]}.${(m[7] || '000').padEnd(3, '0')}` : 'T00:00:00.000');
+    return { ms: new Date(iso).getTime(), iso };
   }
-  return Date.parse(str);
+  const ms = Date.parse(str);
+  return { ms, iso: isNaN(ms) ? str : new Date(ms).toISOString().slice(0, 23) };
+}
+
+function parseDateMs(str) {
+  return parseDateParts(str).ms;
 }
 
 self.addEventListener("message", async (event) => {
@@ -98,8 +102,9 @@ function parseCsvText(text, name) {
     const date = row.Date || "";
 
     if (date) {
-      if (!dateStart) dateStart = date;
-      dateEnd = date;
+      const { iso } = parseDateParts(date);
+      if (!dateStart) dateStart = iso;
+      dateEnd = iso;
     }
 
     let sec = 0;

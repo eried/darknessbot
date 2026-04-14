@@ -544,10 +544,15 @@
       const t = ts[sample][SEC] - t0;
       setCurrentTime(t);
     };
-    c.canvas.addEventListener("mousedown", e => { dragging = true; onMove(e.clientX); });
-    c.canvas.addEventListener("mousemove", e => { if (dragging) onMove(e.clientX); });
-    window.addEventListener("mouseup", () => { dragging = false; });
-    c.canvas.addEventListener("click", e => onMove(e.clientX));
+    const onWindowMove = e => { if (dragging) onMove(e.clientX); };
+    const onWindowUp = () => { dragging = false; };
+    c.canvas.addEventListener("mousedown", e => {
+      dragging = true;
+      onMove(e.clientX);
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", onWindowMove);
+    window.addEventListener("mouseup", onWindowUp);
   });
 
   // ---------- Playback state ----------

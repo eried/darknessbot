@@ -985,7 +985,14 @@ document.addEventListener("DOMContentLoaded", function () {
         trackVisible = new Set(allTracks.map((_, i) => i));
       } else {
         trackVisible = new Set();
-        if (selectedIdx >= 0) trackVisible.add(selectedIdx);
+        if (selectedIdx >= 0) {
+          selectedIdx = -1;
+          paintMode = null;
+          tripList.querySelectorAll(".paint-btn.active").forEach(b => b.classList.remove("active"));
+          tooltip.classList.add("hidden");
+          hideChartMarker();
+          document.querySelectorAll(".trip-item.active").forEach(el => el.classList.remove("active"));
+        }
       }
       tripList.querySelectorAll(".trip-check").forEach(cb => {
         const idx = parseInt(cb.dataset.idx);

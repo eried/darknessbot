@@ -59,6 +59,8 @@
 
   // Timeseries layout: [sec, speed, voltage, temp, battery, altitude, lat, lon]
   const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7;
+  // Points layout: [lat, lon, speed, alt, volt, temp, battery]
+  const P_LAT = 0, P_LON = 1, P_SPD = 2, P_ALT = 3, P_VOLT = 4, P_TEMP = 5, P_BATT = 6;
 
   const duration = ts[ts.length - 1][SEC] - ts[0][SEC];
   const t0 = ts[0][SEC];
@@ -110,7 +112,12 @@
   }
 
   const gpsPoints = ts.filter(hasGpsRow);
-  const hasGps = gpsPoints.length > 1;
+  let routePoints = Array.isArray(track.points) ? track.points.filter((p) => p[P_LAT] !== 0 && p[P_LON] !== 0) : [];
+  if (routePoints.length < 2) {
+    // Fallback for legacy payloads: reconstruct route from timeseries GPS rows.
+    routePoints = gpsPoints.map((r) => [r[LAT], r[LON], r[SPD], r[ALT], r[VOLT], r[TEMP], r[BATT]]);
+  }
+  const hasGps = routePoints.length > 1;
 
   // Basemap themes — each builds a {source, layer} pair inserted below the track.
   const MAP_THEMES = {
@@ -154,11 +161,11 @@
 
   // Color-by configs: invert=true means high value is "good" (green end of palette).
   const COLOR_MODES = {
-    speed:    { idx: SPD,  unit: "km/h", invert: false },
-    battery:  { idx: BATT, unit: "%",    invert: true  },
-    voltage:  { idx: VOLT, unit: "V",    invert: true  },
-    temp:     { idx: TEMP, unit: "\u00b0C", invert: false },
-    altitude: { idx: ALT,  unit: "m",    invert: false }
+    speed:    { pointIdx: P_SPD,  unit: "km/h", invert: false },
+    battery:  { pointIdx: P_BATT, unit: "%",    invert: true  },
+    voltage:  { pointIdx: P_VOLT, unit: "V",    invert: true  },
+    temp:     { pointIdx: P_TEMP, unit: "\u00b0C", invert: false },
+    altitude: { pointIdx: P_ALT,  unit: "m",    invert: false }
   };
   // Palette low → high; inverted modes reverse stops.
   const PALETTE = ["#2962ff", "#00e5ff", "#69f0ae", "#ffeb3b", "#ff5252"];
@@ -167,6 +174,7 @@
   let coords = [];
   let currentTheme = "dark";
   let currentColorMode = "solid";
+  let currentRouteIdx = 0;
 
   function applyTheme(name) {
     if (!map || !map.isStyleLoaded()) return;
@@ -244,9 +252,8 @@
     const cfg = COLOR_MODES[mode];
     if (!cfg) return null;
     let minV = Infinity, maxV = -Infinity;
-    for (let i = 0; i < ts.length; i++) {
-      if (!hasGpsRow(ts[i])) continue;
-      const v = ts[i][cfg.idx];
+    for (let i = 0; i < routePoints.length; i++) {
+      const v = routePoints[i][cfg.pointIdx];
       if (v < minV) minV = v;
       if (v > maxV) maxV = v;
     }
@@ -255,14 +262,15 @@
     return { min: minV, max: maxV, invert: cfg.invert, unit: cfg.unit };
   }
 
-  function buildTraveledGradientExpr(mode, sampleIdx) {
+  function buildTraveledGradientExpr(mode, routeIdx) {
     const cfg = COLOR_MODES[mode];
     const stats = getModeStats(mode);
     if (!cfg || !stats) return null;
 
     const vals = [];
-    for (let i = 0; i <= sampleIdx; i++) {
-      if (hasGpsRow(ts[i])) vals.push(ts[i][cfg.idx]);
+    const end = Math.max(0, Math.min(routeIdx, routePoints.length - 1));
+    for (let i = 0; i <= end; i++) {
+      vals.push(routePoints[i][cfg.pointIdx]);
     }
     if (vals.length < 2) return null;
 
@@ -313,7 +321,7 @@
       return;
     }
 
-    const built = buildTraveledGradientExpr(mode, currentSampleIdx);
+    const built = buildTraveledGradientExpr(mode, currentRouteIdx);
     if (!built) return;
 
     map.setPaintProperty("traveled-line", "line-gradient", built.expr);
@@ -328,8 +336,8 @@
   }
 
   if (hasGps) {
-    const lats = gpsPoints.map(r => r[LAT]);
-    const lons = gpsPoints.map(r => r[LON]);
+    const lats = routePoints.map(p => p[P_LAT]);
+    const lons = routePoints.map(p => p[P_LON]);
     const center = [(Math.min(...lons) + Math.max(...lons)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
 
     const initialTheme = MAP_THEMES.dark;
@@ -366,7 +374,7 @@
     map.on("load", () => {
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.5 });
 
-      coords = ts.filter(r => r[LAT] !== 0 && r[LON] !== 0).map(r => [r[LON], r[LAT]]);
+      coords = routePoints.map((p) => [p[P_LON], p[P_LAT]]);
       map.addSource("track", {
         type: "geojson",
         lineMetrics: true,
@@ -623,21 +631,20 @@
 
     // Map marker + traveled line
     if (map && riderMarker && map.isStyleLoaded() && map.getSource("traveled")) {
-      const lat = row[LAT], lon = row[LON];
-      if (lat !== 0 && lon !== 0) {
-        riderMarker.setLngLat([lon, lat]);
-        // Build traveled coords (only GPS-bearing samples up to current)
-        const traveled = [];
-        for (let i = 0; i <= currentSampleIdx; i++) {
-          if (hasGpsRow(ts[i])) traveled.push([ts[i][LON], ts[i][LAT]]);
-        }
+      if (coords.length > 1) {
+        currentRouteIdx = Math.round((currentSampleIdx / Math.max(1, ts.length - 1)) * (coords.length - 1));
+        currentRouteIdx = Math.max(0, Math.min(coords.length - 1, currentRouteIdx));
+        const markerPos = coords[currentRouteIdx];
+        riderMarker.setLngLat(markerPos);
+
+        const traveled = coords.slice(0, currentRouteIdx + 1);
         if (traveled.length >= 2) {
           map.getSource("traveled").setData({
             type: "Feature", geometry: { type: "LineString", coordinates: traveled }
           });
 
           if (currentColorMode !== "solid") {
-            const built = buildTraveledGradientExpr(currentColorMode, currentSampleIdx);
+            const built = buildTraveledGradientExpr(currentColorMode, currentRouteIdx);
             if (built) {
               map.setPaintProperty("traveled-line", "line-gradient", built.expr);
               map.setPaintProperty("traveled-line", "line-color", "#ffffff");
@@ -645,7 +652,7 @@
           }
         }
         if (followCamera && playing) {
-          map.easeTo({ center: [lon, lat], duration: 200 });
+          map.easeTo({ center: markerPos, duration: 200 });
         }
       }
     }

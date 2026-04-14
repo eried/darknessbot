@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Inspector &mdash; DarknessBot</title>
+    <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="static/css/inspector.css?v=1" />
+</head>
+<body>
+    <div id="inspector">
+        <header id="dash">
+            <a class="back-link" href="index.html#view" title="Back to trip list">&larr;</a>
+            <div class="trip-title">
+                <div id="trip-name">&mdash;</div>
+                <div id="trip-subtitle"></div>
+            </div>
+
+            <div class="gauge gauge-speed">
+                <svg viewBox="0 0 120 70" class="gauge-svg">
+                    <path class="gauge-track" d="M10 60 A 50 50 0 0 1 110 60" />
+                    <path class="gauge-fill"  d="M10 60 A 50 50 0 0 1 110 60" id="speedo-fill" />
+                    <line id="speedo-needle" x1="60" y1="60" x2="60" y2="18" />
+                    <circle cx="60" cy="60" r="4" class="gauge-hub" />
+                </svg>
+                <div class="gauge-value"><span id="speedo-value">0</span><small>km/h</small></div>
+                <div class="gauge-label">Speed</div>
+            </div>
+
+            <div class="gauge gauge-battery">
+                <div class="battery-shell">
+                    <div class="battery-fill" id="battery-fill"></div>
+                    <div class="battery-text" id="battery-value">&mdash;</div>
+                </div>
+                <div class="gauge-label">Battery</div>
+            </div>
+
+            <div class="readout">
+                <div class="readout-label">Distance</div>
+                <div class="readout-value"><span id="odo-value">0.00</span><small>km</small></div>
+                <div class="readout-sub">of <span id="odo-total">0.00</span> km</div>
+            </div>
+
+            <div class="readout">
+                <div class="readout-label">Voltage</div>
+                <div class="readout-value"><span id="volt-value">&mdash;</span><small>V</small></div>
+            </div>
+
+            <div class="readout">
+                <div class="readout-label">Temp</div>
+                <div class="readout-value"><span id="temp-value">&mdash;</span><small>&deg;C</small></div>
+            </div>
+
+            <div class="readout">
+                <div class="readout-label">Altitude</div>
+                <div class="readout-value"><span id="alt-value">&mdash;</span><small>m</small></div>
+            </div>
+
+            <div class="readout clock">
+                <div class="readout-label">Time</div>
+                <div class="readout-value mono"><span id="clock-value">00:00:00</span></div>
+                <div class="readout-sub mono">/ <span id="clock-total">00:00:00</span></div>
+            </div>
+        </header>
+
+        <main id="stage">
+            <div id="map"></div>
+
+            <aside id="charts">
+                <div class="chart-block" data-key="speed">
+                    <div class="chart-header"><span class="chart-swatch"></span><span class="chart-label">Speed</span><span class="chart-reading" data-reading></span></div>
+                    <canvas></canvas>
+                </div>
+                <div class="chart-block" data-key="battery">
+                    <div class="chart-header"><span class="chart-swatch"></span><span class="chart-label">Battery</span><span class="chart-reading" data-reading></span></div>
+                    <canvas></canvas>
+                </div>
+                <div class="chart-block" data-key="voltage">
+                    <div class="chart-header"><span class="chart-swatch"></span><span class="chart-label">Voltage</span><span class="chart-reading" data-reading></span></div>
+                    <canvas></canvas>
+                </div>
+                <div class="chart-block" data-key="temp">
+                    <div class="chart-header"><span class="chart-swatch"></span><span class="chart-label">Temp</span><span class="chart-reading" data-reading></span></div>
+                    <canvas></canvas>
+                </div>
+                <div class="chart-block" data-key="altitude">
+                    <div class="chart-header"><span class="chart-swatch"></span><span class="chart-label">Altitude</span><span class="chart-reading" data-reading></span></div>
+                    <canvas></canvas>
+                </div>
+            </aside>
+        </main>
+
+        <footer id="playback">
+            <button id="play-btn" title="Play / Pause">&#9654;</button>
+            <div class="scrub-wrap">
+                <input id="scrub" type="range" min="0" max="1000" step="1" value="0" />
+            </div>
+            <div class="speed-group">
+                <label>Speed</label>
+                <select id="speed-select">
+                    <option value="1">1&times;</option>
+                    <option value="4">4&times;</option>
+                    <option value="16" selected>16&times;</option>
+                    <option value="64">64&times;</option>
+                    <option value="256">256&times;</option>
+                </select>
+            </div>
+        </footer>
+
+        <div id="error-banner" class="hidden"></div>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script src="static/js/inspector.js?v=2"></script>
+</body>
+</html>

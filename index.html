@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DarknessBot Trip Viewer</title>
+    <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="static/css/style.css?v=12" />
+</head>
+<body>
+    <div id="map"></div>
+
+    <div id="upload-overlay">
+        <div id="upload-box">
+            <div id="upload-icon">&#x1f6f4;</div>
+            <h1><a id="app-link" href="#" target="_blank" rel="noopener"><strong>DarknessBot</strong></a> Trip Viewer</h1>
+            <script>
+                (function(){
+                    var apple = /iPhone|iPad|iPod|Macintosh|Mac OS/i.test(navigator.userAgent);
+                    document.getElementById('app-link').href = apple
+                        ? 'https://apps.apple.com/us/app/darknessbot/id1108403878'
+                        : 'https://play.google.com/store/apps/details?id=com.darknessproduction.darknessbot';
+                })();
+            </script>
+            <label id="upload-label" for="file-input">
+                .dbb / .csv file
+                <input type="file" id="file-input" accept=".dbb,.csv" />
+            </label>
+            <div id="progress-area" class="hidden">
+                <div id="progress-bar"><div id="progress-fill"></div></div>
+                <div id="progress-text"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="trip-panel" class="hidden">
+        <div id="panel-tab"><span id="panel-tab-text">Trip Explorer</span></div>
+        <div id="panel-body">
+            <div id="panel-header"></div>
+            <div id="trip-detail" class="hidden"></div>
+            <div id="trip-list"></div>
+            <div id="panel-footer"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="static/js/app.js?v=21"></script>
+</body>
+</html>

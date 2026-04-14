@@ -105,22 +105,40 @@
   }
 
   // ---------- MapLibre map ----------
-  const gpsPoints = ts.filter(r => r[LAT] !== 0 && r[LON] !== 0);
+  function hasGpsRow(row) {
+    return row[LAT] !== 0 && row[LON] !== 0;
+  }
+
+  const gpsPoints = ts.filter(hasGpsRow);
   const hasGps = gpsPoints.length > 1;
 
   // Basemap themes — each builds a {source, layer} pair inserted below the track.
-  const OSM_TILES = [
-    "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-  ];
   const MAP_THEMES = {
     dark: {
-      source: { type: "raster", tiles: OSM_TILES, tileSize: 256, attribution: "\u00a9 OpenStreetMap" },
-      paint: { "raster-brightness-min": 0.1, "raster-brightness-max": 0.85, "raster-contrast": 0.15, "raster-saturation": -0.2 }
+      source: {
+        type: "raster",
+        tiles: [
+          "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        attribution: "\u00a9 OpenStreetMap contributors \u00a9 CARTO"
+      },
+      paint: {}
     },
     light: {
-      source: { type: "raster", tiles: OSM_TILES, tileSize: 256, attribution: "\u00a9 OpenStreetMap" },
+      source: {
+        type: "raster",
+        tiles: [
+          "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        attribution: "\u00a9 OpenStreetMap contributors"
+      },
       paint: {}
     },
     satellite: {
@@ -148,7 +166,7 @@
   let map = null, riderMarker = null, followCamera = true;
   let coords = [];
   let currentTheme = "dark";
-  let currentColorMode = "fixed";
+  let currentColorMode = "solid";
 
   function applyTheme(name) {
     if (!map || !map.isStyleLoaded()) return;
@@ -177,7 +195,7 @@
     // Metric values aligned with coords (same filter: LAT/LON !== 0).
     const vals = [];
     for (let i = 0; i < ts.length; i++) {
-      if (ts[i][LAT] !== 0 || ts[i][LON] !== 0) vals.push(ts[i][cfg.idx]);
+      if (hasGpsRow(ts[i])) vals.push(ts[i][cfg.idx]);
     }
     let minV = Infinity, maxV = -Infinity;
     for (const v of vals) { if (v < minV) minV = v; if (v > maxV) maxV = v; }
@@ -212,6 +230,56 @@
     return { expr, min: minV, max: maxV, invert: cfg.invert, unit: cfg.unit };
   }
 
+  function metricColor(value, minV, maxV, invert) {
+    const stops = invert ? PALETTE.slice().reverse() : PALETTE;
+    const t = Math.max(0, Math.min(1, (value - minV) / (maxV - minV)));
+    const pos = t * (stops.length - 1);
+    const i = Math.floor(pos);
+    const f = pos - i;
+    if (i >= stops.length - 1) return stops[stops.length - 1];
+    return lerpColor(stops[i], stops[i + 1], f);
+  }
+
+  function getModeStats(mode) {
+    const cfg = COLOR_MODES[mode];
+    if (!cfg) return null;
+    let minV = Infinity, maxV = -Infinity;
+    for (let i = 0; i < ts.length; i++) {
+      if (!hasGpsRow(ts[i])) continue;
+      const v = ts[i][cfg.idx];
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    if (!isFinite(minV) || !isFinite(maxV)) return null;
+    if (minV === maxV) maxV = minV + 1;
+    return { min: minV, max: maxV, invert: cfg.invert, unit: cfg.unit };
+  }
+
+  function buildTraveledGradientExpr(mode, sampleIdx) {
+    const cfg = COLOR_MODES[mode];
+    const stats = getModeStats(mode);
+    if (!cfg || !stats) return null;
+
+    const vals = [];
+    for (let i = 0; i <= sampleIdx; i++) {
+      if (hasGpsRow(ts[i])) vals.push(ts[i][cfg.idx]);
+    }
+    if (vals.length < 2) return null;
+
+    const expr = ["interpolate", ["linear"], ["line-progress"]];
+    const n = vals.length;
+    const step = Math.max(1, Math.floor(n / 150));
+    for (let i = 0; i < n; i += step) {
+      const p = i / (n - 1);
+      expr.push(p, metricColor(vals[i], stats.min, stats.max, stats.invert));
+    }
+    if ((n - 1) % step !== 0) {
+      expr.push(1, metricColor(vals[n - 1], stats.min, stats.max, stats.invert));
+    }
+
+    return { expr, min: stats.min, max: stats.max, invert: stats.invert, unit: stats.unit };
+  }
+
   function lerpColor(a, b, t) {
     const pa = parseHex(a), pb = parseHex(b);
     const r = Math.round(pa[0] + (pb[0] - pa[0]) * t);
@@ -225,26 +293,32 @@
 
   function applyColorMode(mode) {
     if (!map || !map.getLayer("track-line")) return;
+    if (mode === "fixed") mode = "solid";
     currentColorMode = mode;
     const legend = document.getElementById("color-legend");
     const legendBar = legend.querySelector(".legend-bar");
     const legendMin = legend.querySelector("[data-legend-min]");
     const legendMax = legend.querySelector("[data-legend-max]");
 
-    if (mode === "fixed") {
+    map.setPaintProperty("track-line", "line-gradient", undefined);
+    map.setPaintProperty("track-line", "line-color", "#00e5ff");
+    map.setPaintProperty("track-line", "line-opacity", mode === "solid" ? 0.85 : 0.35);
+    if (map.getLayer("traveled-line")) map.setLayoutProperty("traveled-line", "visibility", "visible");
+
+    if (mode === "solid") {
+      map.setPaintProperty("traveled-line", "line-gradient", undefined);
+      map.setPaintProperty("traveled-line", "line-color", "#ffa000");
       map.setPaintProperty("track-line", "line-gradient", undefined);
-      map.setPaintProperty("track-line", "line-color", "#00e5ff");
-      if (map.getLayer("traveled-line")) map.setLayoutProperty("traveled-line", "visibility", "visible");
       legend.classList.add("hidden");
       return;
     }
-    const built = buildGradientExpr(mode);
+
+    const built = buildTraveledGradientExpr(mode, currentSampleIdx);
     if (!built) return;
-    map.setPaintProperty("track-line", "line-gradient", built.expr);
-    // line-gradient requires line-color to be unset.
-    map.setPaintProperty("track-line", "line-color", "#ffffff");
-    // Hide the orange traveled overlay so it doesn't obscure the gradient.
-    if (map.getLayer("traveled-line")) map.setLayoutProperty("traveled-line", "visibility", "none");
+
+    map.setPaintProperty("traveled-line", "line-gradient", built.expr);
+    // line-gradient requires line-color to be set to a dummy value.
+    map.setPaintProperty("traveled-line", "line-color", "#ffffff");
 
     legendBar.classList.toggle("inverted", !!built.invert);
     const fmt = (v) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1)) + " " + built.unit;
@@ -311,6 +385,7 @@
 
       map.addSource("traveled", {
         type: "geojson",
+        lineMetrics: true,
         data: { type: "Feature", geometry: { type: "LineString", coordinates: [coords[0]] } }
       });
       map.addLayer({
@@ -341,6 +416,7 @@
       controls.classList.remove("hidden");
       document.getElementById("theme-select").addEventListener("change", (e) => applyTheme(e.target.value));
       document.getElementById("color-select").addEventListener("change", (e) => applyColorMode(e.target.value));
+      applyColorMode(currentColorMode);
 
       updateUI();
     });
@@ -548,17 +624,25 @@
     // Map marker + traveled line
     if (map && riderMarker && map.isStyleLoaded() && map.getSource("traveled")) {
       const lat = row[LAT], lon = row[LON];
-      if (lat !== 0 || lon !== 0) {
+      if (lat !== 0 && lon !== 0) {
         riderMarker.setLngLat([lon, lat]);
         // Build traveled coords (only GPS-bearing samples up to current)
         const traveled = [];
         for (let i = 0; i <= currentSampleIdx; i++) {
-          if (ts[i][LAT] !== 0 || ts[i][LON] !== 0) traveled.push([ts[i][LON], ts[i][LAT]]);
+          if (hasGpsRow(ts[i])) traveled.push([ts[i][LON], ts[i][LAT]]);
         }
         if (traveled.length >= 2) {
           map.getSource("traveled").setData({
             type: "Feature", geometry: { type: "LineString", coordinates: traveled }
           });
+
+          if (currentColorMode !== "solid") {
+            const built = buildTraveledGradientExpr(currentColorMode, currentSampleIdx);
+            if (built) {
+              map.setPaintProperty("traveled-line", "line-gradient", built.expr);
+              map.setPaintProperty("traveled-line", "line-color", "#ffffff");
+            }
+          }
         }
         if (followCamera && playing) {
           map.easeTo({ center: [lon, lat], duration: 200 });

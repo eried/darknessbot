@@ -258,11 +258,21 @@ function roundTo(value, digits) {
 }
 
 function maxRounded(values) {
-  return values.length ? roundTo(Math.max(...values), 1) : 0;
+  if (!values.length) return 0;
+  let max = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i] > max) max = values[i];
+  }
+  return roundTo(max, 1);
 }
 
 function minRounded(values) {
-  return values.length ? roundTo(Math.min(...values), 1) : 0;
+  if (!values.length) return 0;
+  let min = values[0];
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i] < min) min = values[i];
+  }
+  return roundTo(min, 1);
 }
 
 function haversine(lat1, lon1, lat2, lon2) {

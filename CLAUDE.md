@@ -1,4 +1,8 @@
-# Notes for Claude (project context)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Notes for Claude (project context)
 
 This repo is the **GitHub Pages deployment target** for the DarknessBot Trip Viewer.
 The *working / development* repo is at `D:\GitHub\darknessbot-trip-viewer\` (FastAPI scaffold
@@ -64,11 +68,29 @@ Index `i` in `inspector.html?i=<i>` is the position in `allTracks` *after* sorti
 first, by `dateStart` / `date`). The inspector trusts this order — any change to sort logic in
 `app.js` must be mirrored in how tracks are saved.
 
+## Local development
+
+It's all static — any HTTP server works. A `serve.cmd` is checked in for convenience:
+
+```
+serve.cmd                 # launches: python -m http.server 8000  → http://localhost:8000/
+```
+
+Worker + IndexedDB require `http(s)://`, not `file://`.
+
+## CDN libraries (pinned versions)
+
+- Leaflet 1.9.4 (main map)
+- MapLibre GL 4.7.1 (inspector 3D map + terrain)
+- JSZip 3.10.1 (loaded inside `parser-worker.js` via `importScripts`)
+- AWS terrarium DEM tiles for elevation: `s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`
+
 ## Deploy
 
 Just commit & push. GitHub Pages serves from `main` / root.
 There is no build step. Bump the `?v=` query on linked JS/CSS in the HTML files when making
-cache-visible changes.
+cache-visible changes. The footer version badge is driven by `document.lastModified`, so the
+displayed date updates automatically on each deploy — no manual version bump needed for it.
 
 ## Things that tripped me before
 

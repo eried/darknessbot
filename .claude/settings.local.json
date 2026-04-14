@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp D:/GitHub/darknessbot/index.html D:/GitHub/darknessbot-trip-viewer/web/index.html)",
+      "Bash(cp D:/GitHub/darknessbot/static/css/style.css D:/GitHub/darknessbot-trip-viewer/web/static/css/style.css)",
+      "Bash(cp D:/GitHub/darknessbot/serve.cmd D:/GitHub/darknessbot-trip-viewer/web/serve.cmd)",
+      "Bash(python:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__plugin_playwright_playwright__browser_close"
+    ]
+  }
+}

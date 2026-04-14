@@ -699,3 +699,38 @@ body, html {
 }
 
 .hidden { display: none !important; }
+
+/* Page footer (GitHub link + build version) */
+#page-footer {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 11px;
+    font-size: 0.72rem;
+    color: rgba(220, 230, 235, 0.7);
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 229, 255, 0.15);
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    user-select: none;
+}
+#page-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #00e5ff;
+    text-decoration: none;
+}
+#page-footer a:hover { color: #fff; }
+#page-footer svg { display: block; }
+#page-version {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    opacity: 0.75;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    padding-left: 10px;
+}

@@ -704,7 +704,8 @@ body, html {
 #page-footer {
     position: absolute;
     bottom: 8px;
-    right: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 1100;
     display: flex;
     align-items: center;

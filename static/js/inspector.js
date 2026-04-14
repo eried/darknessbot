@@ -57,8 +57,8 @@
     return;
   }
 
-  // Timeseries layout: [sec, speed, voltage, temp, battery, altitude, lat, lon]
-  const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7;
+  // Timeseries layout: [sec, speed, voltage, temp, battery, altitude, lat, lon, mileageKm]
+  const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7, MILEAGE = 8;
   // Points layout: [lat, lon, speed, alt, volt, temp, battery]
   const P_LAT = 0, P_LON = 1, P_SPD = 2, P_ALT = 3, P_VOLT = 4, P_TEMP = 5, P_BATT = 6;
 
@@ -84,7 +84,18 @@
     }
     cumKm[i] = total;
   }
-  const totalKm = total;
+  let totalKm = total;
+
+  // Fallback: no GPS but CSV provides "Total mileage" odometer → use it.
+  if (totalKm === 0 && ts[0].length > MILEAGE) {
+    let lastMi = 0;
+    for (let i = 0; i < ts.length; i++) {
+      const mi = ts[i][MILEAGE] || 0;
+      if (mi > lastMi) lastMi = mi;
+      cumKm[i] = lastMi;
+    }
+    totalKm = lastMi;
+  }
 
   // ---------- Header info ----------
   document.getElementById("trip-name").textContent = track.date || track.name;

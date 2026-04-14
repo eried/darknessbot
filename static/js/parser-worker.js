@@ -89,6 +89,9 @@ function parseCsvText(text, name) {
   let dateStart = "";
   let dateEnd = "";
   let t0 = null;
+  let mileage0 = null;
+  let mileageLast = 0;
+  let hasMileage = false;
 
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
@@ -100,6 +103,13 @@ function parseCsvText(text, name) {
     const lat = safeFloat(row.Latitude);
     const lon = safeFloat(row.Longitude);
     const date = row.Date || "";
+    const mileageRaw = row["Total mileage"];
+    const mileage = mileageRaw !== undefined && mileageRaw !== "" ? safeFloat(mileageRaw) : null;
+    if (mileage !== null && mileage > 0) {
+      hasMileage = true;
+      if (mileage0 === null) mileage0 = mileage;
+      if (mileage >= mileage0) mileageLast = mileage;
+    }
 
     if (date) {
       const { iso } = parseDateParts(date);
@@ -117,6 +127,9 @@ function parseCsvText(text, name) {
     }
 
     const hasGps = !(lat === 0 && lon === 0);
+    const mileageDelta = (mileage !== null && mileage0 !== null && mileage >= mileage0)
+      ? mileage - mileage0
+      : 0;
     timeseries.push([
       roundTo(sec, 1),
       roundTo(speed, 1),
@@ -126,6 +139,7 @@ function parseCsvText(text, name) {
       roundTo(alt, 1),
       hasGps ? roundTo(lat, 6) : 0,
       hasGps ? roundTo(lon, 6) : 0,
+      roundTo(mileageDelta, 3),
     ]);
 
     if (speed > 0) speeds.push(speed);
@@ -161,6 +175,10 @@ function parseCsvText(text, name) {
   for (let i = 1; i < points.length; i += 1) {
     dist += haversine(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
   }
+  let distanceKm = roundTo(dist / 1000, 2);
+  if (distanceKm === 0 && hasMileage && mileage0 !== null) {
+    distanceKm = roundTo(Math.max(0, mileageLast - mileage0), 2);
+  }
 
   const dateMatch = name.match(DATE_RE);
   return {
@@ -173,7 +191,7 @@ function parseCsvText(text, name) {
     stats: {
       points: points.length,
       rows: rows.length,
-      distanceKm: roundTo(dist / 1000, 2),
+      distanceKm,
       maxSpeed: maxRounded(speeds),
       avgSpeed: speeds.length ? roundTo(speeds.reduce((sum, value) => sum + value, 0) / speeds.length, 1) : 0,
       maxAlt: maxRounded(altitudes),

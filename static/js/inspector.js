@@ -554,12 +554,22 @@
   let currentTime = 0;   // seconds from start
   let currentSampleIdx = 0;
   let playing = false;
-  let playSpeed = 16;
   let lastFrame = 0;
 
   const scrub = document.getElementById("scrub");
   const playBtn = document.getElementById("play-btn");
   const speedSelect = document.getElementById("speed-select");
+
+  // Pick a sensible default speed so the trip plays back in roughly 30–60 s.
+  function autoPlaySpeed(dur) {
+    if (dur <= 1800) return 64;   // ≤ 30 min
+    if (dur <= 3600) return 128;  // ≤ 1 h
+    if (dur <= 7200) return 256;  // ≤ 2 h
+    return 512;                   // > 2 h
+  }
+  let playSpeed = autoPlaySpeed(duration);
+  // Sync the <select> to the chosen default.
+  speedSelect.value = String(playSpeed);
 
   playBtn.addEventListener("click", () => {
     playing = !playing;

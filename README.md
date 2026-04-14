@@ -1,11 +1,7 @@
 # DarknessBot Trip Viewer
 
 Fully client-side web viewer for DarknessBot scooter trip logs (`.dbb` / `.csv`).
-Runs as static pages, no backend. Designed for GitHub Pages.
-
-## Live
-
-GitHub Pages → set up Pages for this repo (branch `main`, folder `/`).
+Runs as static pages, no backend.
 
 ## Structure
 

@@ -195,9 +195,60 @@
   // Palette low → high; inverted modes reverse stops.
   const PALETTE = ["#2962ff", "#00e5ff", "#69f0ae", "#ffeb3b", "#ff5252"];
 
-  let map = null, riderMarker = null, followCamera = true;
+  let map = null, riderMarker = null;
+  let followPan = true, followRotate = true, followZoom = true;
+  let lastFollowAt = 0;
+
+  // Smoothed zoom target. Speed≤10 km/h → ZOOM_MAX (close); ≥40 km/h → ZOOM_MIN (wide).
+  const ZOOM_MIN = 10.0, ZOOM_MAX = 15.0, SPEED_LO = 10, SPEED_HI = 50;
+  let smoothedZoom = null;
+  const ZOOM_ALPHA = 0.06;
+  function targetZoomForSpeed(speed) {
+    if (speed <= SPEED_LO) return ZOOM_MAX;
+    if (speed >= SPEED_HI) return ZOOM_MIN;
+    const t = (speed - SPEED_LO) / (SPEED_HI - SPEED_LO);
+    return ZOOM_MAX + (ZOOM_MIN - ZOOM_MAX) * t;
+  }
+  function stepSmoothZoom(target) {
+    if (smoothedZoom === null) { smoothedZoom = target; return smoothedZoom; }
+    smoothedZoom = smoothedZoom + (target - smoothedZoom) * ZOOM_ALPHA;
+    return smoothedZoom;
+  }
+
+  // Bearing in degrees (0 = north, clockwise) from coord a→b.
+  function bearingBetween(a, b) {
+    const toRad = Math.PI / 180, toDeg = 180 / Math.PI;
+    const lon1 = a[0] * toRad, lat1 = a[1] * toRad;
+    const lon2 = b[0] * toRad, lat2 = b[1] * toRad;
+    const dLon = lon2 - lon1;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (Math.atan2(y, x) * toDeg + 360) % 360;
+  }
+  // Average travel direction around `idx` using a wide window so GPS jitter
+  // doesn't swing the heading. Tuned large to complement the EMA smoothing.
+  function computeBearingAt(idx) {
+    if (!Array.isArray(coords) || coords.length < 2) return null;
+    const lookback = 10, lookahead = 20;
+    const a = coords[Math.max(0, idx - lookback)];
+    const b = coords[Math.min(coords.length - 1, idx + lookahead)];
+    if (!a || !b || (a[0] === b[0] && a[1] === b[1])) return null;
+    return bearingBetween(a, b);
+  }
+
+  // EMA-smoothed bearing target. With ~4 ticks/sec and α=0.08 the effective
+  // time constant is ~3 s — ≈8× smoother than the previous snap-per-tick.
+  let smoothedBearing = null;
+  const BEARING_ALPHA = 0.08;
+  function stepSmoothBearing(targetDeg) {
+    if (targetDeg === null) return smoothedBearing;
+    if (smoothedBearing === null) { smoothedBearing = targetDeg; return smoothedBearing; }
+    const diff = ((targetDeg - smoothedBearing + 540) % 360) - 180;
+    smoothedBearing = (smoothedBearing + diff * BEARING_ALPHA + 360) % 360;
+    return smoothedBearing;
+  }
   let coords = [];
-  let currentTheme = "dark";
+  let currentTheme = "satellite";
   let currentColorMode = "solid";
   let currentRouteIdx = 0;
 
@@ -365,7 +416,7 @@
     const lons = routePoints.map(p => p[P_LON]);
     const center = [(Math.min(...lons) + Math.max(...lons)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
 
-    const initialTheme = MAP_THEMES.dark;
+    const initialTheme = MAP_THEMES[currentTheme] || MAP_THEMES.dark;
     map = new maplibregl.Map({
       container: "map",
       style: {
@@ -442,13 +493,60 @@
         .setLngLat(coords[0])
         .addTo(map);
 
-      map.on("dragstart", () => { followCamera = false; });
+      // Any user-initiated map movement disables follow. MapLibre tags
+      // programmatic easeTo/jumpTo calls without an originalEvent, so we
+      // only flip the flag for real user input (drag/rotate/pitch/zoom).
+      map.on("movestart", (e) => {
+        if (e && e.originalEvent) {
+          followPan = false;
+          followRotate = false;
+          followZoom = false;
+          const fp = document.getElementById("follow-pan");
+          const fr = document.getElementById("follow-rotate");
+          const fz = document.getElementById("follow-zoom");
+          if (fp) fp.checked = false;
+          if (fr) fr.checked = false;
+          if (fz) fz.checked = false;
+        }
+      });
 
       // Show controls now that the style + track are ready.
       const controls = document.getElementById("map-controls");
       controls.classList.remove("hidden");
       document.getElementById("theme-select").addEventListener("change", (e) => applyTheme(e.target.value));
       document.getElementById("color-select").addEventListener("change", (e) => applyColorMode(e.target.value));
+      const followPanEl = document.getElementById("follow-pan");
+      const followRotateEl = document.getElementById("follow-rotate");
+      if (followPanEl) {
+        followPanEl.checked = followPan;
+        followPanEl.addEventListener("change", (e) => {
+          followPan = e.target.checked;
+          if (followPan && riderMarker) {
+            map.easeTo({ center: riderMarker.getLngLat(), duration: 400 });
+          }
+        });
+      }
+      if (followRotateEl) {
+        followRotateEl.checked = followRotate;
+        followRotateEl.addEventListener("change", (e) => {
+          followRotate = e.target.checked;
+        });
+      }
+      const followZoomEl = document.getElementById("follow-zoom");
+      if (followZoomEl) {
+        followZoomEl.checked = followZoom;
+        followZoomEl.addEventListener("change", (e) => {
+          followZoom = e.target.checked;
+          // Seed smoother from current zoom so enabling doesn't jump.
+          if (followZoom) smoothedZoom = map.getZoom();
+        });
+      }
+      const toggleBtn = document.getElementById("map-controls-toggle");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+          controls.classList.toggle("collapsed");
+        });
+      }
       applyColorMode(currentColorMode);
 
       updateUI();
@@ -605,10 +703,19 @@
   // Sync the <select> to the chosen default.
   speedSelect.value = String(playSpeed);
 
-  playBtn.addEventListener("click", () => {
-    playing = !playing;
+  function setPlayingState(next) {
+    playing = next;
     playBtn.textContent = playing ? "\u2759\u2759" : "\u25b6";
     playBtn.classList.toggle("playing", playing);
+    const themeSel = document.getElementById("theme-select");
+    if (themeSel) {
+      themeSel.disabled = playing;
+      themeSel.title = playing ? "Pause to change map style" : "";
+    }
+  }
+
+  playBtn.addEventListener("click", () => {
+    setPlayingState(!playing);
     lastFrame = performance.now();
     if (playing && currentTime >= duration) {
       setCurrentTime(0);
@@ -718,8 +825,23 @@
             }
           }
         }
-        if (followCamera && playing) {
-          map.easeTo({ center: markerPos, duration: 200 });
+        if ((followPan || followRotate || followZoom) && playing) {
+          const nowMs = performance.now();
+          if (nowMs - lastFollowAt > 250) {
+            lastFollowAt = nowMs;
+            const opts = { duration: 400, easing: (t) => t * t * (3 - 2 * t) };
+            if (followPan) opts.center = markerPos;
+            if (followRotate) {
+              const target = computeBearingAt(currentRouteIdx);
+              const sm = stepSmoothBearing(target);
+              if (sm !== null) opts.bearing = sm;
+            }
+            if (followZoom) {
+              const speedNow = sampleAt(SPD);
+              opts.zoom = stepSmoothZoom(targetZoomForSpeed(speedNow));
+            }
+            if (opts.center || opts.bearing !== undefined || opts.zoom !== undefined) map.easeTo(opts);
+          }
         }
       }
     }
@@ -732,9 +854,7 @@
     let nt = currentTime + dt * playSpeed;
     if (nt >= duration) {
       nt = duration;
-      playing = false;
-      playBtn.textContent = "\u25b6";
-      playBtn.classList.remove("playing");
+      setPlayingState(false);
     }
     setCurrentTime(nt);
     if (playing) requestAnimationFrame(loop);
@@ -747,9 +867,7 @@
     resizeCharts();
     setCurrentTime(0);
     // Auto-play on load.
-    playing = true;
-    playBtn.textContent = "\u2759\u2759";
-    playBtn.classList.add("playing");
+    setPlayingState(true);
     lastFrame = performance.now();
     requestAnimationFrame(loop);
   });

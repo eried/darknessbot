@@ -376,7 +376,7 @@ html, body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 6px;
     background: rgba(10, 12, 18, 0.78);
     border: 1px solid rgba(0, 229, 255, 0.18);
     border-radius: 8px;
@@ -386,6 +386,58 @@ html, body {
     pointer-events: auto;
 }
 #map-controls.hidden { display: none; }
+#map-controls-toggle {
+    background: transparent;
+    border: none;
+    color: #00e5ff;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    align-self: flex-start;
+}
+#map-controls-toggle:hover { background: rgba(0, 229, 255, 0.12); }
+#map-controls .map-controls-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 6px 6px;
+    min-width: 180px;
+}
+#map-controls.collapsed .map-controls-body { display: none; }
+#map-controls.collapsed { padding: 4px; }
+#map-controls .follow-row input[type="checkbox"] {
+    accent-color: #00e5ff;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+#map-controls .follow-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+#map-controls .follow-label {
+    color: #8fa7b0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    margin-right: auto;
+}
+#map-controls .follow-row {
+    flex: 0 0 auto;
+    gap: 4px;
+    justify-content: flex-start;
+}
+#map-controls .follow-row > span {
+    text-transform: none;
+    letter-spacing: 0;
+    color: #d7e4ea;
+    font-size: 0.78rem;
+}
 #map-controls label {
     display: flex;
     align-items: center;
@@ -409,6 +461,11 @@ html, body {
     min-width: 110px;
 }
 #map-controls select:focus { outline: 1px solid #00e5ff; }
+#map-controls select:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: #8fa7b0;
+}
 
 #color-legend {
     display: flex;

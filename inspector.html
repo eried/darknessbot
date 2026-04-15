@@ -6,7 +6,7 @@
     <title>Trip Inspector &mdash; DarknessBot</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="static/css/inspector.css?v=3" />
+    <link rel="stylesheet" href="static/css/inspector.css?v=6" />
 </head>
 <body>
     <div id="inspector">
@@ -66,31 +66,51 @@
 
         <main id="stage">
             <div id="map">
-                <div id="map-controls" class="hidden">
-                    <label>
-                        <span>Map</span>
-                        <select id="theme-select">
-                            <option value="dark" selected>Dark</option>
-                            <option value="light">Light</option>
-                            <option value="satellite">Satellite</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>Color by</span>
-                        <select id="color-select">
-                            <option value="solid" selected>Solid</option>
-                            <option value="speed">Speed</option>
-                            <option value="battery">Battery</option>
-                            <option value="voltage">Voltage</option>
-                            <option value="temp">Temp</option>
-                            <option value="altitude">Altitude</option>
-                        </select>
-                    </label>
-                    <div id="color-legend" class="hidden">
-                        <div class="legend-bar"></div>
-                        <div class="legend-scale">
-                            <span data-legend-min>&mdash;</span>
-                            <span data-legend-max>&mdash;</span>
+                <div id="map-controls" class="hidden collapsed">
+                    <button type="button" id="map-controls-toggle" title="Map settings" aria-label="Map settings">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </button>
+                    <div class="map-controls-body">
+                        <label>
+                            <span>Map style</span>
+                            <select id="theme-select">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                                <option value="satellite" selected>Satellite</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Trace color</span>
+                            <select id="color-select">
+                                <option value="solid" selected>Solid</option>
+                                <option value="speed">Speed</option>
+                                <option value="battery">Battery</option>
+                                <option value="voltage">Voltage</option>
+                                <option value="temp">Temp</option>
+                                <option value="altitude">Altitude</option>
+                            </select>
+                        </label>
+                        <div class="follow-group">
+                            <span class="follow-label">Follow</span>
+                            <label class="follow-row">
+                                <input type="checkbox" id="follow-pan" checked />
+                                <span>Pan</span>
+                            </label>
+                            <label class="follow-row">
+                                <input type="checkbox" id="follow-rotate" checked />
+                                <span>Rot</span>
+                            </label>
+                            <label class="follow-row">
+                                <input type="checkbox" id="follow-zoom" checked />
+                                <span>Zoom</span>
+                            </label>
+                        </div>
+                        <div id="color-legend" class="hidden">
+                            <div class="legend-bar"></div>
+                            <div class="legend-scale">
+                                <span data-legend-min>&mdash;</span>
+                                <span data-legend-max>&mdash;</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -144,6 +164,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=12"></script>
+    <script src="static/js/inspector.js?v=19"></script>
 </body>
 </html>

@@ -538,14 +538,18 @@
     c._px = px; c._py = py; c._range = [minV, maxV];
 
     // Redraw cursor
-    if (currentSampleIdx >= 0) drawCursor(c, currentSampleIdx);
+    if (currentSampleIdx >= 0) drawCursor(c, arguments[1] != null ? arguments[1] : currentSampleIdx);
   }
 
-  function drawCursor(c, sampleIdx) {
+  function drawCursor(c, fracIdx) {
     const ctx = c.canvas.getContext("2d");
     if (!c._px) return;
-    const x = c._px(sampleIdx);
-    const y = c._py(ts[sampleIdx][c.cfg.idx]);
+    const i0 = Math.floor(fracIdx);
+    const i1 = Math.min(ts.length - 1, i0 + 1);
+    const f = fracIdx - i0;
+    const x = c._px(fracIdx);
+    const v = ts[i0][c.cfg.idx] + (ts[i1][c.cfg.idx] - ts[i0][c.cfg.idx]) * f;
+    const y = c._py(v);
     ctx.save();
     ctx.strokeStyle = "rgba(255, 160, 0, 0.7)";
     ctx.lineWidth = 1 * (window.devicePixelRatio || 1);
@@ -621,23 +625,38 @@
     playSpeed = parseFloat(e.target.value);
   });
 
+  let sampleFraction = 0; // 0..1 between currentSampleIdx and currentSampleIdx+1
+
   function setCurrentTime(t) {
     currentTime = Math.max(0, Math.min(duration, t));
-    // Find nearest sample
+    // Find lower-bound sample (largest idx where ts[idx][SEC]-t0 <= currentTime)
     const target = t0 + currentTime;
     let lo = 0, hi = ts.length - 1;
     while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (ts[mid][SEC] < target) lo = mid + 1; else hi = mid;
+      const mid = (lo + hi + 1) >> 1;
+      if (ts[mid][SEC] <= target) lo = mid; else hi = mid - 1;
     }
     currentSampleIdx = lo;
+    if (currentSampleIdx < ts.length - 1) {
+      const a = ts[currentSampleIdx][SEC];
+      const b = ts[currentSampleIdx + 1][SEC];
+      sampleFraction = b > a ? Math.max(0, Math.min(1, (target - a) / (b - a))) : 0;
+    } else {
+      sampleFraction = 0;
+    }
     updateUI();
   }
 
+  function lerp(a, b, f) { return a + (b - a) * f; }
+  function sampleAt(col) {
+    const r0 = ts[currentSampleIdx];
+    const r1 = currentSampleIdx < ts.length - 1 ? ts[currentSampleIdx + 1] : r0;
+    return lerp(r0[col], r1[col], sampleFraction);
+  }
+
   function updateUI() {
-    const row = ts[currentSampleIdx];
-    // Dashboard
-    const speed = row[SPD];
+    // Dashboard (interpolated between adjacent samples)
+    const speed = sampleAt(SPD);
     const maxSpeed = Math.max(track.stats?.maxSpeed || 60, 60);
     document.getElementById("speedo-value").textContent = speed.toFixed(1);
     const ratio = Math.min(1, speed / maxSpeed);
@@ -645,16 +664,19 @@
     const angle = -90 + ratio * 180;
     document.getElementById("speedo-needle").style.transform = "rotate(" + angle + "deg)";
 
-    const batt = row[BATT];
+    const batt = sampleAt(BATT);
     document.getElementById("battery-value").textContent = batt.toFixed(0) + "%";
     const bf = document.getElementById("battery-fill");
     bf.style.width = Math.max(0, Math.min(100, batt)) + "%";
     bf.classList.toggle("low", batt < 20);
 
-    document.getElementById("odo-value").textContent = cumKm[currentSampleIdx].toFixed(2);
-    document.getElementById("volt-value").textContent = row[VOLT].toFixed(1);
-    document.getElementById("temp-value").textContent = row[TEMP].toFixed(1);
-    document.getElementById("alt-value").textContent = row[ALT].toFixed(0);
+    const cumNow = currentSampleIdx < cumKm.length - 1
+      ? lerp(cumKm[currentSampleIdx], cumKm[currentSampleIdx + 1], sampleFraction)
+      : cumKm[currentSampleIdx];
+    document.getElementById("odo-value").textContent = cumNow.toFixed(2);
+    document.getElementById("volt-value").textContent = sampleAt(VOLT).toFixed(1);
+    document.getElementById("temp-value").textContent = sampleAt(TEMP).toFixed(1);
+    document.getElementById("alt-value").textContent = sampleAt(ALT).toFixed(0);
     document.getElementById("clock-value").textContent = fmtTime(currentTime);
 
     // Scrub
@@ -662,22 +684,27 @@
       scrub.value = duration > 0 ? (currentTime / duration) * 1000 : 0;
     }
 
-    // Charts: update readings + cursors
+    // Charts: update readings + cursors (cursor uses fractional index for smooth sweep)
+    const fracIdx = currentSampleIdx + sampleFraction;
     charts.forEach(c => {
-      const v = row[c.cfg.idx];
-      c.reading.textContent = v.toFixed(1) + c.cfg.unit;
-      drawChart(c);
+      c.reading.textContent = sampleAt(c.cfg.idx).toFixed(1) + c.cfg.unit;
+      drawChart(c, fracIdx);
     });
 
-    // Map marker + traveled line
+    // Map marker + traveled line (marker lerped between adjacent coords)
     if (map && riderMarker && map.isStyleLoaded() && map.getSource("traveled")) {
       if (coords.length > 1) {
-        currentRouteIdx = Math.round((currentSampleIdx / Math.max(1, ts.length - 1)) * (coords.length - 1));
-        currentRouteIdx = Math.max(0, Math.min(coords.length - 1, currentRouteIdx));
-        const markerPos = coords[currentRouteIdx];
+        const fracRoute = (currentSampleIdx + sampleFraction) / Math.max(1, ts.length - 1) * (coords.length - 1);
+        const routeIdx = Math.floor(fracRoute);
+        const routeFrac = fracRoute - routeIdx;
+        currentRouteIdx = Math.max(0, Math.min(coords.length - 1, routeIdx));
+        const a = coords[currentRouteIdx];
+        const b = coords[Math.min(coords.length - 1, currentRouteIdx + 1)];
+        const markerPos = [lerp(a[0], b[0], routeFrac), lerp(a[1], b[1], routeFrac)];
         riderMarker.setLngLat(markerPos);
 
         const traveled = coords.slice(0, currentRouteIdx + 1);
+        if (b !== a) traveled.push(markerPos);
         if (traveled.length >= 2) {
           map.getSource("traveled").setData({
             type: "Feature", geometry: { type: "LineString", coordinates: traveled }

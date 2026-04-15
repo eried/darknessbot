@@ -590,12 +590,12 @@
   const playBtn = document.getElementById("play-btn");
   const speedSelect = document.getElementById("speed-select");
 
-  // Pick a sensible default speed so the trip plays back in roughly 30–60 s.
+  // Pick a sensible default speed so the trip plays back at a comfortable pace.
   function autoPlaySpeed(dur) {
-    if (dur <= 1800) return 64;   // ≤ 30 min
-    if (dur <= 3600) return 128;  // ≤ 1 h
-    if (dur <= 7200) return 256;  // ≤ 2 h
-    return 512;                   // > 2 h
+    if (dur <= 1800) return 16;   // ≤ 30 min
+    if (dur <= 3600) return 32;   // ≤ 1 h
+    if (dur <= 7200) return 64;   // ≤ 2 h
+    return 128;                   // > 2 h
   }
   let playSpeed = autoPlaySpeed(duration);
   // Sync the <select> to the chosen default.
@@ -715,9 +715,15 @@
 
   // ---------- Init ----------
   window.addEventListener("resize", resizeCharts);
-  // Wait a frame so layout settles, then size canvases
+  // Wait a frame so layout settles, then size canvases and start auto-play.
   requestAnimationFrame(() => {
     resizeCharts();
     setCurrentTime(0);
+    // Auto-play on load.
+    playing = true;
+    playBtn.textContent = "\u2759\u2759";
+    playBtn.classList.add("playing");
+    lastFrame = performance.now();
+    requestAnimationFrame(loop);
   });
 })();

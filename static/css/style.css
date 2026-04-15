@@ -621,18 +621,26 @@ body, html {
     white-space: nowrap;
 }
 
-/* Add more button */
-.add-more-btn {
-    display: block;
+/* Footer nav row: Add more | Main screen */
+.footer-nav-row {
+    display: flex;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.08);
+}
+.footer-nav-row > * {
+    flex: 1;
     text-align: center;
     padding: 8px 16px;
-    color: #00e5ff;
     font-size: 0.8rem;
     cursor: pointer;
-    border-bottom: 1px solid rgba(0, 229, 255, 0.08);
     transition: background 0.15s;
 }
-.add-more-btn:hover, .add-more-btn.dragover { background: rgba(0, 229, 255, 0.06); border-color: #00e5ff; }
+.footer-nav-row > * + * {
+    border-left: 1px solid rgba(0, 229, 255, 0.08);
+}
+
+.add-more-btn, .main-screen-btn { color: #00e5ff; }
+.add-more-btn:hover, .add-more-btn.dragover,
+.main-screen-btn:hover { background: rgba(0, 229, 255, 0.06); }
 
 /* Export button */
 .export-btn {

@@ -863,6 +863,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Auto-open panel with smooth animation
     setTimeout(() => panel.classList.add("open"), 150);
+
+    // Auto-select the first (newest) track so the map & details aren't empty.
+    if (tracks.length > 0) {
+      setTimeout(() => selectTrip(0), 200);
+    }
   }
 
   function fitAll() {
@@ -1292,6 +1297,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const footer = document.getElementById("panel-footer");
     footer.innerHTML = "";
 
+    const navRow = document.createElement("div");
+    navRow.className = "footer-nav-row";
+
     const addBtn = document.createElement("label");
     addBtn.className = "add-more-btn";
     addBtn.innerHTML = `+ Add more <input type="file" accept=".dbb,.csv" style="display:none" />`;
@@ -1305,7 +1313,15 @@ document.addEventListener("DOMContentLoaded", function () {
       addBtn.classList.remove("dragover");
       if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], true);
     });
-    footer.appendChild(addBtn);
+    navRow.appendChild(addBtn);
+
+    const homeBtn = document.createElement("div");
+    homeBtn.className = "main-screen-btn";
+    homeBtn.textContent = "Back to main screen";
+    homeBtn.addEventListener("click", () => navigate("#load"));
+    navRow.appendChild(homeBtn);
+
+    footer.appendChild(navRow);
 
     const selSummary = document.createElement("div");
     selSummary.className = "trip-summary selected-summary hidden";

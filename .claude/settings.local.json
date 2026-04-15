@@ -14,7 +14,9 @@
       "Bash(cp D:/GitHub/darknessbot/static/css/inspector.css D:/GitHub/darknessbot-trip-viewer/web/static/css/inspector.css)",
       "Bash(cp D:/GitHub/darknessbot/static/js/inspector.js D:/GitHub/darknessbot-trip-viewer/web/static/js/inspector.js)",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "mcp__plugin_playwright_playwright__browser_select_option"
+      "mcp__plugin_playwright_playwright__browser_select_option",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/inspector.html)"
     ]
   }
 }

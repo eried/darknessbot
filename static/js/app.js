@@ -1695,16 +1695,35 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // --- Programmatic data injection (used by EvenDarkerBot Android app) ---
-  // Accepts a base64-encoded .dbb (ZIP) or .csv file and loads it as if uploaded.
-  window.loadDbbFromBase64 = async function (base64String, filename, append) {
+  // Accepts a base64-encoded .dbb (ZIP) or .csv file and loads it.
+  // Does NOT save to recents or cache — keeps the viewer clean for embedded use.
+  window.loadDbbFromBase64 = async function (base64String, filename) {
     filename = filename || "import.dbb";
-    var shouldAppend = (append === true);
     try {
       const binary = atob(base64String);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       const file = new File([bytes], filename, { type: "application/octet-stream" });
-      await handleFile(file, shouldAppend);
+      const lname = file.name.toLowerCase();
+      if (!lname.endsWith(".dbb") && !lname.endsWith(".csv")) return { success: false, error: "Unsupported file type" };
+
+      uploadLabel.classList.add("hidden");
+      progressArea.classList.remove("hidden");
+      progressFill.style.width = "0%";
+      progressText.textContent = "Loading...";
+
+      const parsedTracks = await parseFileLocally(parserWorker, file, (msg) => {
+        if (msg.type === "progress") {
+          progressFill.style.width = Math.round((msg.current / msg.total) * 100) + "%";
+          progressText.textContent = "Parsing trip " + msg.current + " of " + msg.total;
+        }
+      });
+
+      if (!parsedTracks.length) return { success: false, error: "No trip data found" };
+
+      // Hide recents UI and load directly — no saveRecentFile, no saveTracks
+      recentUi.section.classList.add("hidden");
+      loadTracks(parsedTracks);
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

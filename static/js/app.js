@@ -1700,6 +1700,9 @@ document.addEventListener("DOMContentLoaded", function () {
   window.loadDbbFromBase64 = async function (base64String, filename) {
     filename = filename || "import.dbb";
     try {
+      // Hide the entire upload overlay immediately
+      overlay.classList.add("hidden");
+
       const binary = atob(base64String);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1707,22 +1710,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const lname = file.name.toLowerCase();
       if (!lname.endsWith(".dbb") && !lname.endsWith(".csv")) return { success: false, error: "Unsupported file type" };
 
-      uploadLabel.classList.add("hidden");
-      progressArea.classList.remove("hidden");
-      progressFill.style.width = "0%";
-      progressText.textContent = "Loading...";
-
-      const parsedTracks = await parseFileLocally(parserWorker, file, (msg) => {
-        if (msg.type === "progress") {
-          progressFill.style.width = Math.round((msg.current / msg.total) * 100) + "%";
-          progressText.textContent = "Parsing trip " + msg.current + " of " + msg.total;
-        }
-      });
+      const parsedTracks = await parseFileLocally(parserWorker, file, () => {});
 
       if (!parsedTracks.length) return { success: false, error: "No trip data found" };
 
-      // Hide recents UI and load directly — no saveRecentFile, no saveTracks
-      recentUi.section.classList.add("hidden");
+      // Load directly — no saveRecentFile, no saveTracks
       loadTracks(parsedTracks);
       return { success: true };
     } catch (e) {

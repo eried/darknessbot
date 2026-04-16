@@ -1697,7 +1697,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Programmatic data injection (used by EvenDarkerBot Android app) ---
   // Accepts a base64-encoded .dbb (ZIP) or .csv file and loads it.
   // Does NOT save to recents or cache — keeps the viewer clean for embedded use.
-  window.loadDbbFromBase64 = async function (base64String, filename) {
+  window.loadFileFromBase64 = async function (base64String, filename) {
     filename = filename || "import.dbb";
     try {
       const binary = atob(base64String);
@@ -1707,9 +1707,22 @@ document.addEventListener("DOMContentLoaded", function () {
       const lname = file.name.toLowerCase();
       if (!lname.endsWith(".dbb") && !lname.endsWith(".csv")) return { success: false, error: "Unsupported file type" };
 
-      const parsedTracks = await parseFileLocally(parserWorker, file, () => {});
+      progressArea.classList.remove("hidden");
+      progressFill.style.width = "0%";
+      progressText.textContent = "Loading...";
 
-      if (!parsedTracks.length) return { success: false, error: "No trip data found" };
+      const parsedTracks = await parseFileLocally(parserWorker, file, (msg) => {
+        if (msg.type === "progress") {
+          const pct = Math.round((msg.current / msg.total) * 100);
+          progressFill.style.width = pct + "%";
+          progressText.textContent = "Parsing trip " + msg.current + " of " + msg.total;
+        }
+      });
+
+      if (!parsedTracks.length) {
+        progressText.textContent = "No trip data found";
+        return { success: false, error: "No trip data found" };
+      }
 
       // Load directly — no saveRecentFile, no saveTracks
       loadTracks(parsedTracks);
@@ -1722,8 +1735,20 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Init ---
   const isEmbedded = new URLSearchParams(location.search).has("embedded");
   if (isEmbedded) {
-    // Embedded mode: hide upload UI, wait for loadDbbFromBase64() call
-    overlay.classList.add("hidden");
+    // Embedded mode: hide upload button and recents, keep progress visible
+    uploadLabel.classList.add("hidden");
+    recentUi.section.classList.add("hidden");
+    document.getElementById("upload-icon").classList.add("hidden");
+    document.querySelector("#upload-box h1").classList.add("hidden");
+    // Show a hint after 5s if no data has arrived
+    setTimeout(() => {
+      if (!allTracks.length) {
+        const hint = document.createElement("div");
+        hint.style.cssText = "color:#888;font-size:13px;margin-top:12px;text-align:center;";
+        hint.innerHTML = 'Waiting for file&hellip; see <a href="https://github.com/eried/darknessbot/blob/main/INTEGRATION.md" target="_blank" style="color:#4FC3F7;">INTEGRATION.md</a> on GitHub';
+        uploadBox.appendChild(hint);
+      }
+    }, 5000);
   } else {
     renderRecentFiles();
     if (!location.hash) navigate("#load", true);

@@ -46,7 +46,7 @@ Each track object:
 
 ## Programmatic integration
 
-The viewer can be embedded in any app (Android, iOS, Electron, iframe). A JavaScript API (`window.loadDbbFromBase64`) accepts base64-encoded `.dbb` or `.csv` data and displays it on the map without manual upload. Add `?embedded` to the URL to hide the upload UI on load. See [INTEGRATION.md](INTEGRATION.md) for details and code examples.
+The viewer can be embedded in any app (Android, iOS, Electron, iframe). A JavaScript API (`window.loadFileFromBase64`) accepts base64-encoded `.dbb` or `.csv` data and displays it on the map without manual upload. Add `?embedded` to the URL to hide the upload UI on load. See [INTEGRATION.md](INTEGRATION.md) for details and code examples.
 
 ## Local development
 

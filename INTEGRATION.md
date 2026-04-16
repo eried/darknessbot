@@ -6,7 +6,7 @@ The viewer exposes a JavaScript API so any app or page can load trip data direct
 
 1. Open the viewer URL with `?embedded` (`https://darknessbot.ried.no/?embedded`)
 2. The `?embedded` parameter hides the upload UI immediately — no flash of the file picker
-3. After the page finishes loading, call `window.loadDbbFromBase64()` to inject trip data
+3. After the page finishes loading, call `window.loadFileFromBase64()` to inject trip data
 4. The viewer parses the data client-side and displays it on the map
 
 ## File formats
@@ -19,7 +19,7 @@ The viewer exposes a JavaScript API so any app or page can load trip data direct
 ```javascript
 // Load a base64-encoded .dbb or .csv into the viewer
 // Returns { success: true } or { success: false, error: "..." }
-await window.loadDbbFromBase64(base64String, filename)
+await window.loadFileFromBase64(base64String, filename)
 ```
 
 **Parameters:**
@@ -34,7 +34,7 @@ await window.loadDbbFromBase64(base64String, filename)
 
 Adding `?embedded` to the URL puts the viewer in embedded mode:
 - The upload overlay (file picker, drag-drop, recent files) is hidden on load
-- The page shows only the map, ready to receive data via `loadDbbFromBase64()`
+- The page shows only the map, ready to receive data via `loadFileFromBase64()`
 - Normal browser usage (without `?embedded`) is unaffected
 
 ## Examples
@@ -47,7 +47,7 @@ val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
 
 // After WebView finishes loading the viewer page
 webView.evaluateJavascript(
-    "window.loadDbbFromBase64('$base64', '${file.name}')", null
+    "window.loadFileFromBase64('$base64', '${file.name}')", null
 )
 ```
 
@@ -56,7 +56,7 @@ webView.evaluateJavascript(
 ```swift
 let base64 = fileData.base64EncodedString()
 webView.evaluateJavaScript(
-    "window.loadDbbFromBase64('\(base64)', '\(fileName)')"
+    "window.loadFileFromBase64('\(base64)', '\(fileName)')"
 )
 ```
 
@@ -64,7 +64,7 @@ webView.evaluateJavaScript(
 
 ```javascript
 const iframe = document.getElementById("viewer");
-iframe.contentWindow.loadDbbFromBase64(base64String, "trip.dbb");
+iframe.contentWindow.loadFileFromBase64(base64String, "trip.dbb");
 ```
 
 For large files, the base64 string is passed inline — ensure single quotes inside the data are escaped.

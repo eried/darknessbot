@@ -1694,6 +1694,22 @@ document.addEventListener("DOMContentLoaded", function () {
     if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
   });
 
+  // --- Programmatic data injection (used by EvenDarkerBot Android app) ---
+  // Accepts a base64-encoded .dbb (ZIP) or .csv file and loads it as if uploaded.
+  window.loadDbbFromBase64 = async function (base64String, filename) {
+    filename = filename || "import.dbb";
+    try {
+      const binary = atob(base64String);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const file = new File([bytes], filename, { type: "application/octet-stream" });
+      await handleFile(file, allTracks.length > 0);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   // --- Init ---
   renderRecentFiles();
   if (!location.hash) navigate("#load", true);

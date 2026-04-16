@@ -44,6 +44,10 @@ Each track object:
 }
 ```
 
+## Android / WebView integration
+
+The viewer can be loaded programmatically from an Android WebView (or any embedded browser). A JavaScript API (`window.loadDbbFromBase64`) accepts base64-encoded `.dbb` or `.csv` data and displays it on the map without manual upload. See [INTEGRATION.md](INTEGRATION.md) for details and code examples.
+
 ## Local development
 
 It's static — any static file server works:

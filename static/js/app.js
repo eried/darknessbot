@@ -1700,9 +1700,6 @@ document.addEventListener("DOMContentLoaded", function () {
   window.loadDbbFromBase64 = async function (base64String, filename) {
     filename = filename || "import.dbb";
     try {
-      // Hide the entire upload overlay immediately
-      overlay.classList.add("hidden");
-
       const binary = atob(base64String);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1723,7 +1720,13 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   // --- Init ---
-  renderRecentFiles();
-  if (!location.hash) navigate("#load", true);
-  else applyRoute();
+  const isEmbedded = new URLSearchParams(location.search).has("embedded");
+  if (isEmbedded) {
+    // Embedded mode: hide upload UI, wait for loadDbbFromBase64() call
+    overlay.classList.add("hidden");
+  } else {
+    renderRecentFiles();
+    if (!location.hash) navigate("#load", true);
+    else applyRoute();
+  }
 });

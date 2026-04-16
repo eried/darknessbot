@@ -1,12 +1,13 @@
-# Android Integration
+# Programmatic Integration
 
-The viewer exposes a JavaScript API so Android apps can load trip data directly into the map without manual file upload.
+The viewer exposes a JavaScript API so any app or page can load trip data directly into the map without manual file upload. This works from Android WebViews, iOS WKWebView, Electron, iframes, or any context where you control a browser instance.
 
 ## How it works
 
-1. The Android app opens the viewer URL in a WebView (`https://darknessbot.ried.no/`)
-2. After the page finishes loading, the app calls `window.loadDbbFromBase64()` via `evaluateJavascript`
-3. The viewer parses the data client-side and displays it on the map
+1. Open the viewer URL with `?embedded` (`https://darknessbot.ried.no/?embedded`)
+2. The `?embedded` parameter hides the upload UI immediately — no flash of the file picker
+3. After the page finishes loading, call `window.loadDbbFromBase64()` to inject trip data
+4. The viewer parses the data client-side and displays it on the map
 
 ## File formats
 
@@ -25,28 +26,50 @@ await window.loadDbbFromBase64(base64String, filename)
 - `base64String` — the file contents encoded as base64 (no line breaks, no data URI prefix)
 - `filename` — display name with extension, e.g. `"my_trip.dbb"` or `"ride.csv"`. The extension determines how the file is parsed.
 
-**Behavior when called programmatically:**
+**Behavior:**
 - Always replaces any existing tracks (never appends)
 - Does not save to recent files or session cache
-- Hides the recent files UI
 
-## Android example (Kotlin)
+## Embedded mode (`?embedded`)
+
+Adding `?embedded` to the URL puts the viewer in embedded mode:
+- The upload overlay (file picker, drag-drop, recent files) is hidden on load
+- The page shows only the map, ready to receive data via `loadDbbFromBase64()`
+- Normal browser usage (without `?embedded`) is unaffected
+
+## Examples
+
+### Android (Kotlin)
 
 ```kotlin
-// 1. Convert a CSV or ZIP file to base64
 val bytes = file.readBytes()
 val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
 
-// 2. After WebView finishes loading the viewer page
+// After WebView finishes loading the viewer page
 webView.evaluateJavascript(
-    "window.loadDbbFromBase64('$base64', '${file.name}')",
-    null
+    "window.loadDbbFromBase64('$base64', '${file.name}')", null
 )
 ```
 
-For large files, avoid string concatenation in the JS call. The base64 string is passed inline, so ensure single quotes inside the data are escaped.
+### iOS (Swift)
+
+```swift
+let base64 = fileData.base64EncodedString()
+webView.evaluateJavaScript(
+    "window.loadDbbFromBase64('\(base64)', '\(fileName)')"
+)
+```
+
+### iframe / browser
+
+```javascript
+const iframe = document.getElementById("viewer");
+iframe.contentWindow.loadDbbFromBase64(base64String, "trip.dbb");
+```
+
+For large files, the base64 string is passed inline — ensure single quotes inside the data are escaped.
 
 ## Notes
 
-- The viewer page must fully load before calling the API. Use `WebViewClient.onPageFinished()` with a short delay, and guard against multiple calls (the callback can fire more than once).
-- The API is read-only from the viewer's perspective: programmatic loads do not persist to IndexedDB or localStorage, so the user's manual upload history stays clean.
+- The viewer page must fully load before calling the API. In a WebView, use the page-loaded callback with a short delay, and guard against multiple calls (the callback can fire more than once).
+- Programmatic loads do not persist to IndexedDB or localStorage, so the user's manual upload history stays clean.

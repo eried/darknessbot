@@ -1696,14 +1696,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // --- Programmatic data injection (used by EvenDarkerBot Android app) ---
   // Accepts a base64-encoded .dbb (ZIP) or .csv file and loads it as if uploaded.
-  window.loadDbbFromBase64 = async function (base64String, filename) {
+  window.loadDbbFromBase64 = async function (base64String, filename, append) {
     filename = filename || "import.dbb";
+    var shouldAppend = (append === true);
     try {
       const binary = atob(base64String);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       const file = new File([bytes], filename, { type: "application/octet-stream" });
-      await handleFile(file, allTracks.length > 0);
+      await handleFile(file, shouldAppend);
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

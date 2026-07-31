@@ -1204,7 +1204,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createParserWorker() {
-    return new Worker("static/js/parser-worker.js?v=13");
+    return new Worker("static/js/parser-worker.js?v=14");
   }
 
   function createRecentFilesUi() {

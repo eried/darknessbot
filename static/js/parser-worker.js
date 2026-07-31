@@ -18,8 +18,10 @@ function parseDateParts(str) {
   // Naive ISO-like "YYYY-MM-DD HH:MM:SS[.SSS]" — preserve the wall-clock so
   // the displayed time matches what the rider actually saw at ride time. Going
   // via Date.parse + toISOString would round-trip through UTC and shift hours
-  // when the browser timezone differs from the ride timezone.
-  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z?\s*$/);
+  // when the browser timezone differs from the ride timezone. A trailing
+  // timezone offset (euc.world writes "+0200") is deliberately dropped for
+  // the same reason: the local part IS the ride wall-clock.
+  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|[+-]\d{2}:?\d{2})?\s*$/);
   if (iso) {
     const naive = `${iso[1]}-${iso[2]}-${iso[3]}T${iso[4]}:${iso[5]}:${iso[6]}.${(iso[7] || '000').padEnd(3, '0')}`;
     return { ms: new Date(naive).getTime(), iso: naive };
@@ -120,7 +122,38 @@ self.addEventListener("message", async (event) => {
 function parseCsvText(text, name) {
   const rows = parseCsvRows(text);
   if (!rows.length) return null;
+  normalizeEucWorldRows(rows);
   return buildTrackFromRows(rows, name.replace(/\.csv$/i, ""));
+}
+
+// euc.world's native app export ("EUC data <date>.csv") uses its own
+// lowercase header (datetime, speed, gps_lat, ...). Remap in place to the
+// canonical DarknessBot-style names the row reader expects. Detection
+// requires both `datetime` and `gps_lat`, so no ordinary export can match.
+// PWM is left empty on purpose: euc.world logs safety_margin, which is
+// related but not the same signal.
+const EUC_WORLD_COLS = {
+  datetime: "Date",
+  speed: "Speed",
+  voltage: "Voltage",
+  current: "Current",
+  power: "Power",
+  battery: "Battery level",
+  temp: "Temperature",
+  gps_lat: "Latitude",
+  gps_lon: "Longitude",
+  gps_alt: "Altitude",
+  gps_speed: "GPS speed",
+  distance_total: "Total mileage",
+};
+function normalizeEucWorldRows(rows) {
+  const first = rows[0];
+  if (!first || first.datetime === undefined || first.gps_lat === undefined) return;
+  for (const row of rows) {
+    for (const src in EUC_WORLD_COLS) {
+      if (row[src] !== undefined) row[EUC_WORLD_COLS[src]] = row[src];
+    }
+  }
 }
 
 // BLE glitches leave "speed islands" in real exports: rows whose value

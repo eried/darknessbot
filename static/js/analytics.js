@@ -1457,13 +1457,13 @@
     const mixed = wheelGi < 0 && wheelGroups.length > 1;
     document.querySelectorAll(".chart-section").forEach((sec) => {
       const want = mixed && MIXED_WHEEL_SECTIONS.includes(sec.dataset.section);
-      let tag = sec.querySelector(".mixed-tag");
+      let tag = sec.querySelector(".mixed-note");
       if (want && !tag) {
         const h2 = sec.querySelector("h2");
         if (!h2) return;
         tag = document.createElement("span");
-        tag.className = "forensic-tag mixed-tag";
-        tag.textContent = "⚠ MIXED WHEELS";
+        tag.className = "mixed-note";
+        tag.textContent = "⚠ mixed wheels";
         tag.title = "All wheels are in scope, so this metric blends different wheels (battery, motor and range differ per wheel). Pick one wheel in Scope for a clean read.";
         h2.insertBefore(tag, h2.querySelector(".sec-meta"));
       } else if (!want && tag) {

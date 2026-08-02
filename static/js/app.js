@@ -1948,10 +1948,13 @@ document.addEventListener("DOMContentLoaded", function () {
   function openTripManager() {
     if (!tmRoot || !allTracks.length) return;
     tmRoot.classList.remove("hidden");
-    renderTripManager();
+    // Mirror the main window's selection ON OPEN only; re-renders from
+    // inside the manager (Set wheel) pass their own selection instead,
+    // so applying an action never shuffles the checkboxes under you.
+    renderTripManager(new Set(trackVisible));
   }
 
-  function renderTripManager() {
+  function renderTripManager(preChecked = new Set()) {
     const list = document.getElementById("tm-list");
     const selAll = document.getElementById("tm-select-all");
     const selWheel = document.getElementById("tm-select-wheel");
@@ -1963,11 +1966,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     list.innerHTML = allTracks.map((t, i) => {
       // Multi-wheel trips (mid-ride switch) show every wheel they carry.
-      // Rows open pre-checked to mirror the main window's selection, so
-      // "check 2 trips, open the manager, Remove" just works.
       const label = wheelIdsOf(t).map(labelOfWheel).filter(Boolean).join(" + ") || null;
       const km = t.stats ? UNITS.dist(t.stats.distanceKm).toFixed(1) + " " + UNITS.distUnit : "";
-      return `<label class="tm-row"><input type="checkbox" data-idx="${i}"${trackVisible.has(i) ? " checked" : ""}>` +
+      return `<label class="tm-row"><input type="checkbox" data-idx="${i}"${preChecked.has(i) ? " checked" : ""}>` +
         `<span class="tm-date">${formatTripLabel(t)}</span>` +
         `<span class="tm-km">${km}</span>` +
         `<span class="tm-wheel${label ? "" : " tm-unknown"}">${label || "Generic wheel"}</span></label>`;
@@ -2033,7 +2034,7 @@ document.addEventListener("DOMContentLoaded", function () {
       buildTripList();
       updateGlow();
       updateVisibilityUI();
-      renderTripManager();
+      renderTripManager(new Set(idxs));
     };
     delBtn.onclick = () => {
       const idxs = new Set(checkedIdx());

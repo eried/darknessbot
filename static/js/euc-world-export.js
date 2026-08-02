@@ -56,7 +56,7 @@
           continue;
         }
         files.push({
-          name: uniqueName(filenameFor(t), usedNames),
+          name: uniqueName(filenameFor(t, ui), usedNames),
           data: new Uint8Array(buf),
         });
       } catch (e) {
@@ -85,14 +85,48 @@
     ui.done(files.length, blob.size);
   }
 
-  // DD.MM.YYYY_HH-MM-SS matches eucviewer's DATE_RE so the trip still displays
-  // as the date, plus the start time (down to seconds) disambiguates rides
-  // when files are extracted from the .dbb. No colon — Windows treats it as
-  // drive separator. Time is rendered in the ride's local timezone via tzId,
-  // not the user's current laptop timezone, so a Tromsø ride is always
-  // "18-08-19" not "08-08-19" when exported from a laptop in LA.
-  function filenameFor(tour) {
-    if (!tour.dateStart) return tour.key + ".xlsx";
+  // Wheel identity for the filename prefix. The tour item's schema is
+  // undocumented, so probe for plausible fields instead of pinning one;
+  // whatever gets picked is logged, so a euc.world schema change shows up
+  // in the export log instead of silently dropping the wheel. The viewer
+  // parses the resulting <Name>_<MAC>_ filename prefix.
+  let wheelLogged = false;
+  function wheelBitsFor(tour, ui) {
+    let name = null, mac = null, nameKey = null, macKey = null;
+    for (const k of Object.keys(tour)) {
+      const v = tour[k];
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (!name && /model|wheel|vehicle|euc|device/i.test(k) && !/id$|^key$|url|photo|image/i.test(k)) {
+        name = v.trim(); nameKey = k;
+      }
+      const macish = v.replace(/[:\-]/g, "");
+      if (!mac && /mac|address|(^|[^a-z])bt/i.test(k) && /^[0-9A-Fa-f]{12}$/.test(macish)) {
+        mac = macish.toUpperCase(); macKey = k;
+      }
+    }
+    if (!wheelLogged) {
+      wheelLogged = true;
+      ui.log(name || mac
+        ? "  wheel identity: " + (name ? nameKey + "=" + name : "") + (mac ? " " + macKey + "=" + mac : "")
+        : "  no wheel field found on tour items; filenames stay date-only");
+    }
+    return { name, mac };
+  }
+  function sanitizeBit(s) {
+    return String(s).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+  }
+
+  // <Wheel>_<MAC>_DD.MM.YYYY_HH-MM-SS: the date part matches eucviewer's
+  // DATE_RE so the trip still displays as the date, the time (in the
+  // ride's own timezone via tzId, not the laptop's) disambiguates rides,
+  // and the wheel prefix lets the viewer's per-wheel filter attribute the
+  // trip. No colon — Windows treats it as drive separator.
+  function filenameFor(tour, ui) {
+    const bits = wheelBitsFor(tour, ui);
+    let prefix = "";
+    if (bits.name) prefix += sanitizeBit(bits.name) + "_";
+    if (bits.mac) prefix += bits.mac + "_";
+    if (!tour.dateStart) return prefix + tour.key + ".xlsx";
     const d = new Date(tour.dateStart * 1000);
     const tz = tour.tzId || undefined;
     const opts = {
@@ -108,7 +142,7 @@
       parts = new Intl.DateTimeFormat("en-GB", opts).formatToParts(d);
     }
     const get = (type) => (parts.find((p) => p.type === type) || {}).value || "00";
-    return get("day") + "." + get("month") + "." + get("year") +
+    return prefix + get("day") + "." + get("month") + "." + get("year") +
       "_" + get("hour") + "-" + get("minute") + "-" + get("second") + ".xlsx";
   }
 

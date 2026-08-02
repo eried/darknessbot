@@ -1097,7 +1097,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const progressStart = Math.max(0, Math.min(99, Number(opts.progressStart) || 0));
     const progressScale = (100 - progressStart) / 100;
     const lname = file.name.toLowerCase();
-    if (!lname.endsWith(".dbb") && !lname.endsWith(".csv") && !lname.endsWith(".gpx") && !lname.endsWith(".xlsx")) return;
+    if (!lname.endsWith(".dbb") && !lname.endsWith(".zip") && !lname.endsWith(".csv") && !lname.endsWith(".gpx") && !lname.endsWith(".xlsx")) return;
 
     const addBtn = append ? document.querySelector("#panel-footer .add-more-btn") : null;
     const setProgress = (text, error) => {
@@ -1147,7 +1147,12 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       if (!parsedTracks.length) {
-        setProgress("No trip data found in file", true);
+        setProgress(
+          lname.endsWith(".zip") || lname.endsWith(".dbb")
+            ? "No trips inside this archive. It should contain .csv, .gpx or .xlsx trip files."
+            : "No trip data found in file",
+          true
+        );
         if (!append) {
           if (uploadActions) uploadActions.classList.remove("hidden");
           uploadLabel.classList.remove("hidden");
@@ -1204,7 +1209,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createParserWorker() {
-    return new Worker("static/js/parser-worker.js?v=14");
+    return new Worker("static/js/parser-worker.js?v=21");
   }
 
   function createRecentFilesUi() {
@@ -1866,6 +1871,181 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // --- Build trip list ---
+  // --- Wheel grouping --------------------------------------------------
+  // Real identity only, no guessing: euc.world CSVs carry the wheel's
+  // make/model/serial in their extra column (attached at parse as
+  // track.wheel). EUC Planet and DarknessBot files record nothing about
+  // the wheel, so those trips group as "Generic wheel" until their
+  // recorder starts writing identity.
+  function labelOfWheel(w) {
+    if (!w) return null;
+    // Some wheels report the brand inside the model ("InMotion P6"); don't
+    // double it up in the label.
+    const modelHasMake = w.make && w.model &&
+      w.model.toLowerCase().startsWith(w.make.toLowerCase());
+    const label = modelHasMake ? w.model : [w.make, w.model].filter(Boolean).join(" ");
+    return label || w.name || (w.mac ? "Wheel " + w.mac : null);
+  }
+  function wheelLabelOf(t) {
+    return labelOfWheel(t && t.wheel);
+  }
+  // Every identity a trip carries: multi-wheel trips (mid-ride switch)
+  // list them all, ride order; single-wheel trips list just the one.
+  function wheelIdsOf(t) {
+    if (!t) return [];
+    if (t.wheels && t.wheels.length) return t.wheels;
+    return t.wheel ? [t.wheel] : [];
+  }
+  function computeWheelGroups() {
+    const byKey = new Map();
+    const unknown = [];
+    for (let i = 0; i < allTracks.length; i++) {
+      // A multi-wheel trip counts under EVERY wheel it contains, so
+      // filtering by either wheel shows it.
+      const ids = wheelIdsOf(allTracks[i]).filter((w) => labelOfWheel(w));
+      if (!ids.length) { unknown.push(i); continue; }
+      for (const w of ids) {
+        const label = labelOfWheel(w);
+        // Same key formula as analytics wheelKeyOf, so a wheel picked here
+        // can be handed to Forensics via ?wheel= and match there.
+        const key = label + "|" + (w.serial || w.mac || "");
+        if (!byKey.has(key)) byKey.set(key, { label, key, wheel: w, indices: [] });
+        const g = byKey.get(key);
+        if (g.indices[g.indices.length - 1] !== i) g.indices.push(i);
+      }
+    }
+    const groups = [...byKey.values()];
+    // Two wheels of the same model (different serials): number them.
+    const counts = {};
+    for (const g of groups) counts[g.label] = (counts[g.label] || 0) + 1;
+    const seen = {};
+    for (const g of groups) {
+      if (counts[g.label] > 1) {
+        seen[g.label] = (seen[g.label] || 0) + 1;
+        g.label += " #" + seen[g.label];
+      }
+    }
+    // Newest first (allTracks is sorted newest-first).
+    groups.sort((a, b) => Math.min(...a.indices) - Math.min(...b.indices));
+    if (unknown.length) groups.push({ label: "Generic wheel", indices: unknown, unknown: true });
+    return groups;
+  }
+
+  // --- Trip manager ----------------------------------------------------
+  // Works on the LOADED library, whatever the sources (upload, Dropbox,
+  // euc.world, share links), so wheels can be uniformed across all of
+  // them: remove trips, or assign/clear the wheel on any selection. Edits
+  // persist to the session and flow out through the normal exports.
+  const tmRoot = document.getElementById("trip-manager");
+  function tmClose() { if (tmRoot) tmRoot.classList.add("hidden"); }
+  if (tmRoot) {
+    tmRoot.querySelectorAll("[data-tm-close]").forEach((el) => el.addEventListener("click", tmClose));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !tmRoot.classList.contains("hidden")) tmClose();
+    });
+  }
+
+  function openTripManager() {
+    if (!tmRoot || !allTracks.length) return;
+    tmRoot.classList.remove("hidden");
+    renderTripManager();
+  }
+
+  function renderTripManager() {
+    const list = document.getElementById("tm-list");
+    const selAll = document.getElementById("tm-select-all");
+    const selWheel = document.getElementById("tm-select-wheel");
+    const target = document.getElementById("tm-wheel-target");
+    const applyBtn = document.getElementById("tm-apply-wheel");
+    const delBtn = document.getElementById("tm-delete");
+    const countEl = document.getElementById("tm-count");
+    const groups = computeWheelGroups();
+
+    list.innerHTML = allTracks.map((t, i) => {
+      // Multi-wheel trips (mid-ride switch) show every wheel they carry.
+      const label = wheelIdsOf(t).map(labelOfWheel).filter(Boolean).join(" + ") || null;
+      const km = t.stats ? UNITS.dist(t.stats.distanceKm).toFixed(1) + " " + UNITS.distUnit : "";
+      return `<label class="tm-row"><input type="checkbox" data-idx="${i}">` +
+        `<span class="tm-date">${formatTripLabel(t)}</span>` +
+        `<span class="tm-km">${km}</span>` +
+        `<span class="tm-wheel${label ? "" : " tm-unknown"}">${label || "Generic wheel"}</span></label>`;
+    }).join("");
+
+    selWheel.innerHTML = '<option value="">Select by wheel…</option>' +
+      groups.map((g, gi) => `<option value="${gi}">${g.label} (${g.indices.length})</option>`).join("");
+
+    // Assignable wheels: every named identity in the library, plus a
+    // custom one, plus clearing. Values carry the identity as JSON.
+    const named = groups.filter((g) => !g.unknown).map((g) => {
+      const w = g.wheel || {};
+      return { label: g.label, wheel: { name: w.name, mac: w.mac, make: w.make, model: w.model, serial: w.serial } };
+    });
+    target.innerHTML = named.map((n, i) => `<option value="${i}">→ ${n.label}</option>`).join("") +
+      '<option value="custom">→ New wheel…</option>' +
+      '<option value="clear">→ No wheel (clear)</option>';
+    target._named = named;
+
+    const checkedIdx = () => [...list.querySelectorAll("input:checked")].map((c) => parseInt(c.dataset.idx));
+    const refresh = () => {
+      const n = checkedIdx().length;
+      countEl.textContent = n ? n + " selected" : allTracks.length + " trips";
+      applyBtn.disabled = !n;
+      delBtn.disabled = !n;
+      selAll.checked = n === allTracks.length;
+    };
+    list.addEventListener("change", refresh);
+    selAll.onchange = () => {
+      list.querySelectorAll("input").forEach((c) => { c.checked = selAll.checked; });
+      refresh();
+    };
+    selWheel.onchange = () => {
+      const gi = selWheel.value;
+      if (gi === "") return;
+      const wanted = new Set(groups[parseInt(gi)].indices);
+      list.querySelectorAll("input").forEach((c) => { c.checked = wanted.has(parseInt(c.dataset.idx)); });
+      selWheel.value = "";
+      refresh();
+    };
+    applyBtn.onclick = () => {
+      const idxs = checkedIdx();
+      if (!idxs.length) return;
+      let wheel;
+      const v = target.value;
+      if (v === "clear") {
+        wheel = null;
+      } else if (v === "custom") {
+        const name = (window.prompt("Wheel name (e.g. KS-16SZ or Lynx-2317):") || "").trim();
+        if (!name) return;
+        wheel = { name };
+      } else {
+        wheel = { ...target._named[parseInt(v)].wheel };
+      }
+      for (const i of idxs) {
+        // Manual assignment is a uniform identity: it also drops any
+        // multi-wheel list the parser attached.
+        if (wheel) allTracks[i].wheel = { ...wheel };
+        else delete allTracks[i].wheel;
+        delete allTracks[i].wheels;
+      }
+      saveTracks(allTracks);
+      buildTripList();
+      updateGlow();
+      updateVisibilityUI();
+      renderTripManager();
+    };
+    delBtn.onclick = () => {
+      const idxs = new Set(checkedIdx());
+      if (!idxs.size) return;
+      if (!window.confirm("Remove " + idxs.size + " trip(s) from the loaded library? The original files are not touched.")) return;
+      const remaining = allTracks.filter((_, i) => !idxs.has(i));
+      loadTracks(remaining, true);
+      saveTracks(allTracks);
+      if (!allTracks.length) { tmClose(); return; }
+      renderTripManager();
+    };
+    refresh();
+  }
+
   function buildTripList() {
     tripList.innerHTML = "";
     const header = document.getElementById("panel-header");
@@ -1895,18 +2075,62 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
     header.appendChild(summary);
 
-    // Wheel Forensics lives at the top of the panel because it always
-    // operates on the whole library, not the current selection. Opens in
-    // a new tab so the viewer state (selection, expanded groups, scroll)
-    // is preserved when the user comes back.
+    // One row: wheel selector on the left, Forensics on the right.
+    // Forensics opens in a new tab (viewer state survives) scoped to the
+    // selected wheel; "All wheels" opens the whole history. A library
+    // with a single wheel, or none recorded at all, gets a disabled
+    // selector that just states what's loaded, and Forensics opens
+    // unscoped (it IS the whole history then).
+    const wheelGroups = computeWheelGroups();
+    let forensicsWheel = null; // null = whole library
+    const wheelRow = document.createElement("div");
+    wheelRow.className = "wheel-filter-row";
+    const wheelSel = document.createElement("select");
+    wheelSel.className = "wheel-filter";
+    if (wheelGroups.length > 1) {
+      wheelSel.innerHTML = '<option value="-1">All wheels (' + allTracks.length + ")</option>" +
+        wheelGroups.map((g, gi) =>
+          '<option value="' + gi + '">' + g.label + " (" + g.indices.length + ")</option>").join("");
+      // Picking a wheel drives the same visibility set as the checkboxes,
+      // so the map, summary, exports, trace colors and Forensics follow.
+      wheelSel.addEventListener("change", (e) => {
+        const gi = parseInt(e.target.value);
+        forensicsWheel = gi < 0 ? null : wheelGroups[gi];
+        trackVisible = gi < 0
+          ? new Set(allTracks.map((_, i) => i))
+          : new Set(wheelGroups[gi].indices);
+        if (selectedIdx >= 0 && !trackVisible.has(selectedIdx)) {
+          selectedIdx = -1;
+          tooltip.classList.add("hidden");
+          hideChartMarker();
+          document.querySelectorAll(".trip-item.active").forEach(el => el.classList.remove("active"));
+        }
+        tripList.querySelectorAll(".trip-check").forEach(cb => {
+          cb.checked = trackVisible.has(parseInt(cb.dataset.idx));
+        });
+        tripList.querySelectorAll(".month-group").forEach(g => updateGroupCheckbox(g));
+        tripList.querySelectorAll(".year-group").forEach(g => updateYearCheckbox(g));
+        updateGlow();
+        updateVisibilityUI();
+        fitAll();
+      });
+    } else {
+      const only = wheelGroups[0];
+      const label = only && !only.unknown ? only.label : "Generic wheel";
+      wheelSel.innerHTML = "<option>" + label + " (" + allTracks.length + ")</option>";
+      wheelSel.disabled = true;
+      wheelSel.title = only && !only.unknown
+        ? "Every loaded trip is from this wheel"
+        : "None of the loaded trips carry a wheel identity; assign one in Manage trips";
+    }
     const analyticsBtn = document.createElement("a");
-    analyticsBtn.className = "analytics-btn analytics-btn-header";
+    analyticsBtn.className = "forensics-btn";
     analyticsBtn.href = "analytics.html";
     analyticsBtn.target = "_blank";
     analyticsBtn.rel = "noopener";
     analyticsBtn.innerHTML = `
       <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M1.5 13.5 5.5 8l3 3 6-8"/><circle cx="5.5" cy="8" r="1.2" fill="currentColor"/><circle cx="8.5" cy="11" r="1.2" fill="currentColor"/></svg>
-      <span class="analytics-label">Wheel Forensics</span>`;
+      <span class="analytics-label">Forensics</span>`;
     // The whole-history analysis needs a real sample of rides before its
     // trends and fits mean anything; below the floor the button explains
     // itself instead of opening a page of empty sections.
@@ -1929,11 +2153,16 @@ document.addEventListener("DOMContentLoaded", function () {
       label.textContent = "Preparing…";
       analyticsBtn.style.pointerEvents = "none";
       try { await pendingSessionWrite; } catch (_) {}
-      window.open("analytics.html", "_blank", "noopener");
+      const scope = forensicsWheel
+        ? "?wheel=" + encodeURIComponent(forensicsWheel.unknown ? "__unknown__" : forensicsWheel.key)
+        : "";
+      window.open("analytics.html" + scope, "_blank", "noopener");
       label.textContent = orig;
       analyticsBtn.style.pointerEvents = "";
     });
-    header.appendChild(analyticsBtn);
+    wheelRow.appendChild(wheelSel);
+    wheelRow.appendChild(analyticsBtn);
+    header.appendChild(wheelRow);
 
     // "All trips" checkbox row with expand/collapse buttons
     const allRow = document.createElement("div");
@@ -1941,6 +2170,13 @@ document.addEventListener("DOMContentLoaded", function () {
     allRow.innerHTML = `
       <label><input type="checkbox" class="all-check" checked> All trips</label>
       <div class="tree-actions">
+        <span class="tree-btn manage-trips" title="Assign wheels, remove trips">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11.3 2.7a1.4 1.4 0 0 1 2 2L5.5 12.5l-2.9.9.9-2.9z"/>
+            <line x1="9.6" y1="4.4" x2="11.6" y2="6.4"/>
+          </svg>
+          Manage trips
+        </span>
         <span class="tree-btn expand-all" title="Expand all">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="4 6 8 2 12 6"/>
@@ -1977,6 +2213,7 @@ document.addEventListener("DOMContentLoaded", function () {
       updateGlow();
       updateVisibilityUI();
     });
+    allRow.querySelector(".manage-trips").addEventListener("click", openTripManager);
     allRow.querySelector(".expand-all").addEventListener("click", () => {
       tripList.querySelectorAll(".year-group, .month-group").forEach(g => g.classList.add("expanded"));
     });
@@ -2353,7 +2590,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const addBtn = document.createElement("label");
     addBtn.className = "add-more-btn";
-    addBtn.innerHTML = `+ Add more <input type="file" accept=".dbb,.csv,.gpx,.xlsx" style="display:none" />`;
+    addBtn.innerHTML = `+ Add more <input type="file" accept=".zip,.dbb,.csv,.gpx,.xlsx" style="display:none" />`;
     addBtn.querySelector("input").addEventListener("change", (e) => {
       if (e.target.files[0]) handleFile(e.target.files[0], true);
     });
@@ -2412,10 +2649,10 @@ document.addEventListener("DOMContentLoaded", function () {
       chips = [["csv", ".csv"], ["xlsx", ".xlsx"], ["gpx", ".gpx"]];
     } else if (n === total) {
       label = "Export all";
-      chips = [["dbb", ".dbb"]];
+      chips = [["dbb", ".zip"]];
     } else {
       label = `Export selected (${n})`;
-      chips = [["dbb", ".dbb"]];
+      chips = [["dbb", ".zip"]];
     }
     exportBtn.innerHTML =
       `<span class="export-label">${label}</span>` +
@@ -2470,10 +2707,27 @@ document.addEventListener("DOMContentLoaded", function () {
     return cum;
   }
 
+  // Wheel identity as Extra-column pairs (EUC Planet's event convention),
+  // so exports keep the wheel attribution in-file, not just in the name.
+  function wheelExtraPairs(track) {
+    const w = track && track.wheel;
+    if (!w) return [];
+    const clean = (v) => String(v).replace(/[,"\r\n]+/g, " ").trim();
+    const out = [];
+    if (w.name) out.push("wheel.name=" + clean(w.name));
+    if (w.mac) out.push("wheel.mac=" + clean(w.mac));
+    if (w.make) out.push("wheel.brand=" + clean(w.make));
+    if (w.model) out.push("wheel.model=" + clean(w.model));
+    if (w.serial) out.push("wheel.serial=" + clean(w.serial));
+    return out;
+  }
+
   function trackToCSV(track) {
     const imp = UNITS.imperial;
+    const wheelPairs = wheelExtraPairs(track);
     const header = "Date,Speed,Voltage,PWM,Current,Power,Battery level,Total mileage,Temperature,Pitch,Roll,Latitude,Longitude,Altitude"
-      + (imp ? "," + IMPERIAL_COLS.join(",") : "") + "\n";
+      + (imp ? "," + IMPERIAL_COLS.join(",") : "")
+      + (wheelPairs.length ? ",Extra" : "") + "\n";
     let csv = header;
     const t0 = track.dateStart ? new Date(track.dateStart).getTime() : 0;
     const cum = imp ? exportCumKm(track) : null;
@@ -2487,6 +2741,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       const cols = [dateStr, row[1], row[2], "", "", "", row[4], "", row[3], "", "", row[6], row[7], row[5]];
       if (imp) cols.push(...imperialVals(row[1], cum[i], row[3]));
+      if (wheelPairs.length) cols.push(i < wheelPairs.length ? wheelPairs[i] : "");
       csv += cols.join(",") + "\n";
     }
     return csv;
@@ -2543,6 +2798,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const headerRow = ["Date", "Speed", "Voltage", "PWM", "Current", "Power", "Battery level",
                        "Total mileage", "Temperature", "Latitude", "Longitude", "Altitude", "GPS speed"];
     if (imp) headerRow.push(...IMPERIAL_COLS);
+    const wheelPairs = wheelExtraPairs(track);
+    if (wheelPairs.length) headerRow.push("Extra");
     const rows = [headerRow];
     const cum = imp ? exportCumKm(track) : null;
     const ts = track.timeseries;
@@ -2555,6 +2812,7 @@ document.addEventListener("DOMContentLoaded", function () {
         r[12] || "",
       ];
       if (imp) cols.push(...imperialVals(r[1], cum[i], r[3]));
+      if (wheelPairs.length) cols.push(i < wheelPairs.length ? wheelPairs[i] : "");
       rows.push(cols);
     }
     const ws = XLSXLib.utils.aoa_to_sheet(rows);
@@ -2621,7 +2879,10 @@ document.addEventListener("DOMContentLoaded", function () {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "trips_export.dbb";
+      // Plain .zip: phones and desktops open it natively, and unzipping
+      // straight into Dropbox/Apps/EUC Planet/trips just works. The
+      // importer accepts .dbb and .zip alike.
+      a.download = "trips_export.zip";
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -3297,13 +3558,14 @@ document.addEventListener("DOMContentLoaded", function () {
   // Does NOT save to recents or cache — keeps the viewer clean for embedded use.
   window.loadFileFromBase64 = async function (base64String, filename) {
     filename = filename || "import.dbb";
+    // (zip and dbb are the same container; both accepted below)
     try {
       const binary = atob(base64String);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       const file = new File([bytes], filename, { type: "application/octet-stream" });
       const lname = file.name.toLowerCase();
-      if (!lname.endsWith(".dbb") && !lname.endsWith(".csv") && !lname.endsWith(".gpx") && !lname.endsWith(".xlsx")) return { success: false, error: "Unsupported file type" };
+      if (!lname.endsWith(".dbb") && !lname.endsWith(".zip") && !lname.endsWith(".csv") && !lname.endsWith(".gpx") && !lname.endsWith(".xlsx")) return { success: false, error: "Unsupported file type" };
 
       progressArea.classList.remove("hidden");
       progressFill.style.width = "0%";

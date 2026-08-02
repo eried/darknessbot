@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=49" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=51" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -134,6 +134,10 @@
                     <div class="dr-labels">
                         <span id="dr-lo">…</span>
                         <span id="dr-hi">…</span>
+                    </div>
+                    <div class="scope-wheel-row hidden" id="scope-wheel-row">
+                        <label for="scope-wheel">Wheel</label>
+                        <select id="scope-wheel" title="Only trips whose file records the wheel identity can be attributed"></select>
                     </div>
                     <div class="scope-actions">
                         <span class="dr-summary" id="dr-summary">All trips</span>
@@ -717,6 +721,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=75"></script>
+    <script src="static/js/analytics.js?v=78"></script>
 </body>
 </html>

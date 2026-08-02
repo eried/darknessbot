@@ -726,6 +726,21 @@
     const p = (n) => String(n).padStart(2, "0");
     return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
+  // Real wheel identity only (no voltage guessing): euc.world CSVs carry
+  // make/model/serial in their extra column, attached at parse as
+  // track.wheel. Trips without it stay unattributed.
+  function wheelKeyOf(t) {
+    const w = t && t.wheel;
+    if (!w) return null;
+    // Some wheels report the brand inside the model ("InMotion P6"); don't
+    // double it up in the label.
+    const modelHasMake = w.make && w.model &&
+      w.model.toLowerCase().startsWith(w.make.toLowerCase());
+    const label = (modelHasMake ? w.model : [w.make, w.model].filter(Boolean).join(" "))
+      || w.name || (w.mac ? "Wheel " + w.mac : null);
+    return label ? { key: label + "|" + (w.serial || w.mac || ""), label } : null;
+  }
+
   function computeTripMetrics(t) {
     const rawTs = Array.isArray(t.timeseries) ? t.timeseries : [];
     const lastAlive = lastAliveIndex(rawTs);
@@ -733,6 +748,7 @@
     const date = parseTripDate(t);
     const m = {
       date,
+      wheel: wheelKeyOf(t),
       dateStr: date ? localDateStr(date) : null,
       label: t.date || (date ? fmtTripLabel(date) : (t.name || "Trip")),
       distKm: tripDistanceKm(t),
@@ -1367,6 +1383,49 @@
   // Keep the unfiltered set: the date-range slider operates by replacing
   // `dated` with a sub-slice of `datedFull`, then re-running renderAll().
   const datedFull = dated.slice();
+
+  // Wheel groups from real identity only: metrics with the same wheel
+  // key share a group, everything unattributed lands in "Generic wheel".
+  // Each metric gets its group index in m.wheelGi.
+  const wheelGroups = (() => {
+    const byKey = new Map();
+    const unknown = [];
+    for (const m of datedFull) {
+      if (m.wheel) {
+        if (!byKey.has(m.wheel.key)) byKey.set(m.wheel.key, { key: m.wheel.key, label: m.wheel.label, members: [] });
+        byKey.get(m.wheel.key).members.push(m);
+      } else {
+        unknown.push(m);
+      }
+    }
+    const groups = [...byKey.values()];
+    const counts = {};
+    for (const g of groups) counts[g.label] = (counts[g.label] || 0) + 1;
+    const seen = {};
+    for (const g of groups) {
+      if (counts[g.label] > 1) {
+        seen[g.label] = (seen[g.label] || 0) + 1;
+        g.label += " #" + seen[g.label];
+      }
+    }
+    if (unknown.length && groups.length) groups.push({ label: "Generic wheel", members: unknown, unknown: true });
+    groups.forEach((g, gi) => { for (const m of g.members) m.wheelGi = gi; });
+    return groups.map((g) => ({ label: g.label, count: g.members.length, key: g.key, unknown: g.unknown }));
+  })();
+  const wheelScopeSel = document.getElementById("scope-wheel");
+  if (wheelScopeSel && wheelGroups.length > 1) {
+    document.getElementById("scope-wheel-row").classList.remove("hidden");
+    wheelScopeSel.innerHTML = '<option value="-1">All wheels (' + datedFull.length + ")</option>" +
+      wheelGroups.map((g, gi) => '<option value="' + gi + '">' + g.label + " (" + g.count + ")</option>").join("");
+    // The viewer's Forensics button hands over its wheel-filter pick via
+    // ?wheel=<key> (same key formula both sides; __unknown__ = the
+    // unattributed group). Preselect it before the first render.
+    const wantKey = new URLSearchParams(location.search).get("wheel");
+    if (wantKey) {
+      const gi = wheelGroups.findIndex((g) => wantKey === "__unknown__" ? g.unknown : g.key === wantKey);
+      if (gi >= 0) wheelScopeSel.value = String(gi);
+    }
+  }
   const subtitleFmt = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
   function refreshSubtitle() {
     let totalKm = 0;
@@ -1389,6 +1448,30 @@
   const drHi = document.getElementById("dr-hi");
   const drReset = document.getElementById("dr-reset");
   const drFmt = new Intl.DateTimeFormat(undefined, { month: "short", year: "2-digit", day: "numeric" });
+  // "All wheels" over a multi-wheel library blends per-wheel physics:
+  // range, efficiency, regen, motor sag, thermals and battery health only
+  // mean something per wheel, so those sections carry a MIXED flag until
+  // the scope narrows to one wheel.
+  const MIXED_WHEEL_SECTIONS = ["range", "efficiency", "regen", "motor", "thermal", "health"];
+  function updateMixedTags(wheelGi) {
+    const mixed = wheelGi < 0 && wheelGroups.length > 1;
+    document.querySelectorAll(".chart-section").forEach((sec) => {
+      const want = mixed && MIXED_WHEEL_SECTIONS.includes(sec.dataset.section);
+      let tag = sec.querySelector(".mixed-tag");
+      if (want && !tag) {
+        const h2 = sec.querySelector("h2");
+        if (!h2) return;
+        tag = document.createElement("span");
+        tag.className = "forensic-tag mixed-tag";
+        tag.textContent = "⚠ MIXED WHEELS";
+        tag.title = "All wheels are in scope, so this metric blends different wheels (battery, motor and range differ per wheel). Pick one wheel in Scope for a clean read.";
+        h2.insertBefore(tag, h2.querySelector(".sec-meta"));
+      } else if (!want && tag) {
+        tag.remove();
+      }
+    });
+  }
+
   function applyDateRange() {
     const fullStart = datedFull[0].date.getTime();
     const fullEnd = datedFull[datedFull.length - 1].date.getTime();
@@ -1401,11 +1484,15 @@
     drFill.style.width = (maxV - minV) + "%";
     drLo.textContent = drFmt.format(dateRangeStart);
     drHi.textContent = drFmt.format(dateRangeEnd);
-    const sub = datedFull.filter((m) => m.date >= dateRangeStart && m.date <= dateRangeEnd);
+    const wheelGi = wheelScopeSel ? Number(wheelScopeSel.value) : -1;
+    updateMixedTags(wheelGi);
+    const sub = datedFull.filter((m) =>
+      m.date >= dateRangeStart && m.date <= dateRangeEnd &&
+      (wheelGi < 0 || m.wheelGi === wheelGi));
     dated.length = 0;
     Array.prototype.push.apply(dated, sub);
     dated.forEach((m, i) => { m.epoch = dated.length > 1 ? i / (dated.length - 1) : 0.5; });
-    const all = minV === 0 && maxV === 100;
+    const all = minV === 0 && maxV === 100 && wheelGi < 0;
     drSummary.textContent = all
       ? "All trips (" + datedFull.length + ")"
       : sub.length + " of " + datedFull.length + " trips";
@@ -1425,14 +1512,29 @@
     applyDateRangeDebounced();
   });
   drReset.addEventListener("click", () => {
-    drMin.value = 0; drMax.value = 100; applyDateRange();
+    drMin.value = 0; drMax.value = 100;
+    if (wheelScopeSel) wheelScopeSel.value = "-1";
+    applyDateRange();
   });
+  if (wheelScopeSel) wheelScopeSel.addEventListener("change", applyDateRange);
   // Initial visual sync (don't run renderAll yet, it isn't defined at this point)
   drFill.style.left = "0%";
   drFill.style.width = "100%";
   drLo.textContent = drFmt.format(datedFull[0].date);
   drHi.textContent = drFmt.format(datedFull[datedFull.length - 1].date);
   drSummary.textContent = "All trips (" + datedFull.length + ")";
+  // A ?wheel= preselect must scope the very first render too; renderAll
+  // isn't defined yet, so filter `dated` directly (the date range is
+  // still full-width here).
+  const initWheelGi = wheelScopeSel ? Number(wheelScopeSel.value) : -1;
+  updateMixedTags(initWheelGi);
+  if (initWheelGi >= 0) {
+    const sub = datedFull.filter((m) => m.wheelGi === initWheelGi);
+    dated.length = 0;
+    Array.prototype.push.apply(dated, sub);
+    dated.forEach((m, i) => { m.epoch = dated.length > 1 ? i / (dated.length - 1) : 0.5; });
+    drSummary.textContent = sub.length + " of " + datedFull.length + " trips";
+  }
 
   // Scope: a modal dialog behind a small button near the page title.
   // The button glows whenever a sub-range is active so the user can't

@@ -310,6 +310,26 @@ body[data-layout="single"] .layout-toggle-btn .layout-icon-tabs { display: block
 }
 .scope-panel .calc-close:hover { border-color: #b388ff; }
 .scope-body { padding: 18px 18px 12px; }
+.scope-wheel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 0.78rem;
+    color: #9ab;
+}
+.scope-wheel-row select {
+    flex: 1;
+    min-width: 0;
+    background: rgba(0, 229, 255, 0.05);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    border-radius: 4px;
+    color: #cfe;
+    font-size: 0.78rem;
+    padding: 4px 6px;
+    color-scheme: dark;
+}
+.scope-wheel-row select option { background: #0f1419; color: #cfe; }
 .scope-actions {
     display: flex;
     align-items: center;
@@ -603,6 +623,16 @@ body[data-layout="tabs"] [data-tab]:not(.tab-btn):not(.tab-active) { display: no
     border-color: rgba(124, 199, 255, 0.4);
     color: #7cc7ff;
     background: rgba(124, 199, 255, 0.08);
+}
+/* MIXED WHEELS chip: amber warning shown when "All wheels" are in scope
+   on a multi-wheel library and this section's metric blends per-wheel
+   physics (range, efficiency, motor, thermal, battery health). */
+.forensic-tag.mixed-tag,
+[data-section="gpsdelta"] .forensic-tag.mixed-tag {
+    border-color: rgba(255, 193, 7, 0.45);
+    color: #ffc107;
+    background: rgba(255, 193, 7, 0.08);
+    cursor: help;
 }
 .chart-section.no-data .chart-host { display: none; }
 

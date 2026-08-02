@@ -6,7 +6,7 @@
     <title>EUC Planet Trip Viewer</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/style.css?v=64" />
+    <link rel="stylesheet" href="static/css/style.css?v=68" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -84,7 +84,7 @@
             <div id="upload-actions">
                 <label id="upload-label" for="file-input">
                     Upload trips
-                    <input type="file" id="file-input" accept=".dbb,.csv,.gpx,.xlsx" />
+                    <input type="file" id="file-input" accept=".zip,.dbb,.csv,.gpx,.xlsx" />
                 </label>
                 <div id="dropbox-split" class="dropbox-split">
                     <button type="button" id="dropbox-btn" class="hint-source dropbox-main" data-source="dropbox" title="Load trips from Dropbox">
@@ -118,6 +118,28 @@
         </div>
     </div>
 
+    <div id="trip-manager" class="hidden" role="dialog" aria-label="Manage trips">
+        <div class="tm-backdrop" data-tm-close></div>
+        <div class="tm-panel">
+            <header class="tm-header">
+                <span class="tm-tag">MANAGE</span>
+                <h3>Trips in this library</h3>
+                <button type="button" class="tm-close" data-tm-close aria-label="Close">&times;</button>
+            </header>
+            <div class="tm-toolbar">
+                <label class="tm-selall"><input type="checkbox" id="tm-select-all"> All</label>
+                <select id="tm-select-wheel" title="Select every trip of one wheel"></select>
+                <span class="tm-count" id="tm-count"></span>
+            </div>
+            <div class="tm-list" id="tm-list"></div>
+            <footer class="tm-actions">
+                <select id="tm-wheel-target" title="Wheel to assign"></select>
+                <button type="button" id="tm-apply-wheel" disabled>Set wheel</button>
+                <button type="button" id="tm-delete" class="tm-danger" disabled>Remove</button>
+            </footer>
+        </div>
+    </div>
+
     <div id="page-footer">
         <a href="https://github.com/eried/eucviewer" target="_blank" rel="noopener" title="View / contribute on GitHub">
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -139,7 +161,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="static/js/app.js?v=105"></script>
+    <script src="static/js/app.js?v=116"></script>
     <script src="static/js/dropbox-source.js?v=5"></script>
     <script src="static/js/source-hints.js?v=34"></script>
 </body>

@@ -69,8 +69,8 @@ self.addEventListener("message", async (event) => {
       return;
     }
 
-    if (!lowerName.endsWith(".dbb")) {
-      throw new Error("Please upload a .dbb, .csv, .gpx or .xlsx file");
+    if (!lowerName.endsWith(".dbb") && !lowerName.endsWith(".zip")) {
+      throw new Error("Please upload a .zip, .dbb, .csv, .gpx or .xlsx file");
     }
 
     if (!self.JSZip) {
@@ -119,11 +119,107 @@ self.addEventListener("message", async (event) => {
   }
 });
 
+// Wheel identity from the filename, for files whose content carries none
+// (web XLSX and DarknessBot CSVs). Recognized shapes:
+//   <Name>_<MAC12>_DD.MM.YYYY_HH-MM-SS.*        eucviewer bookmarklet
+//   <Name>_DD.MM.YYYY_HH-MM-SS.*                bookmarklet, MAC unknown
+//   <MAC12>_DD.MM.YYYY*.csv                     DarknessBot
+//   EUC_data_log_<identity>_YYYY_MM_DD_HHMMSS   euc.world app export
+function wheelFromFileName(name) {
+  const base = String(name || "").replace(/\.[A-Za-z0-9]+$/, "");
+  let m = base.match(/^EUC_data_log_(.+)_\d{4}_\d{2}_\d{2}_\d{6}$/);
+  if (m) return { name: m[1].replace(/_/g, " ") };
+  m = base.match(/^(.*?)_?([0-9A-Fa-f]{12})_\d{2}\.\d{2}\.\d{4}/);
+  if (m) {
+    const out = { mac: m[2].toUpperCase() };
+    if (m[1]) out.name = m[1].replace(/_/g, " ");
+    return out;
+  }
+  m = base.match(/^(.+?)_\d{2}\.\d{2}\.\d{4}_\d{2}-\d{2}-\d{2}/);
+  if (m) return { name: m[1].replace(/_/g, " ") };
+  return null;
+}
+
 function parseCsvText(text, name) {
   const rows = parseCsvRows(text);
   if (!rows.length) return null;
-  normalizeEucWorldRows(rows);
-  return buildTrackFromRows(rows, name.replace(/\.csv$/i, ""));
+  const wheel = normalizeEucWorldRows(rows);
+  const track = buildTrackFromRows(rows, name.replace(/\.csv$/i, ""));
+  // Optional wheel identity: in-file metadata (euc.world's extra column,
+  // or the Wheel / Wheel MAC trailing columns EUC Planet is adopting)
+  // wins over the filename. New optional track field; readers guard,
+  // cached tracks simply lack it.
+  if (track) {
+    const w = wheel || wheelFromExtraColumn(rows) || wheelFromFileName(name);
+    if (w) {
+      if (w.all) { track.wheels = w.all; delete w.all; }
+      track.wheel = w;
+    }
+  }
+  return track;
+}
+
+// EUC Planet's recorder appends a trailing "Extra" event column: empty on
+// normal rows, one key=value pair per event row. Identity keys
+// (wheel.name / wheel.mac / wheel.model / wheel.adapter / wheel.firmware)
+// are re-emitted on every (re)connect, so a trip that switched wheels
+// mid-ride holds several identity blocks. The trip is attributed to the
+// wheel covering the most rows (`track.wheel`), and when more than one
+// wheel rode it the full list lands in `track.wheels` so filters can
+// count the trip under each of them.
+function wheelFromExtraColumn(rows) {
+  if (!rows.length) return null;
+  const col = rows[0].Extra !== undefined ? "Extra" : (rows[0].extra !== undefined ? "extra" : null);
+  if (!col) return null;
+  // Collect identity blocks: a block starts when name/mac re-appears
+  // (reconnect or a different wheel) and closes on wheel.disconnected.
+  const blocks = [];
+  let current = null;
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i][col];
+    if (!raw) continue;
+    const eq = raw.indexOf("=");
+    if (eq <= 0) continue;
+    const key = raw.slice(0, eq).trim();
+    if (!/^wheel\./.test(key)) continue;
+    const field = key.slice(6);
+    const value = raw.slice(eq + 1).trim();
+    if (field === "disconnected") { current = null; continue; }
+    if (!value) continue;
+    if (!current || ((field === "name" || field === "mac") && current[field] !== undefined)) {
+      current = { startRow: i };
+      blocks.push(current);
+    }
+    if (field === "name") current.name = value;
+    else if (field === "mac") current.mac = value.replace(/[:\-]/g, "").toUpperCase();
+    else if (field === "model") current.model = value;
+    else if (field === "brand") current.make = value;
+    else if (field === "serial") current.serial = value;
+  }
+  const named = blocks.filter((b) => b.name || b.mac || b.model);
+  if (!named.length) return null;
+  // Majority attribution when a trip switched wheels mid-ride: sum the
+  // row span of each distinct identity, biggest total wins.
+  for (let i = 0; i < named.length; i++) {
+    const end = i + 1 < named.length ? named[i + 1].startRow : rows.length;
+    named[i].span = Math.max(1, end - named[i].startRow);
+  }
+  const byId = new Map();
+  for (const b of named) {
+    const id = (b.name || "") + "|" + (b.mac || "") + "|" + (b.model || "");
+    const agg = byId.get(id);
+    if (agg) agg.span += b.span;
+    else byId.set(id, { name: b.name, mac: b.mac, model: b.model, make: b.make, serial: b.serial, span: b.span });
+  }
+  const strip = (w) => ({ name: w.name, mac: w.mac, model: w.model, make: w.make, serial: w.serial });
+  const ids = [...byId.values()];
+  let best = ids[0];
+  for (const w of ids) if (w.span > best.span) best = w;
+  const res = strip(best);
+  // A trip that switched wheels mid-ride: `all` lists every distinct
+  // identity in ride order so it can appear under each of its wheels.
+  if (ids.length > 1) res.all = ids.map(strip);
+  return res;
 }
 
 // euc.world's native app export ("EUC data <date>.csv") uses its own
@@ -148,12 +244,32 @@ const EUC_WORLD_COLS = {
 };
 function normalizeEucWorldRows(rows) {
   const first = rows[0];
-  if (!first || first.datetime === undefined || first.gps_lat === undefined) return;
+  if (!first || first.datetime === undefined || first.gps_lat === undefined) return null;
+  // Wheel identity rides in the `extra` column as key=value pairs spread
+  // over the first rows. Key spelling changed across euc.world versions:
+  // 2023-era "eucModel=KS-14S", current "euc.model=KS-16SZ".
+  const wheel = {};
+  const WHEEL_KEYS = {
+    "euc.make": "make",
+    "euc.model": "model", "eucModel": "model",
+    "euc.name": "name", "eucBluetoothName": "name",
+    "euc.serial": "serial", "eucSerial": "serial",
+  };
+  const scanMax = Math.min(rows.length, 400);
+  for (let i = 0; i < scanMax; i++) {
+    const extra = rows[i].extra;
+    if (!extra) continue;
+    const eq = extra.indexOf("=");
+    if (eq <= 0) continue;
+    const key = WHEEL_KEYS[extra.slice(0, eq).trim()];
+    if (key && !wheel[key]) wheel[key] = extra.slice(eq + 1).trim();
+  }
   for (const row of rows) {
     for (const src in EUC_WORLD_COLS) {
       if (row[src] !== undefined) row[EUC_WORLD_COLS[src]] = row[src];
     }
   }
+  return (wheel.make || wheel.model || wheel.name) ? wheel : null;
 }
 
 // BLE glitches leave "speed islands" in real exports: rows whose value
@@ -620,7 +736,15 @@ async function parseXlsxBuffer(buffer, name) {
     rows.push(obj);
   }
   if (!rows.length) return null;
-  return buildTrackFromRows(rows, name.replace(/\.xlsx$/i, ""));
+  const track = buildTrackFromRows(rows, name.replace(/\.xlsx$/i, ""));
+  if (track) {
+    const w = wheelFromExtraColumn(rows) || wheelFromFileName(name);
+    if (w) {
+      if (w.all) { track.wheels = w.all; delete w.all; }
+      track.wheel = w;
+    }
+  }
+  return track;
 }
 
 function parseCsvRows(text) {

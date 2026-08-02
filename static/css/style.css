@@ -984,6 +984,112 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 }
 
 /* All trips checkbox row */
+/* Trip manager modal */
+#trip-manager { position: fixed; inset: 0; z-index: 1200; }
+#trip-manager.hidden { display: none; }
+.tm-backdrop { position: absolute; inset: 0; background: rgba(5, 8, 12, 0.7); backdrop-filter: blur(3px); }
+.tm-panel {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(560px, 94vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #10161d, #0b1015);
+    border: 1px solid rgba(0, 229, 255, 0.18);
+    border-radius: 10px;
+    box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.7);
+    overflow: hidden;
+}
+.tm-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.1);
+}
+.tm-tag {
+    font-size: 0.62rem; letter-spacing: 0.12em; font-weight: 700;
+    color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.35);
+    border-radius: 3px; padding: 2px 6px;
+}
+.tm-header h3 { margin: 0; font-size: 0.95rem; color: #e7f6fa; font-weight: 600; flex: 1; }
+.tm-close {
+    background: none; border: none; color: #9ab; font-size: 22px;
+    cursor: pointer; line-height: 1; padding: 2px 6px;
+}
+.tm-close:hover { color: #fff; }
+.tm-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.07);
+    font-size: 0.78rem; color: #9ab;
+}
+.tm-selall { display: flex; align-items: center; gap: 6px; }
+.tm-toolbar select, .tm-actions select {
+    background: rgba(0, 229, 255, 0.05);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    border-radius: 4px; color: #cfe; font-size: 0.78rem; padding: 4px 6px;
+    min-width: 0;
+    color-scheme: dark;
+}
+/* The open dropdown list is UA-rendered: without an explicit dark
+   background the options come up white-on-white over the dark panel. */
+.tm-toolbar select option, .tm-actions select option,
+.wheel-filter-row .wheel-filter option {
+    background: #0f1419;
+    color: #cfe;
+}
+.tm-count { margin-left: auto; color: #789; }
+.tm-list { flex: 1; overflow-y: auto; min-height: 120px; }
+.tm-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    font-size: 0.8rem; color: #cdd;
+    cursor: pointer;
+}
+.tm-row:hover { background: rgba(0, 229, 255, 0.04); }
+.tm-row .tm-date { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-row .tm-km { color: #8aa; width: 70px; text-align: right; }
+.tm-row .tm-wheel { color: #6fc3d6; width: 150px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-row .tm-wheel.tm-unknown { color: #667; }
+.tm-actions {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    border-top: 1px solid rgba(0, 229, 255, 0.1);
+}
+.tm-actions select { flex: 1; }
+.tm-actions button {
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    border-radius: 5px; color: #bfeef7; font-size: 0.8rem;
+    padding: 6px 14px; cursor: pointer;
+}
+.tm-actions button:disabled { opacity: 0.35; cursor: default; }
+.tm-actions button:not(:disabled):hover { background: rgba(0, 229, 255, 0.18); }
+.tm-actions .tm-danger { border-color: rgba(255, 90, 90, 0.4); color: #ffb3b3; background: rgba(255, 90, 90, 0.07); }
+.tm-actions .tm-danger:not(:disabled):hover { background: rgba(255, 90, 90, 0.16); }
+
+.wheel-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.08);
+    font-size: 0.82rem;
+    color: #aaa;
+}
+.wheel-filter-row .wheel-filter {
+    flex: 1;
+    min-width: 0;
+    background: rgba(0, 229, 255, 0.05);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    border-radius: 4px;
+    color: #cfe;
+    font-size: 0.8rem;
+    padding: 4px 6px;
+    color-scheme: dark;
+}
 .all-trips-row {
     display: flex;
     align-items: center;
@@ -1024,6 +1130,16 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     user-select: none;
 }
 .tree-btn svg { width: 14px; height: 14px; }
+/* Labeled variant: icon + text instead of a bare 24px icon. */
+.tree-btn.manage-trips {
+    width: auto;
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 0.74rem;
+    border: 1px solid rgba(0, 229, 255, 0.18);
+    color: #9cc;
+    white-space: nowrap;
+}
 .tree-btn:hover {
     background: rgba(0, 229, 255, 0.08);
     color: #00e5ff;
@@ -1341,40 +1457,40 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 .main-screen-btn:hover { background: rgba(0, 229, 255, 0.06); }
 
 /* Wheel Forensics button — opens analytics.html */
-.analytics-btn {
-    display: flex;
+/* Forensics: compact button sharing the wheel-filter row; the selector
+   on its left IS the scope it opens with. */
+.forensics-btn {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 6px;
-    padding: 8px 16px;
+    padding: 4px 12px;
+    border: 1px solid rgba(179, 136, 255, 0.32);
+    border-radius: 5px;
+    background: linear-gradient(180deg, rgba(179, 136, 255, 0.10), rgba(179, 136, 255, 0.04));
     color: #b388ff;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
     text-decoration: none;
     cursor: pointer;
-    border-bottom: 1px solid rgba(0, 229, 255, 0.08);
+    white-space: nowrap;
     transition: background 0.15s;
 }
-.analytics-btn:hover { background: rgba(179, 136, 255, 0.08); }
+.forensics-btn:hover {
+    background: linear-gradient(180deg, rgba(179, 136, 255, 0.18), rgba(179, 136, 255, 0.08));
+}
 /* Not enough trips yet: dimmed but still hoverable so the tooltip can
    explain the requirement (clicks are blocked in JS). */
-.analytics-btn.disabled {
+.forensics-btn.disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
-.analytics-btn.disabled:hover { background: transparent; }
-
-/* Header variant: prominent card under the summary stats. Always applies
-   to the whole library, so it lives outside of selection-dependent UI. */
-.analytics-btn-header {
-    margin: 8px 12px 4px;
-    padding: 10px 14px;
-    border: 1px solid rgba(179, 136, 255, 0.32);
-    border-bottom: 1px solid rgba(179, 136, 255, 0.32);
-    border-radius: 8px;
+.forensics-btn.disabled:hover {
     background: linear-gradient(180deg, rgba(179, 136, 255, 0.10), rgba(179, 136, 255, 0.04));
-    font-weight: 600;
-    font-size: 0.85rem;
-    letter-spacing: 0.3px;
+}
+.wheel-filter-row .wheel-filter:disabled {
+    opacity: 0.75;
+    cursor: default;
 }
 .analytics-btn-header:hover {
     background: linear-gradient(180deg, rgba(179, 136, 255, 0.18), rgba(179, 136, 255, 0.08));

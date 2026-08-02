@@ -1963,9 +1963,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     list.innerHTML = allTracks.map((t, i) => {
       // Multi-wheel trips (mid-ride switch) show every wheel they carry.
+      // Rows open pre-checked to mirror the main window's selection, so
+      // "check 2 trips, open the manager, Remove" just works.
       const label = wheelIdsOf(t).map(labelOfWheel).filter(Boolean).join(" + ") || null;
       const km = t.stats ? UNITS.dist(t.stats.distanceKm).toFixed(1) + " " + UNITS.distUnit : "";
-      return `<label class="tm-row"><input type="checkbox" data-idx="${i}">` +
+      return `<label class="tm-row"><input type="checkbox" data-idx="${i}"${trackVisible.has(i) ? " checked" : ""}>` +
         `<span class="tm-date">${formatTripLabel(t)}</span>` +
         `<span class="tm-km">${km}</span>` +
         `<span class="tm-wheel${label ? "" : " tm-unknown"}">${label || "Generic wheel"}</span></label>`;

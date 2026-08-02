@@ -258,7 +258,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const GlowLayer = L.Layer.extend({
     onAdd(map) {
       this._map = map;
-      this._canvas = L.DomUtil.create("canvas", "glow-canvas");
+      // leaflet-zoom-animated: during a zoom animation the map container
+      // carries .leaflet-zoom-anim, whose CSS transitions the transform we
+      // set in _updateTransform, so the trace scales WITH the tiles
+      // instead of freezing until zoomend repaints it.
+      this._canvas = L.DomUtil.create("canvas", "glow-canvas leaflet-zoom-animated");
       this._canvas.style.pointerEvents = "none";
       map.getPane("overlayPane").appendChild(this._canvas);
       this._ctx = this._canvas.getContext("2d");
@@ -267,11 +271,32 @@ document.addEventListener("DOMContentLoaded", function () {
       this._visible = null;
       this._onViewChange = this._onViewChange.bind(this);
       map.on("moveend zoomend viewreset resize", this._onViewChange);
+      map.on("zoomanim", this._onZoomAnim, this);
+      map.on("zoom", this._onZoom, this);
       this._onViewChange();
     },
     onRemove(map) {
       L.DomUtil.remove(this._canvas);
       map.off("moveend zoomend viewreset resize", this._onViewChange);
+      map.off("zoomanim", this._onZoomAnim, this);
+      map.off("zoom", this._onZoom, this);
+    },
+    // Zoom-follow, same scheme as L.Renderer: transform the already-drawn
+    // canvas to where its content lands under the new (center, zoom); the
+    // zoomend redraw then repaints it crisp and setPosition clears the
+    // scale. "zoomanim" covers the animated wheel/button zoom, "zoom" the
+    // per-frame pinch and flyTo updates.
+    _onZoomAnim(e) { this._updateTransform(e.center, e.zoom); },
+    _onZoom() { this._updateTransform(this._map.getCenter(), this._map.getZoom()); },
+    _updateTransform(center, zoom) {
+      if (!this._drawnCenter) return;
+      const map = this._map;
+      const scale = map.getZoomScale(zoom, this._drawnZoom);
+      const currentCenterPoint = map.project(this._drawnCenter, zoom);
+      const topLeftOffset = this._drawnViewHalf.multiplyBy(-scale)
+        .add(currentCenterPoint)
+        .subtract(map._getNewPixelOrigin(center, zoom));
+      L.DomUtil.setTransform(this._canvas, topLeftOffset, scale);
     },
     setData(latLngs, selected) {
       this._latLngs = latLngs;
@@ -348,6 +373,10 @@ document.addEventListener("DOMContentLoaded", function () {
       this._canvas.height = h;
       const topLeft = map.containerPointToLayerPoint([-pad, -pad]);
       L.DomUtil.setPosition(this._canvas, topLeft);
+      // Reference view for the zoom-follow transform (_updateTransform).
+      this._drawnCenter = map.getCenter();
+      this._drawnZoom = map.getZoom();
+      this._drawnViewHalf = L.point(size.x / 2 + pad, size.y / 2 + pad);
       const ctx = this._ctx;
       ctx.clearRect(0, 0, w, h);
       if (!this._latLngs.length) return;

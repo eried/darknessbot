@@ -124,7 +124,12 @@ document.addEventListener("DOMContentLoaded", function () {
     zoom: 5,
     zoomControl: false,
     preferCanvas: true,
-    zoomSnap: 1,
+    // Fractional zoom: settle on quarter levels, half a level per +/-
+    // press, and twice the scroll distance per level, so zooming stops
+    // jumping 2x at a time. Raster tiles scale between integer levels.
+    zoomSnap: 0.25,
+    zoomDelta: 0.5,
+    wheelPxPerZoomLevel: 120,
     layers: [BASE_STYLES[selectedStyle].layer],
   });
   map.getContainer().classList.toggle("dark-tiles", BASE_STYLES[selectedStyle].dark);

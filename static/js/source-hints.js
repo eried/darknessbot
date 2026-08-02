@@ -123,7 +123,7 @@
           </div></li>
         <li>Open <a href="https://euc.world/account/tours" target="_blank" rel="noopener">euc.world</a>, sign in.</li>
         <li>Click the <strong>Takeout my trips</strong> toolbar button.</li>
-        <li>Drop the downloaded <code>.dbb</code> here.</li>
+        <li>Drop the downloaded <code>.zip</code> here.</li>
       </ol>
       <p class="src-sub">A single ride</p>
       <ol class="src-steps">
@@ -145,8 +145,8 @@
       <p class="src-sub">All trips at once <span class="src-sub-tag">recommended</span></p>
       <ol class="src-steps">
         <li>Open <strong>Settings</strong> &rarr; <strong>Application</strong> &rarr; <strong>App data</strong>.</li>
-        <li>Tap <strong>Export trips</strong> and save the <code>.dbb</code> file.</li>
-        <li>Drop the <code>.dbb</code> here.</li>
+        <li>Tap <strong>Export trips</strong> and save the exported file.</li>
+        <li>Drop it here.</li>
       </ol>
       <p class="src-sub">A single ride</p>
       <ol class="src-steps">
@@ -384,7 +384,7 @@
         status.textContent = fromCache
           ? `Preparing trips (${fromCache} from cache)…`
           : "Preparing trips…";
-        const file = new File([blob], `all_trips.dbb`, { type: "application/zip" });
+        const file = new File([blob], `all_trips.zip`, { type: "application/zip" });
         closeModal(root);
         if (typeof window.eucViewerLoadFile === "function") {
           window.eucViewerLoadFile(file, { dropboxMap: blob.__dropboxMap, source: "dropbox" });
@@ -466,7 +466,7 @@
       });
       // Leave the bar at 50% — handleFile picks up there and runs to 100.
       if (progressFill) progressFill.style.width = "50%";
-      const file = new File([blob], `all_trips.dbb`, { type: "application/zip" });
+      const file = new File([blob], `all_trips.zip`, { type: "application/zip" });
       if (typeof window.eucViewerLoadFile === "function") {
         window.eucViewerLoadFile(file, {
           dropboxMap: blob.__dropboxMap,

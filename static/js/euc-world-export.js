@@ -1,7 +1,7 @@
 // Loaded as a script tag inside euc.world via the eucviewer bookmarklet.
 // Same-origin context, so /webapi/userTours pagination and /xlsx/{key}
-// fetches both inherit the user's session cookies. Output: a single .dbb
-// (zip of .xlsx) that eucviewer can read directly.
+// fetches both inherit the user's session cookies. Output: a single .zip
+// (of .xlsx files) that eucviewer can read directly.
 (function () {
   "use strict";
 
@@ -76,7 +76,7 @@
     const stamp = new Date().toISOString().slice(0, 10);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "euc-world_" + stamp + ".dbb";
+    a.download = "euc-world_" + stamp + ".zip";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

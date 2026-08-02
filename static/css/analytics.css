@@ -630,7 +630,7 @@ body[data-layout="tabs"] [data-tab]:not(.tab-btn):not(.tab-active) { display: no
    metric blends per-wheel physics (range, efficiency, motor, thermal,
    battery health). */
 .mixed-note {
-    font-size: 0.68rem;
+    font-size: 0.8rem;
     font-weight: 500;
     letter-spacing: 0.04em;
     color: rgba(255, 107, 107, 0.72);

@@ -1593,6 +1593,10 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     white-space: nowrap;
     max-width: calc(100vw - 16px);
 }
+/* Load screen: the upload overlay (z 1000) would bury the badge behind
+   its blurred black. Lift the footer above it only while the overlay is
+   up, so the phone trip panel (z 800) still slides over it in normal use. */
+#upload-overlay:not(.hidden) ~ #page-footer { z-index: 1010; }
 /* Narrow phones: icon-only GitHub link so the build date keeps one line */
 @media (max-width: 480px) {
     #page-footer { gap: 8px; }

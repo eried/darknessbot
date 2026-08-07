@@ -8,9 +8,10 @@
 #      stay silent.
 #
 # Opt-in via repo secrets (Settings -> Secrets and variables -> Actions):
-#   TELEGRAM_BOT_TOKEN  - same bot token as eucplanet
-#   TELEGRAM_CHANNEL_ID - "@ChannelName" (public) or "-100..." (private);
-#                         the bot must be a channel admin that can post.
+#   TELEGRAM_BOT_TOKEN         - same bot token as eucplanet
+#   TELEGRAM_CHANNEL_ID        - the @EUCPlanetApp group id
+#   TELEGRAM_CHANNEL_THREAD_ID - the "EUC Viewer" topic in that group
+#                                (optional: empty posts to the main chat)
 # Missing secrets skip the post; a Telegram hiccup never fails the run.
 name: Telegram announce
 
@@ -37,6 +38,7 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          THREAD_ID: ${{ secrets.TELEGRAM_CHANNEL_THREAD_ID }}
           DISPATCH_MSG: ${{ inputs.message }}
           COMMIT_MSG: ${{ github.event_name == 'push' && github.event.head_commit.message || '' }}
         run: |
@@ -56,8 +58,11 @@ jobs:
           text="$(esc "$msg")
 
           🌍 https://eucviewer.ried.no"
+          thread_arg=()
+          if [ -n "$THREAD_ID" ]; then thread_arg=(-d "message_thread_id=${THREAD_ID}"); fi
           curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${CHAT_ID}" \
+            "${thread_arg[@]}" \
             --data-urlencode "text=${text}" \
             -d "parse_mode=HTML" -d "disable_web_page_preview=true" \
             -o /dev/null -w "Telegram HTTP %{http_code}\n" || true

@@ -1027,6 +1027,32 @@
     snapBtn.classList.toggle("active", tlSnap);
     try { localStorage.setItem("eucviewer-video-snap", tlSnap ? "1" : "0"); } catch (_) {}
   });
+  // Reset: a small modal where the user picks what goes back to default.
+  const rsModal = $("reset-modal");
+  $("tlz-reset").addEventListener("click", () => rsModal.classList.remove("hidden"));
+  rsModal.querySelectorAll("[data-rs-close]").forEach((el) =>
+    el.addEventListener("click", () => rsModal.classList.add("hidden")));
+  $("rs-apply").addEventListener("click", () => {
+    const picks = [...rsModal.querySelectorAll("input:checked")].map((i) => i.value);
+    rsModal.classList.add("hidden");
+    if (!picks.length) return;
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    if (picks.includes("offset")) cfg.teleOffset = 0;
+    if (picks.includes("trim")) { cfg.trimStart = 0; cfg.trimEnd = S ? S.dur : null; }
+    if (picks.includes("text")) cfg.text = clone(DEFAULT_CFG.text);
+    if (picks.includes("gauge")) cfg.gauge = clone(DEFAULT_CFG.gauge);
+    if (picks.includes("elements")) {
+      cfg.elements = clone(DEFAULT_CFG.elements);
+      cfg.order = DEFAULT_CFG.order.slice();
+      cfg.useIcons = DEFAULT_CFG.useIcons;
+      cfg.map = clone(DEFAULT_CFG.map);
+      cfg.chroma = DEFAULT_CFG.chroma;
+      cfg.debug = DEFAULT_CFG.debug;
+    }
+    persistCfg(); buildSidebar(); layoutTimeline(); drawTeleGraph(); positionTrims(); requestDraw();
+    toast("Reset done.");
+  });
+
   function snapTo(value, candidates) {
     if (!tlSnap) return value;
     const th = 12 / pxPerSec;

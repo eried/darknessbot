@@ -7,7 +7,7 @@
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="static/video-manifest.webmanifest" />
     <meta name="theme-color" content="#0d1017" />
-    <link rel="stylesheet" href="static/css/video.css?v=12" />
+    <link rel="stylesheet" href="static/css/video.css?v=13" />
 </head>
 <body data-mtab="media">
     <header id="topbar">
@@ -89,6 +89,9 @@
             <button id="tlz-out" title="Zoom out (scroll on the timeline also zooms)">−</button>
             <button id="tlz-in" title="Zoom in">+</button>
             <button id="tlz-fit" title="Fit everything">⛶</button>
+            <button id="tlz-reset" title="Reset alignment, trims or style settings">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 6.7A5.2 5.2 0 1 1 2.8 9.5"/><path d="M2.5 3.5v3.4h3.4"/></svg>
+            </button>
             <button id="tlz-snap" title="Snap alignment to the video start and playhead">
                 <svg viewBox="0 0 16 16"><path d="M15 12h-4v3h4v-3ZM5 12H1v3h4v-3ZM0 8a8 8 0 1 1 16 0v8h-6V8a2 2 0 1 0-4 0v8H0V8Z"/></svg>
                 <span>Snap</span>
@@ -210,6 +213,24 @@
         </div>
     </div>
 
+    <div id="reset-modal" class="hidden">
+        <div class="xp-backdrop" data-rs-close></div>
+        <div class="xp-panel">
+            <header class="xp-head">
+                <h3>Reset</h3>
+                <button class="xp-close" data-rs-close aria-label="Close">&times;</button>
+            </header>
+            <div class="xp-body">
+                <label class="rs-opt"><input type="checkbox" value="offset" checked><span>Trip alignment offset</span></label>
+                <label class="rs-opt"><input type="checkbox" value="trim" checked><span>Trip trims</span></label>
+                <label class="rs-opt"><input type="checkbox" value="text"><span>Text settings</span></label>
+                <label class="rs-opt"><input type="checkbox" value="gauge"><span>Dial settings</span></label>
+                <label class="rs-opt"><input type="checkbox" value="elements"><span>Elements, map and chroma</span></label>
+                <button id="rs-apply" class="xp-go">Reset selected</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="hidden"></div>
 
     <input type="file" id="file-video" accept="video/*,.lrv" class="hidden" />
@@ -219,6 +240,6 @@
     <input type="file" id="file-cfg" accept=".json" class="hidden" />
 
     <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
-    <script src="static/js/video-editor.js?v=12"></script>
+    <script src="static/js/video-editor.js?v=13"></script>
 </body>
 </html>

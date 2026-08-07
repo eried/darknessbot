@@ -744,6 +744,11 @@
     if (hasVideo) { p ? videoEl.play().catch(() => {}) : videoEl.pause(); }
   }
   $("btn-play").addEventListener("click", () => setPlaying(!playing));
+  // Paused seeks land asynchronously: redraw when the frame is actually
+  // there, otherwise scrubbing a stopped video shows the previous frame
+  // (or black right after loading).
+  videoEl.addEventListener("seeked", requestDraw);
+  videoEl.addEventListener("loadeddata", requestDraw);
   document.addEventListener("keydown", (e) => {
     if (e.key === " " && !e.target.closest("input,select,button")) { e.preventDefault(); setPlaying(!playing); }
   });

@@ -344,6 +344,10 @@ button { font-family: inherit; }
     padding: 0;
 }
 #tl-tools button svg { width: 11px; height: 11px; }
+/* Snap is the one labeled tool: magnet icon (Bootstrap Icons, MIT) + text. */
+#tlz-snap { width: auto; padding: 0 8px; gap: 5px; }
+#tlz-snap svg { fill: currentColor; stroke: none; width: 10px; height: 10px; }
+#tlz-snap span { font-size: 0.64rem; letter-spacing: 0.03em; }
 #tl-tools button { transition: background 0.12s, color 0.12s, border-color 0.12s; }
 #tl-tools button:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; }
 #tl-tools button.active {
@@ -351,10 +355,10 @@ button { font-family: inherit; }
     border-color: rgba(0, 229, 255, 0.6);
     color: #00e5ff;
 }
-#tl-ruler { display: block; margin-left: 96px; height: 20px; cursor: pointer; }
+#tl-ruler { display: block; margin-left: 142px; height: 20px; cursor: pointer; }
 .tl-row { display: flex; align-items: stretch; height: 46px; margin-top: 2px; overflow: hidden; }
 .tl-label {
-    width: 96px;
+    width: 142px;
     flex: none;
     display: flex;
     align-items: center;
@@ -596,6 +600,9 @@ button { font-family: inherit; }
         font-size: 0.9rem;
     }
     #tl-tools button svg { width: 16px; height: 16px; }
+    #tlz-snap { width: auto; padding: 0 14px; gap: 7px; }
+    #tlz-snap svg { width: 14px; height: 14px; }
+    #tlz-snap span { font-size: 0.78rem; }
     .tl-label { width: 34px; padding-left: 9px; }
     .tl-label span { display: none; }
     .tl-label svg { width: 15px; height: 15px; }

@@ -7,10 +7,10 @@
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="static/video-manifest.webmanifest" />
     <meta name="theme-color" content="#0d1017" />
-    <link rel="stylesheet" href="static/css/video.css?v=7" />
+    <link rel="stylesheet" href="static/css/video.css?v=9" />
 </head>
-<body>
-    <div id="topbar">
+<body data-mtab="media">
+    <header id="topbar">
         <div class="tb-group tb-left">
             <button id="btn-video" class="tb-btn" title="Upload the ride footage (mp4, mov, webm)">
                 <svg viewBox="0 0 16 16"><rect x="1" y="4" width="9.5" height="8" rx="1.5"/><path d="M10.5 7.5 15 5v6l-4.5-2.5z"/></svg>
@@ -31,9 +31,6 @@
         </div>
         <div class="tb-title" id="tb-trip-name"></div>
         <div class="tb-group tb-right">
-            <button id="btn-panel" class="tb-btn tb-icon" title="Show / hide the overlay settings">
-                <svg viewBox="0 0 16 16"><line x1="2" y1="4" x2="14" y2="4"/><circle cx="6" cy="4" r="1.8"/><line x1="2" y1="8" x2="14" y2="8"/><circle cx="10.5" cy="8" r="1.8"/><line x1="2" y1="12" x2="14" y2="12"/><circle cx="5" cy="12" r="1.8"/></svg>
-            </button>
             <button id="btn-load-cfg" class="tb-btn tb-icon" title="Load config (.json)">
                 <svg viewBox="0 0 16 16"><path d="M8 11V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
             </button>
@@ -46,63 +43,61 @@
                 <span>Generate video</span>
             </button>
         </div>
-    </div>
+    </header>
 
-    <div id="main">
-        <div id="sidebar">
-            <div id="side-tabs">
-                <button class="side-tab active" data-tab="text">Text</button>
-                <button class="side-tab" data-tab="gauge">Dial</button>
-                <button class="side-tab" data-tab="elements">Elements</button>
-            </div>
-            <div id="side-panels">
-                <div class="side-panel active" data-panel="text"></div>
-                <div class="side-panel" data-panel="gauge"></div>
-                <div class="side-panel" data-panel="elements"></div>
+    <aside id="sidebar">
+        <div id="side-tabs">
+            <button class="side-tab active" data-tab="text">Text</button>
+            <button class="side-tab" data-tab="gauge">Dial</button>
+            <button class="side-tab" data-tab="elements">Elements</button>
+        </div>
+        <div id="side-panels">
+            <div class="side-panel active" data-panel="text"></div>
+            <div class="side-panel" data-panel="gauge"></div>
+            <div class="side-panel" data-panel="elements"></div>
+        </div>
+    </aside>
+
+    <section id="stage">
+        <div id="stage-box">
+            <canvas id="preview"></canvas>
+            <div id="stage-empty" class="hidden">
+                <p><strong>No trip loaded.</strong></p>
+                <p>Open this page from a trip's Video button, or load one with the Trip button.</p>
             </div>
         </div>
-
-        <div id="stage">
-            <div id="stage-box">
-                <canvas id="preview"></canvas>
-                <div id="stage-empty" class="hidden">
-                    <p><strong>No trip loaded.</strong></p>
-                    <p>Open this page from a trip's Video button, or load one with the Trip button above.</p>
-                </div>
-            </div>
-            <div id="transport">
-                <button id="btn-play" title="Play / pause (space)">
-                    <svg id="ic-play" viewBox="0 0 16 16"><path d="M4.5 2.5 13 8l-8.5 5.5z"/></svg>
-                    <svg id="ic-pause" viewBox="0 0 16 16" class="hidden"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg>
-                </button>
-                <span id="time-label">00:00 / 00:00</span>
-                <span id="transport-hint">Drag the overlay parts on the preview. Drag the telemetry strip below to align it with the video.</span>
-            </div>
+        <div id="transport">
+            <button id="btn-play" title="Play / pause (space)">
+                <svg id="ic-play" viewBox="0 0 16 16"><path d="M4.5 2.5 13 8l-8.5 5.5z"/></svg>
+                <svg id="ic-pause" viewBox="0 0 16 16" class="hidden"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg>
+            </button>
+            <span id="time-label">00:00 / 00:00</span>
+            <span id="transport-hint">Drag the overlay parts on the preview. Drag the telemetry strip below to align it with the video.</span>
         </div>
-    </div>
+    </section>
 
-    <div id="timeline">
+    <section id="timeline">
         <div id="tl-resize" title="Drag to resize the timeline"></div>
         <div id="tl-tools">
             <button id="tlz-out" title="Zoom out (scroll on the timeline also zooms)">−</button>
             <button id="tlz-in" title="Zoom in">+</button>
             <button id="tlz-fit" title="Fit everything">⛶</button>
             <button id="tlz-snap" title="Snap alignment to the video start and playhead">
-                <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4.5 2v6a3.5 3.5 0 0 0 7 0V2"/><line x1="4.5" y1="4.8" x2="7" y2="4.8"/><line x1="9" y1="4.8" x2="11.5" y2="4.8"/></svg>
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4.5 2v6a3.5 3.5 0 0 0 7 0V2"/><line x1="4.5" y1="4.8" x2="7" y2="4.8"/><line x1="9" y1="4.8" x2="11.5" y2="4.8"/></svg>
             </button>
         </div>
         <canvas id="tl-ruler"></canvas>
         <div class="tl-row">
             <div class="tl-label">
                 <svg viewBox="0 0 16 16"><rect x="1" y="4" width="9.5" height="8" rx="1.5"/><path d="M10.5 7.5 15 5v6l-4.5-2.5z"/></svg>
-                Video
+                <span>Video</span>
             </div>
             <div class="tl-track" id="tl-video-track"><canvas id="tl-thumbs"></canvas><div id="tl-video-empty">no video · chroma background</div></div>
         </div>
         <div class="tl-row">
             <div class="tl-label">
                 <svg viewBox="0 0 16 16"><path d="M1 12l3-5 3 3 3-6 3 4 2-2"/></svg>
-                Trip
+                <span>Trip</span>
             </div>
             <div class="tl-track" id="tl-tele-track">
                 <canvas id="tl-graph"></canvas>
@@ -111,7 +106,57 @@
             </div>
         </div>
         <div id="playhead"></div>
-    </div>
+    </section>
+
+    <section id="mob-media" class="mob-panel">
+        <p class="mob-hint">Load your material, then align and style it in the other tabs.</p>
+        <button class="media-row" id="mr-video">
+            <svg viewBox="0 0 16 16"><rect x="1" y="4" width="9.5" height="8" rx="1.5"/><path d="M10.5 7.5 15 5v6l-4.5-2.5z"/></svg>
+            <span class="mr-text"><strong>Ride video</strong><em id="ms-video">none · chroma background</em></span>
+        </button>
+        <button class="media-row" id="mr-trip">
+            <svg viewBox="0 0 16 16"><path d="M3 14V2.5A1.5 1.5 0 0 1 4.5 1H11l2 2v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 8.5 7 10l3.5-3.5"/></svg>
+            <span class="mr-text"><strong>Trip telemetry</strong><em id="ms-trip">none loaded</em></span>
+        </button>
+        <button class="media-row" id="mr-vbo">
+            <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>
+            <span class="mr-text"><strong>Dragy VBO</strong><em id="ms-vbo">optional · GPS speed and track map</em></span>
+        </button>
+        <button class="media-row" id="mr-sync" disabled>
+            <svg viewBox="0 0 16 16"><path d="M2 8a6 6 0 0 1 10.5-4M14 8a6 6 0 0 1-10.5 4"/><path d="M12.5 1v3h-3M3.5 15v-3h3"/></svg>
+            <span class="mr-text"><strong>Auto-sync</strong><em id="ms-sync">load a video first</em></span>
+        </button>
+    </section>
+
+    <section id="mob-export" class="mob-panel">
+        <button class="media-row" id="mr-save">
+            <svg viewBox="0 0 16 16"><path d="M8 2v9M4.5 7.5 8 11l3.5-3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+            <span class="mr-text"><strong>Save config</strong><em>everything incl. alignment, as .json</em></span>
+        </button>
+        <button class="media-row" id="mr-load">
+            <svg viewBox="0 0 16 16"><path d="M8 11V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+            <span class="mr-text"><strong>Load config</strong><em>restore a saved setup</em></span>
+        </button>
+        <button id="mr-generate">
+            <svg viewBox="0 0 16 16"><path d="M5 3.5 12.5 8 5 12.5z"/></svg>
+            Generate video
+        </button>
+    </section>
+
+    <nav id="mob-nav">
+        <button data-mtab="media" class="active">
+            <svg viewBox="0 0 16 16"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+            <span>Media</span>
+        </button>
+        <button data-mtab="style">
+            <svg viewBox="0 0 16 16"><line x1="2.5" y1="4" x2="13.5" y2="4"/><circle cx="6" cy="4" r="1.9"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><circle cx="10.5" cy="8" r="1.9"/><line x1="2.5" y1="12" x2="13.5" y2="12"/><circle cx="5" cy="12" r="1.9"/></svg>
+            <span>Style</span>
+        </button>
+        <button data-mtab="export">
+            <svg viewBox="0 0 16 16"><path d="M5 3.5 12.5 8 5 12.5z"/></svg>
+            <span>Export</span>
+        </button>
+    </nav>
 
     <div id="export-modal" class="hidden">
         <div class="xp-backdrop" data-xp-close></div>
@@ -163,6 +208,6 @@
     <input type="file" id="file-cfg" accept=".json" class="hidden" />
 
     <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
-    <script src="static/js/video-editor.js?v=8"></script>
+    <script src="static/js/video-editor.js?v=9"></script>
 </body>
 </html>

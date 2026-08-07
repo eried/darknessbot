@@ -136,6 +136,7 @@
     if (cfg.trimEnd == null || cfg.trimEnd > S.dur) cfg.trimEnd = S.dur;
     if (cfg.trimStart > S.dur) cfg.trimStart = 0;
     $("tb-trip-name").textContent = t.date || t.name || "";
+    setStatus("ms-trip", `${t.date || t.name || "trip"} · ${fmtT(S.dur)}`);
     $("stage-empty").classList.add("hidden");
     layoutTimeline();
     drawTeleGraph();
@@ -824,6 +825,10 @@
   let tlZoom = 1;       // 1 = everything fits the viewport
   let tlView = 0;       // left edge of the viewport, in seconds
   let tlRowH = parseInt(localStorage.getItem("eucviewer-video-tlh")) || 46;
+  // Phone: fixed finger-friendly rows, no resizing (the grip is hidden).
+  const mobileMQ = window.matchMedia("(max-width: 760px)");
+  const rowH = () => (mobileMQ.matches ? 48 : tlRowH);
+  mobileMQ.addEventListener("change", () => { layoutTimeline(); requestDraw(); });
   let thumbCache = null; // { bmps: ImageBitmap[], dur }
 
   function tlSpan() {
@@ -836,7 +841,7 @@
   function layoutTimeline() {
     const w = trackW();
     if (!w) return;
-    document.querySelectorAll(".tl-row").forEach((r) => { r.style.height = tlRowH + "px"; });
+    document.querySelectorAll(".tl-row").forEach((r) => { r.style.height = rowH() + "px"; });
     pxPerSec = (w / tlSpan()) * tlZoom;
     const maxView = Math.max(0, tlSpan() - w / pxPerSec);
     tlView = Math.min(Math.max(0, tlView), maxView);
@@ -878,7 +883,7 @@
   // column, so extreme zoom levels never allocate giant canvases.
   function drawTeleGraph() {
     if (!S) return;
-    const w = trackW(), h = tlRowH - 2;
+    const w = trackW(), h = rowH() - 2;
     if (!w) return;
     const dpr = window.devicePixelRatio || 1;
     tlGraph.width = w * dpr; tlGraph.height = h * dpr;
@@ -920,7 +925,7 @@
   }
 
   function renderThumbs() {
-    const w = trackW(), h = tlRowH - 2;
+    const w = trackW(), h = rowH() - 2;
     const dpr = window.devicePixelRatio || 1;
     tlThumbs.width = w * dpr; tlThumbs.height = h * dpr;
     tlThumbs.style.width = w + "px"; tlThumbs.style.height = h + "px";
@@ -1098,6 +1103,9 @@
       videoEl.removeEventListener("loadedmetadata", once);
       $("tl-video-empty").classList.add("hidden");
       $("btn-lrv").disabled = false;
+      if ($("mr-sync")) $("mr-sync").disabled = false;
+      setStatus("ms-video", `${fmtT(videoEl.duration || 0)} · ${videoEl.videoWidth}x${videoEl.videoHeight}`);
+      setStatus("ms-sync", "pick the full source recording (.lrv)");
       curT = 0;
       layoutTimeline(); drawTeleGraph(); buildThumbs(); requestDraw();
       toast(`Video loaded: ${(videoEl.duration || 0) > 0 ? fmtT(videoEl.duration) : "?"} at ${videoEl.videoWidth}x${videoEl.videoHeight}`);
@@ -1182,6 +1190,7 @@
       if (parsed.path.length > 1) cfg.map.source = "vbo";
       buildSidebar();
       requestDraw();
+      setStatus("ms-vbo", `${parsed.t.length} rows · ${fmtT(parsed.t[parsed.t.length - 1])}${parsed.path.length > 1 ? " · GPS track" : ""}`);
       toast(`VBO loaded: ${parsed.t.length} rows, ${fmtT(parsed.t[parsed.t.length - 1])}${parsed.path.length > 1 ? ", GPS track" : ""}`);
     } catch (err) {
       toast("VBO parse failed: " + err.message);
@@ -1251,9 +1260,11 @@
         cfg.teleOffset = -clipStart;
         toast(`Clip starts ${fmtT(clipStart)} into the source. Telemetry assumed to start with it; fine-tune by dragging.`, 6000);
       }
+      setStatus("ms-sync", `synced · offset ${cfg.teleOffset.toFixed(1)}s`);
       persistCfg(); layoutTimeline(); requestDraw();
     } catch (err) {
       toast("Auto-sync failed: " + err.message, 5000);
+      setStatus("ms-sync", "failed, drag the trip strip to align by hand");
     }
   });
 
@@ -1383,14 +1394,16 @@
     sel.innerHTML = opts.map(([w, h, tag], i) =>
       `<option value="${w}x${h}"${(hasVideo ? tag === "source" : i === 0) ? " selected" : ""}>${w} × ${h}${tag ? " (" + tag + ")" : ""}</option>`).join("");
   }
-  $("btn-export").addEventListener("click", () => {
+  function openExport() {
     if (!S) { toast("Load a trip first."); return; }
     buildResOptions();
     $("xp-duration").textContent = fmtT(exportDuration());
     $("xp-setup").classList.remove("hidden");
     $("xp-progress").classList.add("hidden");
     xpModal.classList.remove("hidden");
-  });
+  }
+  $("btn-export").addEventListener("click", openExport);
+  if ($("mr-generate")) $("mr-generate").addEventListener("click", openExport);
   xpModal.querySelectorAll("[data-xp-close]").forEach((el) =>
     el.addEventListener("click", () => { if (!exporting) xpModal.classList.add("hidden"); }));
 
@@ -1590,13 +1603,26 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   }
 
-  // Phone: the parameters live in a bottom sheet behind the sliders
-  // button; only the preview and timeline show by default.
-  const panelBtn = $("btn-panel");
-  if (panelBtn) panelBtn.addEventListener("click", () => {
-    document.body.classList.toggle("show-panel");
-    panelBtn.classList.toggle("active", document.body.classList.contains("show-panel"));
+  // --- Phone: bottom nav switches the content area (Media, Style,
+  // Export); the preview and timeline stay put on top. The media and
+  // export rows proxy the same inputs the desktop topbar uses. ---
+  document.querySelectorAll("#mob-nav button").forEach((b) => {
+    b.addEventListener("click", () => {
+      document.body.dataset.mtab = b.dataset.mtab;
+      document.querySelectorAll("#mob-nav button").forEach((x) =>
+        x.classList.toggle("active", x === b));
+    });
   });
+  const mrProxy = { "mr-video": "file-video", "mr-trip": "file-trip", "mr-vbo": "file-vbo", "mr-sync": "file-lrv", "mr-load": "file-cfg" };
+  for (const id in mrProxy) {
+    const el = $(id);
+    if (el) el.addEventListener("click", () => $(mrProxy[id]).click());
+  }
+  if ($("mr-save")) $("mr-save").addEventListener("click", saveCfgFile);
+  function setStatus(id, text) {
+    const el = $(id);
+    if (el) el.textContent = text;
+  }
 
   // First paint.
   if (pendingTrack) setTrack(pendingTrack);

@@ -1,5 +1,10 @@
 /* Video Overlay Studio. Same dark language as the viewer: near-black
-   panels, cyan accents, purple for the primary action. */
+   panels, cyan accents, purple for the primary action.
+
+   Layout is a body grid with two shapes:
+   - desktop:  topbar / sidebar+stage / timeline
+   - phone:    stage / timeline / tabbed content (Media, Style, Export)
+     driven by body[data-mtab] and the bottom nav. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
     height: 100%;
@@ -8,19 +13,30 @@ html, body {
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
     overflow: hidden;
 }
-body { display: flex; flex-direction: column; }
+body {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+        "top top"
+        "side stage"
+        "tl tl";
+}
 .hidden { display: none !important; }
 button { font-family: inherit; }
 
+/* Phone-only blocks stay out of the desktop layout entirely. */
+#mob-media, #mob-export, #mob-nav { display: none; }
+
 /* --- Top bar --- */
 #topbar {
+    grid-area: top;
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
     background: #0d1017;
     border-bottom: 1px solid rgba(0, 229, 255, 0.12);
-    flex-wrap: wrap;
 }
 .tb-group { display: flex; gap: 8px; align-items: center; }
 .tb-title {
@@ -36,11 +52,11 @@ button { font-family: inherit; }
 .tb-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+    gap: 7px;
+    padding: 7px 13px;
     background: rgba(0, 229, 255, 0.06);
     border: 1px solid rgba(0, 229, 255, 0.25);
-    border-radius: 6px;
+    border-radius: 7px;
     color: #bfeef7;
     font-size: 0.8rem;
     cursor: pointer;
@@ -48,11 +64,12 @@ button { font-family: inherit; }
 .tb-btn:hover:not(:disabled) { background: rgba(0, 229, 255, 0.15); }
 .tb-btn:disabled { opacity: 0.35; cursor: default; }
 .tb-btn svg {
-    width: 14px; height: 14px;
+    width: 15px; height: 15px;
     fill: none; stroke: currentColor;
-    stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    flex: none;
 }
-.tb-icon { padding: 6px 8px; }
+.tb-icon { padding: 7px 9px; }
 .tb-primary {
     background: linear-gradient(180deg, rgba(179, 136, 255, 0.22), rgba(179, 136, 255, 0.1));
     border-color: rgba(179, 136, 255, 0.5);
@@ -62,25 +79,24 @@ button { font-family: inherit; }
 .tb-primary:hover:not(:disabled) { background: linear-gradient(180deg, rgba(179, 136, 255, 0.32), rgba(179, 136, 255, 0.16)); }
 .tb-primary svg { fill: currentColor; stroke: none; }
 
-/* --- Main area --- */
-#main { flex: 1; display: flex; min-height: 0; }
+/* --- Sidebar --- */
 #sidebar {
-    width: 250px;
-    flex: none;
+    grid-area: side;
     display: flex;
     flex-direction: column;
+    min-height: 0;
     background: #0d1017;
     border-right: 1px solid rgba(0, 229, 255, 0.1);
 }
 #side-tabs { display: flex; border-bottom: 1px solid rgba(0, 229, 255, 0.1); }
 .side-tab {
     flex: 1;
-    padding: 8px 0;
+    padding: 10px 0;
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: #8aa;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     cursor: pointer;
 }
 .side-tab.active { color: #00e5ff; border-bottom-color: #00e5ff; }
@@ -88,55 +104,60 @@ button { font-family: inherit; }
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 10px 12px 20px;
-    /* Scrolls with the wheel, no visible bar. */
+    padding: 10px 14px 24px;
     scrollbar-width: none;
 }
 #side-panels::-webkit-scrollbar { display: none; }
 .side-panel { display: none; }
 .side-panel.active { display: block; }
 
-.ctl-row { margin: 10px 0; font-size: 0.75rem; color: #9ab; }
-.ctl-row label { display: block; margin-bottom: 3px; }
-.ctl-row input[type="range"] { width: calc(100% - 52px); vertical-align: middle; accent-color: #00e5ff; }
-.ctl-val { display: inline-block; width: 48px; text-align: right; color: #cfe; font-variant-numeric: tabular-nums; }
+.ctl-row { margin: 12px 0; font-size: 0.76rem; color: #9ab; }
+.ctl-row label { display: block; margin-bottom: 4px; }
+.ctl-row input[type="range"] {
+    width: calc(100% - 54px);
+    vertical-align: middle;
+    accent-color: #00e5ff;
+    height: 22px;
+}
+.ctl-val { display: inline-block; width: 50px; text-align: right; color: #cfe; font-variant-numeric: tabular-nums; }
 .ctl-row select {
     width: 100%;
     background: rgba(0, 229, 255, 0.05);
     border: 1px solid rgba(0, 229, 255, 0.2);
-    border-radius: 4px;
+    border-radius: 5px;
     color: #cfe;
-    font-size: 0.78rem;
-    padding: 4px 6px;
+    font-size: 0.8rem;
+    padding: 6px 8px;
     color-scheme: dark;
 }
 .ctl-row select option { background: #0f1419; color: #cfe; }
 .ctl-check {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 9px 0;
-    font-size: 0.78rem;
+    gap: 9px;
+    margin: 11px 0;
+    font-size: 0.8rem;
     color: #bcd;
     cursor: pointer;
 }
-.ctl-check input { accent-color: #00e5ff; }
+.ctl-check input { accent-color: #00e5ff; width: 15px; height: 15px; }
 .ctl-sep {
-    margin: 16px 0 6px;
+    margin: 18px 0 6px;
     font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #6fc3d6;
     border-top: 1px solid rgba(0, 229, 255, 0.1);
-    padding-top: 10px;
+    padding-top: 12px;
 }
 .ctl-hint { font-size: 0.7rem; color: #678; margin: 4px 0 8px; }
-.chroma-swatches { display: flex; align-items: center; gap: 7px; margin: 8px 0; }
+
+.chroma-swatches { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
 .swatch {
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
     border: 2px solid rgba(255, 255, 255, 0.15);
     cursor: pointer;
     padding: 0;
@@ -157,8 +178,8 @@ button { font-family: inherit; }
     color: #cfe0e8;
 }
 .swatch-custom svg {
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
     pointer-events: none;
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8));
 }
@@ -168,25 +189,32 @@ button { font-family: inherit; }
     opacity: 0;
     cursor: pointer;
 }
-.chroma-swatches #chroma-hex { font-size: 0.7rem; color: #9ab; margin-left: 2px; }
+.chroma-swatches #chroma-hex { font-size: 0.72rem; color: #9ab; margin-left: 2px; }
 
 #el-list { margin: 2px 0 6px; }
 .el-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 2px;
+    gap: 7px;
+    padding: 5px 2px;
     border-radius: 4px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
 }
 .el-row.dragging { opacity: 0.4; }
 .el-row:hover { background: rgba(0, 229, 255, 0.05); }
-.el-grip { color: #567; cursor: grab; font-size: 0.7rem; letter-spacing: -1px; }
-.el-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #bcd; flex: 1; }
-.el-row input { accent-color: #00e5ff; }
+.el-grip { color: #567; cursor: grab; font-size: 0.72rem; letter-spacing: -1px; }
+.el-row label { display: flex; align-items: center; gap: 9px; cursor: pointer; color: #bcd; flex: 1; }
+.el-row input { accent-color: #00e5ff; width: 15px; height: 15px; }
 
 /* --- Stage --- */
-#stage { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #05060a; }
+#stage {
+    grid-area: stage;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: #05060a;
+}
 #stage-box {
     flex: 1;
     display: flex;
@@ -218,7 +246,8 @@ button { font-family: inherit; }
     border-top: 1px solid rgba(0, 229, 255, 0.1);
 }
 #btn-play {
-    width: 30px; height: 30px;
+    width: 32px; height: 32px;
+    flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -229,12 +258,12 @@ button { font-family: inherit; }
     cursor: pointer;
 }
 #btn-play svg { width: 13px; height: 13px; fill: currentColor; }
-#time-label { font-size: 0.78rem; color: #cfe; font-variant-numeric: tabular-nums; }
+#time-label { font-size: 0.8rem; color: #cfe; font-variant-numeric: tabular-nums; }
 #transport-hint { font-size: 0.7rem; color: #567; flex: 1; text-align: right; }
 
 /* --- Timeline --- */
 #timeline {
-    flex: none;
+    grid-area: tl;
     position: relative;
     background: #0d1017;
     border-top: 1px solid rgba(0, 229, 255, 0.12);
@@ -251,7 +280,6 @@ button { font-family: inherit; }
     z-index: 3;
     touch-action: none;
 }
-/* Always-visible grab pill so the resize is discoverable, esp. on touch. */
 #tl-resize::after {
     content: "";
     position: absolute;
@@ -269,43 +297,44 @@ button { font-family: inherit; }
     top: 24px;
     left: 8px;
     display: flex;
-    gap: 3px;
+    gap: 4px;
     z-index: 2;
 }
 #tl-tools button {
-    width: 18px;
-    height: 16px;
+    width: 20px;
+    height: 18px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: rgba(0, 229, 255, 0.07);
     border: 1px solid rgba(0, 229, 255, 0.22);
-    border-radius: 3px;
+    border-radius: 4px;
     color: #9cc;
-    font-size: 0.62rem;
+    font-size: 0.66rem;
     line-height: 1;
     cursor: pointer;
     padding: 0;
 }
+#tl-tools button svg { width: 11px; height: 11px; }
 #tl-tools button:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; }
 #tl-tools button.active {
     background: rgba(0, 229, 255, 0.25);
     border-color: rgba(0, 229, 255, 0.6);
     color: #00e5ff;
 }
-#tl-ruler { display: block; margin-left: 92px; height: 20px; cursor: pointer; }
+#tl-ruler { display: block; margin-left: 96px; height: 20px; cursor: pointer; }
 .tl-row { display: flex; align-items: stretch; height: 46px; margin-top: 2px; overflow: hidden; }
 .tl-label {
-    width: 92px;
+    width: 96px;
     flex: none;
     display: flex;
     align-items: center;
     gap: 6px;
     padding-left: 10px;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     color: #7a8a99;
 }
-.tl-label svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.tl-label svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; flex: none; }
 .tl-track {
     flex: 1;
     position: relative;
@@ -322,7 +351,7 @@ button { font-family: inherit; }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     color: #567;
 }
 #tl-tele-track { cursor: grab; touch-action: none; }
@@ -331,11 +360,23 @@ button { font-family: inherit; }
 .trim-handle {
     position: absolute;
     top: 0;
-    width: 8px;
+    width: 10px;
     height: 100%;
-    background: rgba(0, 229, 255, 0.65);
-    border-radius: 2px;
+    background: rgba(0, 229, 255, 0.6);
+    border-radius: 3px;
     cursor: col-resize;
+    touch-action: none;
+}
+.trim-handle::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 40%;
+    border-radius: 1px;
+    background: rgba(10, 16, 23, 0.75);
 }
 .trim-handle:hover { background: #00e5ff; }
 #playhead {
@@ -369,7 +410,7 @@ button { font-family: inherit; }
     border-bottom: 1px solid rgba(179, 136, 255, 0.2);
 }
 .xp-head h3 { font-size: 0.95rem; color: #d9c8ff; }
-.xp-close { background: none; border: none; color: #9ab; font-size: 1.3rem; cursor: pointer; }
+.xp-close { background: none; border: none; color: #9ab; font-size: 1.4rem; cursor: pointer; padding: 0 4px; }
 .xp-body { padding: 16px; }
 .xp-row {
     display: flex;
@@ -383,10 +424,10 @@ button { font-family: inherit; }
 .xp-row select {
     background: rgba(0, 229, 255, 0.05);
     border: 1px solid rgba(0, 229, 255, 0.2);
-    border-radius: 4px;
+    border-radius: 5px;
     color: #cfe;
-    font-size: 0.8rem;
-    padding: 5px 8px;
+    font-size: 0.82rem;
+    padding: 7px 8px;
     color-scheme: dark;
     width: 190px;
 }
@@ -401,9 +442,9 @@ button { font-family: inherit; }
 }
 .xp-go, .xp-stop {
     width: 100%;
-    padding: 9px 0;
-    border-radius: 6px;
-    font-size: 0.85rem;
+    padding: 11px 0;
+    border-radius: 7px;
+    font-size: 0.88rem;
     font-weight: 600;
     cursor: pointer;
 }
@@ -444,51 +485,169 @@ button { font-family: inherit; }
     text-align: center;
 }
 
-/* The settings toggle only exists on phones. */
-#btn-panel { display: none; }
-
-/* --- Phone: preview + timeline only; parameters live in a bottom sheet
-   behind the sliders button. Topbar becomes two tidy equal-width rows. --- */
+/* ============================= Phone ============================= */
 @media (max-width: 760px) {
-    #topbar { gap: 6px; padding: 6px 8px; }
-    .tb-title { display: none; }
-    .tb-group { flex: 1 1 100%; }
-    .tb-group .tb-btn { flex: 1; justify-content: center; }
-    .tb-btn span { display: none; }
-    .tb-primary span { display: inline; }
-    #btn-panel { display: inline-flex; }
-    #btn-panel.active { background: rgba(0, 229, 255, 0.25); color: #00e5ff; }
-
-    #main { flex-direction: column; }
-    #stage { flex: 1; min-height: 0; }
-    #sidebar { display: none; }
-    body.show-panel #sidebar {
-        display: flex;
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        max-height: 58vh;
-        z-index: 60;
+    body {
+        grid-template-columns: 1fr;
+        grid-template-rows: 38vh auto minmax(0, 1fr) auto;
+        grid-template-areas:
+            "stage"
+            "tl"
+            "content"
+            "nav";
+    }
+    #topbar { display: none; }
+    #sidebar {
+        grid-area: content;
+        display: none;
         border-right: none;
-        border-top: 1px solid rgba(0, 229, 255, 0.35);
-        box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.65);
     }
+    body[data-mtab="style"] #sidebar { display: flex; }
+    #mob-media { grid-area: content; }
+    #mob-export { grid-area: content; }
+    body[data-mtab="media"] #mob-media { display: block; }
+    body[data-mtab="export"] #mob-export { display: block; }
 
+    /* Stage: fixed band on top, timeline pinned right under it. */
+    #stage { min-height: 200px; }
+    #transport { padding: 8px 12px; }
+    #btn-play { width: 40px; height: 40px; }
+    #btn-play svg { width: 16px; height: 16px; }
+    #time-label { font-size: 0.9rem; }
     #transport-hint { display: none; }
-    .tl-label { width: 34px; font-size: 0; gap: 0; padding-left: 8px; }
-    .tl-label svg { width: 14px; height: 14px; }
-    #tl-ruler { margin-left: 34px; }
-    /* The tools overlap the ruler start on this narrow gutter; give them
-       a translucent backing so they stay readable. */
-    #tl-tools {
-        top: 22px;
-        left: 4px;
-        padding: 2px 3px;
-        background: rgba(13, 16, 23, 0.88);
-        border-radius: 4px;
+
+    /* Timeline: fixed height, finger-sized controls, no resizing. */
+    #tl-resize { display: none; }
+    #timeline { padding-top: 4px; }
+    #tl-tools { position: static; margin: 2px 8px 4px; gap: 8px; }
+    #tl-tools button {
+        width: 44px;
+        height: 32px;
+        border-radius: 6px;
+        font-size: 0.9rem;
     }
-    #tl-tools button { width: 22px; height: 20px; }
-    #tl-resize::after { width: 80px; height: 6px; }
+    #tl-tools button svg { width: 16px; height: 16px; }
+    .tl-label { width: 34px; padding-left: 9px; }
+    .tl-label span { display: none; }
+    .tl-label svg { width: 15px; height: 15px; }
+    #tl-ruler { margin-left: 34px; }
+    .trim-handle { width: 18px; border-radius: 5px; }
+    .trim-handle::after { width: 4px; }
+
+    /* Content panels: big touch rows. */
+    .mob-panel {
+        overflow-y: auto;
+        padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+        background: #0a0d14;
+        scrollbar-width: none;
+    }
+    .mob-panel::-webkit-scrollbar { display: none; }
+    .mob-hint { font-size: 0.78rem; color: #789; margin: 2px 2px 12px; }
+    .media-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        text-align: left;
+        padding: 14px;
+        margin-bottom: 10px;
+        background: rgba(0, 229, 255, 0.05);
+        border: 1px solid rgba(0, 229, 255, 0.2);
+        border-radius: 10px;
+        color: #cfe0e8;
+        cursor: pointer;
+    }
+    .media-row:active { background: rgba(0, 229, 255, 0.14); }
+    .media-row:disabled { opacity: 0.4; }
+    .media-row svg {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        fill: none;
+        stroke: #7fdcee;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .mr-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .mr-text strong { font-size: 0.92rem; font-weight: 600; }
+    .mr-text em {
+        font-style: normal;
+        font-size: 0.74rem;
+        color: #7a8a99;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #mr-generate {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 16px 0;
+        margin-top: 6px;
+        border-radius: 10px;
+        background: linear-gradient(180deg, rgba(179, 136, 255, 0.3), rgba(179, 136, 255, 0.15));
+        border: 1px solid rgba(179, 136, 255, 0.55);
+        color: #e6dbff;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    #mr-generate svg { width: 16px; height: 16px; fill: currentColor; }
+
+    /* Bottom nav: three fat tabs. */
+    #mob-nav {
+        grid-area: nav;
+        display: flex;
+        background: #0d1017;
+        border-top: 1px solid rgba(0, 229, 255, 0.15);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    #mob-nav button {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 9px 0 7px;
+        background: none;
+        border: none;
+        border-top: 2px solid transparent;
+        color: #7a8a99;
+        font-size: 0.7rem;
+        cursor: pointer;
+    }
+    #mob-nav button svg {
+        width: 21px;
+        height: 21px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    #mob-nav button[data-mtab="export"] svg { fill: currentColor; stroke: none; }
+    #mob-nav button.active { color: #00e5ff; border-top-color: #00e5ff; }
+
+    /* Sidebar controls grow for touch. */
+    .side-tab { padding: 12px 0; font-size: 0.85rem; }
+    .ctl-row input[type="range"] { height: 30px; }
+    .ctl-check { margin: 13px 0; font-size: 0.86rem; }
+    .ctl-check input, .el-row input { width: 18px; height: 18px; }
+    .el-row { padding: 8px 2px; font-size: 0.86rem; }
+    .swatch { width: 34px; height: 34px; }
+
+    /* Export modal becomes a bottom sheet. */
+    .xp-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        transform: none;
+        width: 100%;
+        border-radius: 14px 14px 0 0;
+        border-bottom: none;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }

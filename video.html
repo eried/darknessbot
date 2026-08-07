@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Video Overlay Studio · EUC Planet</title>
+    <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="static/video-manifest.webmanifest" />
+    <meta name="theme-color" content="#0d1017" />
+    <link rel="stylesheet" href="static/css/video.css?v=6" />
+</head>
+<body>
+    <div id="topbar">
+        <div class="tb-group tb-left">
+            <button id="btn-video" class="tb-btn" title="Upload the ride footage (mp4, mov, webm)">
+                <svg viewBox="0 0 16 16"><rect x="1" y="4" width="9.5" height="8" rx="1.5"/><path d="M10.5 7.5 15 5v6l-4.5-2.5z"/></svg>
+                <span>Video</span>
+            </button>
+            <button id="btn-trip" class="tb-btn" title="Load a different trip (csv, zip, dbb, gpx, xlsx)">
+                <svg viewBox="0 0 16 16"><path d="M3 14V2.5A1.5 1.5 0 0 1 4.5 1H11l2 2v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 8.5 7 10l3.5-3.5"/></svg>
+                <span>Trip</span>
+            </button>
+            <button id="btn-vbo" class="tb-btn" title="Load a Dragy .vbo (GPS speed + track map)">
+                <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>
+                <span>VBO</span>
+            </button>
+            <button id="btn-lrv" class="tb-btn" title="Auto-sync: pick the full source recording (.lrv or original file) to find where this clip starts" disabled>
+                <svg viewBox="0 0 16 16"><path d="M2 8a6 6 0 0 1 10.5-4M14 8a6 6 0 0 1-10.5 4"/><path d="M12.5 1v3h-3M3.5 15v-3h3"/></svg>
+                <span>Sync</span>
+            </button>
+        </div>
+        <div class="tb-title" id="tb-trip-name"></div>
+        <div class="tb-group tb-right">
+            <button id="btn-load-cfg" class="tb-btn tb-icon" title="Load config (.json)">
+                <svg viewBox="0 0 16 16"><path d="M8 11V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+            </button>
+            <button id="btn-save-cfg" class="tb-btn" title="Save the current config (.json), including trip alignment and trims">
+                <svg viewBox="0 0 16 16"><path d="M8 2v9M4.5 7.5 8 11l3.5-3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+                <span>Save config</span>
+            </button>
+            <button id="btn-export" class="tb-btn tb-primary">
+                <svg viewBox="0 0 16 16"><path d="M5 3.5 12.5 8 5 12.5z"/></svg>
+                <span>Generate video</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="sidebar">
+            <div id="side-tabs">
+                <button class="side-tab active" data-tab="text">Text</button>
+                <button class="side-tab" data-tab="gauge">Dial</button>
+                <button class="side-tab" data-tab="elements">Elements</button>
+            </div>
+            <div id="side-panels">
+                <div class="side-panel active" data-panel="text"></div>
+                <div class="side-panel" data-panel="gauge"></div>
+                <div class="side-panel" data-panel="elements"></div>
+            </div>
+        </div>
+
+        <div id="stage">
+            <div id="stage-box">
+                <canvas id="preview"></canvas>
+                <div id="stage-empty" class="hidden">
+                    <p><strong>No trip loaded.</strong></p>
+                    <p>Open this page from a trip's Video button, or load one with the Trip button above.</p>
+                </div>
+            </div>
+            <div id="transport">
+                <button id="btn-play" title="Play / pause (space)">
+                    <svg id="ic-play" viewBox="0 0 16 16"><path d="M4.5 2.5 13 8l-8.5 5.5z"/></svg>
+                    <svg id="ic-pause" viewBox="0 0 16 16" class="hidden"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg>
+                </button>
+                <span id="time-label">00:00 / 00:00</span>
+                <span id="transport-hint">Drag the overlay parts on the preview. Drag the telemetry strip below to align it with the video.</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="timeline">
+        <div id="tl-resize" title="Drag to resize the timeline"></div>
+        <div id="tl-tools">
+            <button id="tlz-out" title="Zoom out (scroll on the timeline also zooms)">−</button>
+            <button id="tlz-in" title="Zoom in">+</button>
+            <button id="tlz-fit" title="Fit everything">⛶</button>
+        </div>
+        <canvas id="tl-ruler"></canvas>
+        <div class="tl-row">
+            <div class="tl-label">
+                <svg viewBox="0 0 16 16"><rect x="1" y="4" width="9.5" height="8" rx="1.5"/><path d="M10.5 7.5 15 5v6l-4.5-2.5z"/></svg>
+                Video
+            </div>
+            <div class="tl-track" id="tl-video-track"><canvas id="tl-thumbs"></canvas><div id="tl-video-empty">no video · chroma background</div></div>
+        </div>
+        <div class="tl-row">
+            <div class="tl-label">
+                <svg viewBox="0 0 16 16"><path d="M1 12l3-5 3 3 3-6 3 4 2-2"/></svg>
+                Trip
+            </div>
+            <div class="tl-track" id="tl-tele-track">
+                <canvas id="tl-graph"></canvas>
+                <div class="trim-handle" id="trim-l" title="Trim telemetry start"></div>
+                <div class="trim-handle" id="trim-r" title="Trim telemetry end"></div>
+            </div>
+        </div>
+        <div id="playhead"></div>
+    </div>
+
+    <div id="export-modal" class="hidden">
+        <div class="xp-backdrop" data-xp-close></div>
+        <div class="xp-panel">
+            <header class="xp-head">
+                <h3>Generate video</h3>
+                <button class="xp-close" data-xp-close aria-label="Close">&times;</button>
+            </header>
+            <div class="xp-body" id="xp-setup">
+                <div class="xp-row">
+                    <label>Resolution</label>
+                    <select id="xp-res">
+                        <option value="1920x1080" selected>1920 × 1080</option>
+                        <option value="1280x720">1280 × 720</option>
+                        <option value="3840x2160">3840 × 2160</option>
+                        <option value="854x480">854 × 480 (fast preview)</option>
+                    </select>
+                </div>
+                <div class="xp-row">
+                    <label>Frame rate</label>
+                    <select id="xp-fps">
+                        <option value="30" selected>30 fps</option>
+                        <option value="60">60 fps</option>
+                        <option value="24">24 fps</option>
+                    </select>
+                </div>
+                <div class="xp-row"><label>Duration</label><span id="xp-duration">--:--</span></div>
+                <ul class="xp-notes">
+                    <li>Rendering happens in this tab. Keep it open and visible.</li>
+                    <li>MP4 (H.264). Original audio is kept when possible.</li>
+                    <li>Without a video, the chroma color is the background so you can key it later.</li>
+                </ul>
+                <button id="xp-start" class="xp-go">Start</button>
+            </div>
+            <div class="xp-body hidden" id="xp-progress">
+                <div class="xp-bar"><div id="xp-fill"></div></div>
+                <div id="xp-status">Preparing…</div>
+                <button id="xp-cancel" class="xp-stop">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="hidden"></div>
+
+    <input type="file" id="file-video" accept="video/*,.lrv" class="hidden" />
+    <input type="file" id="file-trip" accept=".csv,.zip,.dbb,.gpx,.xlsx" class="hidden" />
+    <input type="file" id="file-vbo" accept=".vbo,.csv" class="hidden" />
+    <input type="file" id="file-lrv" accept="video/*,.lrv,.mp4" class="hidden" />
+    <input type="file" id="file-cfg" accept=".json" class="hidden" />
+
+    <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
+    <script src="static/js/video-editor.js?v=7"></script>
+</body>
+</html>

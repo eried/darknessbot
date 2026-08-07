@@ -1,0 +1,13 @@
+{
+  "name": "EUC Video Overlay Studio",
+  "short_name": "EUC Video",
+  "description": "Overlay EUC telemetry on ride footage, rendered entirely in the browser.",
+  "start_url": "../video.html",
+  "scope": "../",
+  "display": "standalone",
+  "background_color": "#0a0a12",
+  "theme_color": "#0d1017",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

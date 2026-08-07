@@ -348,7 +348,7 @@ button { font-family: inherit; }
    Doubled ids out-rank the fixed-width base rule above, so the button
    actually sizes to its content instead of squeezing the icon. */
 #tl-tools #tlz-snap { width: auto; padding: 0 8px; gap: 5px; }
-#tl-tools #tlz-snap svg { fill: currentColor; stroke: none; width: 10px; height: 10px; }
+#tl-tools #tlz-snap svg { width: 11px; height: 11px; }
 #tl-tools #tlz-snap span { font-size: 0.64rem; letter-spacing: 0.03em; }
 #tl-tools button { transition: background 0.12s, color 0.12s, border-color 0.12s; }
 #tl-tools button:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; }
@@ -635,7 +635,7 @@ button { font-family: inherit; }
     /* Reset + Snap live on the right edge, reset first. */
     #tl-tools #tlz-reset { margin-left: auto; }
     #tl-tools #tlz-snap { width: auto; padding: 0 12px; gap: 6px; }
-    #tl-tools #tlz-snap svg { width: 13px; height: 13px; }
+    #tl-tools #tlz-snap svg { width: 14px; height: 14px; }
     #tl-tools #tlz-snap span { font-size: 0.78rem; }
     .tl-label { width: 34px; padding-left: 9px; }
     .tl-label span { display: none; }

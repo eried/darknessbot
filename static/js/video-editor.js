@@ -942,7 +942,8 @@
     for (let x = x0; x <= x1; x++) c.lineTo(x, h - (colVal(S.t, S.pwm, tauAt(x)) / 100) * (h - 4));
     c.lineTo(x1, h);
     c.closePath();
-    c.fillStyle = "rgba(198,40,40,0.55)";
+    // Viewer purple (the forensics/action accent) instead of alarm red.
+    c.fillStyle = "rgba(155,110,255,0.38)";
     c.fill();
     c.beginPath();
     const peak = S.peak || 1;

@@ -849,6 +849,8 @@
     renderThumbs();
     drawTeleGraph();
     positionTrims();
+    // Playhead spans the ruler + rows only, never the tools above them.
+    playheadEl.style.top = tlRuler.offsetTop + "px";
     updatePlayhead();
   }
 
@@ -865,6 +867,17 @@
     const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200];
     const step = steps.find((s) => s * pxPerSec > 60) || 1800;
     const t1 = tlView + w / pxPerSec;
+    // Minor ticks between the labeled ones when there's room.
+    const minor = step / 5;
+    if (minor * pxPerSec > 7) {
+      rc.strokeStyle = "rgba(122,138,153,0.18)";
+      for (let t = Math.ceil(tlView / minor) * minor; t <= t1; t += minor) {
+        if (Math.abs(t / step - Math.round(t / step)) < 1e-6) continue;
+        const x = (t - tlView) * pxPerSec;
+        rc.beginPath(); rc.moveTo(x, 17); rc.lineTo(x, 20); rc.stroke();
+      }
+      rc.strokeStyle = "rgba(122,138,153,0.4)";
+    }
     for (let t = Math.ceil(tlView / step) * step; t <= t1; t += step) {
       const x = (t - tlView) * pxPerSec;
       rc.beginPath(); rc.moveTo(x, 14); rc.lineTo(x, 20); rc.stroke();
@@ -1063,23 +1076,36 @@
   });
   teleTrack.addEventListener("pointerup", () => { tlDrag = null; });
 
-  // Scrub by dragging on the ruler or the video row.
+  // Scrub by dragging the playhead knob, the ruler, or the video row.
   function scrubTo(clientX) {
     const r = $("tl-video-track").getBoundingClientRect();
     const t = Math.min(Math.max(0, tlView + (clientX - r.left) / pxPerSec), playSpan());
     curT = t;
     if (hasVideo) videoEl.currentTime = t;
+    $("ph-time").textContent = fmtT(t);
     updatePlayhead(); requestDraw();
   }
-  for (const el of [tlRuler, $("tl-video-track")]) {
+  for (const el of [tlRuler, $("tl-video-track"), $("ph-knob")]) {
     el.addEventListener("pointerdown", (e) => {
       el.setPointerCapture(e.pointerId);
       el._scrub = true;
+      playheadEl.classList.add("scrubbing");
       scrubTo(e.clientX);
+      e.preventDefault();
+      e.stopPropagation();
     });
     el.addEventListener("pointermove", (e) => { if (el._scrub) scrubTo(e.clientX); });
-    el.addEventListener("pointerup", () => { el._scrub = false; });
+    el.addEventListener("pointerup", () => {
+      el._scrub = false;
+      playheadEl.classList.remove("scrubbing");
+    });
   }
+  $("btn-restart").addEventListener("click", () => {
+    curT = 0;
+    if (hasVideo) videoEl.currentTime = 0;
+    tlView = 0;
+    layoutTimeline(); requestDraw();
+  });
 
   // --- File loading ---
   $("btn-video").addEventListener("click", () => $("file-video").click());

@@ -38,6 +38,22 @@ button { font-family: inherit; }
     background: #0d1017;
     border-bottom: 1px solid rgba(0, 229, 255, 0.12);
 }
+.tb-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 10px;
+    padding-right: 12px;
+    border-right: 1px solid rgba(0, 229, 255, 0.12);
+}
+.tb-brand img { width: 19px; height: 19px; }
+.tb-brand span {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #cfe0e8;
+    white-space: nowrap;
+}
 .tb-group { display: flex; gap: 8px; align-items: center; }
 .tb-title {
     flex: 1;
@@ -61,6 +77,7 @@ button { font-family: inherit; }
     font-size: 0.8rem;
     cursor: pointer;
 }
+.tb-btn { transition: background 0.12s, color 0.12s, border-color 0.12s; }
 .tb-btn:hover:not(:disabled) { background: rgba(0, 229, 255, 0.15); }
 .tb-btn:disabled { opacity: 0.35; cursor: default; }
 .tb-btn svg {
@@ -223,7 +240,14 @@ button { font-family: inherit; }
     min-height: 0;
     position: relative;
 }
-#preview { display: block; background: #000; touch-action: none; }
+#preview {
+    display: block;
+    background: #000;
+    touch-action: none;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.55);
+}
 #stage-empty {
     position: absolute;
     inset: 0;
@@ -245,7 +269,7 @@ button { font-family: inherit; }
     background: #0d1017;
     border-top: 1px solid rgba(0, 229, 255, 0.1);
 }
-#btn-play {
+#btn-play, #btn-restart {
     width: 32px; height: 32px;
     flex: none;
     display: inline-flex;
@@ -256,8 +280,12 @@ button { font-family: inherit; }
     border-radius: 50%;
     color: #bfeef7;
     cursor: pointer;
+    transition: background 0.12s;
 }
+#btn-play:hover, #btn-restart:hover { background: rgba(0, 229, 255, 0.18); }
+#btn-restart { width: 27px; height: 27px; }
 #btn-play svg { width: 13px; height: 13px; fill: currentColor; }
+#btn-restart svg { width: 11px; height: 11px; fill: currentColor; }
 #time-label { font-size: 0.8rem; color: #cfe; font-variant-numeric: tabular-nums; }
 #transport-hint { font-size: 0.7rem; color: #567; flex: 1; text-align: right; }
 
@@ -316,6 +344,7 @@ button { font-family: inherit; }
     padding: 0;
 }
 #tl-tools button svg { width: 11px; height: 11px; }
+#tl-tools button { transition: background 0.12s, color 0.12s, border-color 0.12s; }
 #tl-tools button:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; }
 #tl-tools button.active {
     background: rgba(0, 229, 255, 0.25);
@@ -379,15 +408,55 @@ button { font-family: inherit; }
     background: rgba(10, 16, 23, 0.75);
 }
 .trim-handle:hover { background: #00e5ff; }
+/* Playhead: spans only the ruler + tracks (set from JS), never the
+   tools. The knob on top is the drag handle, with a generous touch pad
+   and a time bubble while scrubbing. */
 #playhead {
     position: absolute;
     top: 0;
-    bottom: 0;
+    bottom: 4px;
     width: 2px;
     background: #ff5252;
     pointer-events: none;
     box-shadow: 0 0 6px rgba(255, 82, 82, 0.8);
+    z-index: 2;
 }
+#ph-knob {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 13px;
+    height: 16px;
+    background: #ff5252;
+    border-radius: 3px 3px 2px 2px;
+    clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%);
+    pointer-events: auto;
+    cursor: ew-resize;
+    touch-action: none;
+}
+#ph-knob::before {
+    /* Invisible oversize touch pad. */
+    content: "";
+    position: absolute;
+    inset: -12px;
+}
+#ph-time {
+    display: none;
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(16, 20, 29, 0.95);
+    border: 1px solid rgba(255, 82, 82, 0.5);
+    border-radius: 4px;
+    color: #ffd7d7;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 7px;
+    white-space: nowrap;
+}
+#playhead.scrubbing #ph-time { display: block; }
 
 /* --- Export modal --- */
 #export-modal { position: fixed; inset: 0; z-index: 1000; }

@@ -57,7 +57,7 @@
   const DEFAULT_ORDER = ["maxSpeed", "gps", "voltage", "temp", "battery", "mileage", "pwm", "power", "current", "speed", "time", "dragy"];
   const DEFAULT_CFG = {
     version: 1,
-    chroma: "#00b140",
+    chroma: "#0000ff",
     useIcons: false,
     debug: false,
     order: DEFAULT_ORDER.slice(),
@@ -378,11 +378,10 @@
     // that opens the native picker. The active swatch carries a ring.
     const chromaRow = document.createElement("div");
     chromaRow.className = "chroma-swatches";
-    // The traditional keying colors: chroma green #00B140 and chroma blue
-    // #0047BB (Rosco standards), plus OBS-style magenta and black for
-    // luma keys or dark edits.
+    // Pure blue (the default) and pure green like EUCTelemetry, plus
+    // OBS-style magenta and black for luma keys or dark edits.
     chromaRow.innerHTML =
-      ['#00b140|Chroma green', '#0047bb|Chroma blue', '#ff00ff|Magenta', '#000000|Black']
+      ['#0000ff|Blue', '#00ff00|Green', '#ff00ff|Magenta', '#000000|Black']
         .map((p) => {
           const [c, name] = p.split("|");
           return `<button type="button" class="swatch" data-c="${c}" style="background:${c}" title="${name}"></button>`;

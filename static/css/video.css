@@ -600,7 +600,7 @@ button { font-family: inherit; }
         font-size: 0.9rem;
     }
     #tl-tools button svg { width: 16px; height: 16px; }
-    #tlz-snap { width: auto; padding: 0 14px; gap: 7px; }
+    #tlz-snap { width: auto; padding: 0 14px; gap: 7px; margin-left: auto; }
     #tlz-snap svg { width: 14px; height: 14px; }
     #tlz-snap span { font-size: 0.78rem; }
     .tl-label { width: 34px; padding-left: 9px; }
@@ -704,7 +704,8 @@ button { font-family: inherit; }
         stroke-linecap: round;
         stroke-linejoin: round;
     }
-    #mob-nav button[data-mtab="export"] svg { fill: currentColor; stroke: none; }
+    #mob-nav button[data-mtab="export"] svg,
+    #mob-nav button[data-mtab="style"] svg { fill: currentColor; stroke: none; }
     #mob-nav button.active { color: #00e5ff; border-top-color: #00e5ff; }
 
     /* Sidebar controls grow for touch. */

@@ -897,6 +897,18 @@
     $("trim-r").style.left = ((cfg.teleOffset + s1 - tlView) * pxPerSec - 4) + "px";
   }
 
+  // Max over [a, b] with interpolated endpoints. The strip graph uses this
+  // per pixel column: point-sampling made narrow speed/PWM spikes flicker
+  // while dragging (the sampling phase shifts under the data); taking the
+  // column max keeps a spike lit wherever it lands inside the column.
+  function rangeMax(tArr, vArr, a, b) {
+    let m = Math.max(lerpAt(tArr, vArr, a), lerpAt(tArr, vArr, b));
+    let lo = 0, hi = tArr.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (tArr[mid] <= a) lo = mid; else hi = mid; }
+    for (let i = hi; i < tArr.length && tArr[i] < b; i++) if (vArr[i] > m) m = vArr[i];
+    return m;
+  }
+
   // The telemetry graph draws only the visible window, sampling per pixel
   // column, so extreme zoom levels never allocate giant canvases.
   function drawTeleGraph() {
@@ -918,9 +930,16 @@
     c.fillStyle = "rgba(20,28,40,0.92)";
     c.fillRect(x0, 0, x1 - x0, h);
     // PWM area (red, behind) then speed line (blue), per pixel column.
+    // Columns wider than the sample spacing aggregate by max; narrower
+    // ones interpolate.
+    const colSec = 1 / pxPerSec;
+    const dt = S.dur / Math.max(1, S.n - 1);
+    const colVal = (tArr, vArr, tau) => colSec > dt
+      ? rangeMax(tArr, vArr, tau, tau + colSec)
+      : lerpAt(tArr, vArr, tau);
     c.beginPath();
     c.moveTo(x0, h);
-    for (let x = x0; x <= x1; x++) c.lineTo(x, h - (lerpAt(S.t, S.pwm, tauAt(x)) / 100) * (h - 4));
+    for (let x = x0; x <= x1; x++) c.lineTo(x, h - (colVal(S.t, S.pwm, tauAt(x)) / 100) * (h - 4));
     c.lineTo(x1, h);
     c.closePath();
     c.fillStyle = "rgba(198,40,40,0.55)";
@@ -928,7 +947,7 @@
     c.beginPath();
     const peak = S.peak || 1;
     for (let x = x0; x <= x1; x++) {
-      const y = h - (lerpAt(S.t, S.spd, tauAt(x)) / peak) * (h - 6) - 2;
+      const y = h - (colVal(S.t, S.spd, tauAt(x)) / peak) * (h - 6) - 2;
       x > x0 ? c.lineTo(x, y) : c.moveTo(x, y);
     }
     c.strokeStyle = "#4fc3f7";

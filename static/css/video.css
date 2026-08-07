@@ -243,15 +243,27 @@ button { font-family: inherit; }
 }
 #tl-resize {
     position: absolute;
-    top: -3px;
+    top: -6px;
     left: 0;
     right: 0;
-    height: 7px;
+    height: 13px;
     cursor: ns-resize;
     z-index: 3;
     touch-action: none;
 }
-#tl-resize:hover { background: linear-gradient(180deg, transparent 2px, rgba(0, 229, 255, 0.5) 3px, transparent 5px); }
+/* Always-visible grab pill so the resize is discoverable, esp. on touch. */
+#tl-resize::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 54px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(0, 229, 255, 0.28);
+}
+#tl-resize:hover::after, #tl-resize:active::after { background: rgba(0, 229, 255, 0.7); }
 #tl-tools {
     position: absolute;
     top: 24px;
@@ -276,10 +288,15 @@ button { font-family: inherit; }
     padding: 0;
 }
 #tl-tools button:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; }
-#tl-ruler { display: block; margin-left: 70px; height: 20px; cursor: pointer; }
+#tl-tools button.active {
+    background: rgba(0, 229, 255, 0.25);
+    border-color: rgba(0, 229, 255, 0.6);
+    color: #00e5ff;
+}
+#tl-ruler { display: block; margin-left: 92px; height: 20px; cursor: pointer; }
 .tl-row { display: flex; align-items: stretch; height: 46px; margin-top: 2px; overflow: hidden; }
 .tl-label {
-    width: 70px;
+    width: 92px;
     flex: none;
     display: flex;
     align-items: center;
@@ -427,22 +444,51 @@ button { font-family: inherit; }
     text-align: center;
 }
 
-/* --- Phone --- */
+/* The settings toggle only exists on phones. */
+#btn-panel { display: none; }
+
+/* --- Phone: preview + timeline only; parameters live in a bottom sheet
+   behind the sliders button. Topbar becomes two tidy equal-width rows. --- */
 @media (max-width: 760px) {
     #topbar { gap: 6px; padding: 6px 8px; }
+    .tb-title { display: none; }
+    .tb-group { flex: 1 1 100%; }
+    .tb-group .tb-btn { flex: 1; justify-content: center; }
     .tb-btn span { display: none; }
     .tb-primary span { display: inline; }
-    .tb-title { display: none; }
+    #btn-panel { display: inline-flex; }
+    #btn-panel.active { background: rgba(0, 229, 255, 0.25); color: #00e5ff; }
+
     #main { flex-direction: column; }
-    #sidebar {
+    #stage { flex: 1; min-height: 0; }
+    #sidebar { display: none; }
+    body.show-panel #sidebar {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
         width: 100%;
-        order: 2;
-        max-height: 38vh;
+        max-height: 58vh;
+        z-index: 60;
         border-right: none;
-        border-top: 1px solid rgba(0, 229, 255, 0.1);
+        border-top: 1px solid rgba(0, 229, 255, 0.35);
+        box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.65);
     }
-    #stage { order: 1; min-height: 34vh; }
+
     #transport-hint { display: none; }
-    .tl-label { width: 46px; font-size: 0; gap: 0; }
-    #tl-ruler { margin-left: 46px; }
+    .tl-label { width: 34px; font-size: 0; gap: 0; padding-left: 8px; }
+    .tl-label svg { width: 14px; height: 14px; }
+    #tl-ruler { margin-left: 34px; }
+    /* The tools overlap the ruler start on this narrow gutter; give them
+       a translucent backing so they stay readable. */
+    #tl-tools {
+        top: 22px;
+        left: 4px;
+        padding: 2px 3px;
+        background: rgba(13, 16, 23, 0.88);
+        border-radius: 4px;
+    }
+    #tl-tools button { width: 22px; height: 20px; }
+    #tl-resize::after { width: 80px; height: 6px; }
 }

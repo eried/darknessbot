@@ -467,8 +467,11 @@
     if (cfg.map.on) drawMap(ctx, W, H, k, s, forPreview);
     if (cfg.debug) drawDebug(ctx, W, H, k, s, t);
 
-    if (forPreview && hoverGroup && hitBoxes[hoverGroup]) {
-      const b = hitBoxes[hoverGroup];
+    // Outline the hovered group, or the dragged one: touch has no hover,
+    // so while a finger drags, the dashed frame follows the drag itself.
+    const outlined = dragGroup || hoverGroup;
+    if (forPreview && outlined && hitBoxes[outlined]) {
+      const b = hitBoxes[outlined];
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.75)";
       ctx.setLineDash([6 * k, 5 * k]);
@@ -775,6 +778,7 @@
     if (!g) return;
     dragGroup = g;
     previewCanvas.setPointerCapture(e.pointerId);
+    requestDraw();
     e.preventDefault();
   });
   previewCanvas.addEventListener("pointermove", (e) => {
@@ -797,7 +801,11 @@
       previewCanvas.style.cursor = g ? "move" : "default";
     }
   });
-  previewCanvas.addEventListener("pointerup", () => { dragGroup = null; });
+  previewCanvas.addEventListener("pointerup", (e) => {
+    dragGroup = null;
+    if (e.pointerType === "touch") hoverGroup = null;
+    requestDraw();
+  });
   previewCanvas.addEventListener("pointerleave", () => { if (hoverGroup) { hoverGroup = null; requestDraw(); } });
   previewCanvas.addEventListener("wheel", (e) => {
     const p = canvasPos(e);
@@ -965,6 +973,24 @@
     setZoom(tlZoom / 1.6, tlView + w / pxPerSec / 2, w / 2);
   });
   $("tlz-fit").addEventListener("click", () => { tlZoom = 1; tlView = 0; layoutTimeline(); });
+
+  // Snap: dragging the telemetry (or its trims) sticks to the video start
+  // and the playhead when close, so "align to the beginning" is a flick
+  // instead of pixel hunting. Toggle lives with the zoom tools.
+  let tlSnap = localStorage.getItem("eucviewer-video-snap") !== "0";
+  const snapBtn = $("tlz-snap");
+  snapBtn.classList.toggle("active", tlSnap);
+  snapBtn.addEventListener("click", () => {
+    tlSnap = !tlSnap;
+    snapBtn.classList.toggle("active", tlSnap);
+    try { localStorage.setItem("eucviewer-video-snap", tlSnap ? "1" : "0"); } catch (_) {}
+  });
+  function snapTo(value, candidates) {
+    if (!tlSnap) return value;
+    const th = 12 / pxPerSec;
+    for (const c of candidates) if (Math.abs(value - c) < th) return c;
+    return value;
+  }
   $("timeline").addEventListener("wheel", (e) => {
     e.preventDefault();
     const r = $("tl-video-track").getBoundingClientRect();
@@ -995,11 +1021,15 @@
   });
   $("tl-resize").addEventListener("pointerup", (e) => { e.currentTarget._y = undefined; });
 
-  // Drag on the telemetry row = alignment offset. Handles = trims.
+  // Drag on the telemetry row = alignment offset. Handles = trims. All
+  // three snap their timeline position to the video start and playhead.
   let tlDrag = null;
   teleTrack.addEventListener("pointerdown", (e) => {
     if (e.target.classList.contains("trim-handle")) {
-      tlDrag = { kind: e.target.id === "trim-l" ? "trimL" : "trimR", x0: e.clientX };
+      tlDrag = {
+        kind: e.target.id === "trim-l" ? "trimL" : "trimR", x0: e.clientX,
+        start: e.target.id === "trim-l" ? cfg.trimStart : (cfg.trimEnd == null ? S.dur : cfg.trimEnd),
+      };
     } else {
       tlDrag = { kind: "offset", x0: e.clientX, start: cfg.teleOffset };
     }
@@ -1009,17 +1039,19 @@
   teleTrack.addEventListener("pointermove", (e) => {
     if (!tlDrag) return;
     const dSec = (e.clientX - tlDrag.x0) / pxPerSec;
+    const vEnd = hasVideo ? (videoEl.duration || 0) : 0;
     if (tlDrag.kind === "offset") {
-      cfg.teleOffset = Math.round((tlDrag.start + dSec) * 100) / 100;
+      const raw = snapTo(tlDrag.start + dSec, [0, curT, vEnd ? vEnd - S.dur : null].filter((v) => v !== null));
+      cfg.teleOffset = Math.round(raw * 100) / 100;
       drawTeleGraph(); positionTrims();
     } else if (tlDrag.kind === "trimL") {
-      tlDrag.x0 = e.clientX;
-      cfg.trimStart = Math.min(Math.max(0, cfg.trimStart + dSec), (cfg.trimEnd == null ? S.dur : cfg.trimEnd) - 1);
+      // Snap the handle's absolute timeline position, then map back.
+      const pos = snapTo(cfg.teleOffset + tlDrag.start + dSec, [0, curT]);
+      cfg.trimStart = Math.min(Math.max(0, pos - cfg.teleOffset), (cfg.trimEnd == null ? S.dur : cfg.trimEnd) - 1);
       positionTrims(); drawTeleGraph();
     } else {
-      tlDrag.x0 = e.clientX;
-      const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
-      cfg.trimEnd = Math.max(Math.min(S.dur, s1 + dSec), cfg.trimStart + 1);
+      const pos = snapTo(cfg.teleOffset + tlDrag.start + dSec, [curT, vEnd || S.dur]);
+      cfg.trimEnd = Math.max(Math.min(S.dur, pos - cfg.teleOffset), cfg.trimStart + 1);
       positionTrims(); drawTeleGraph();
     }
     persistCfg(); requestDraw();
@@ -1557,6 +1589,14 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   }
+
+  // Phone: the parameters live in a bottom sheet behind the sliders
+  // button; only the preview and timeline show by default.
+  const panelBtn = $("btn-panel");
+  if (panelBtn) panelBtn.addEventListener("click", () => {
+    document.body.classList.toggle("show-panel");
+    panelBtn.classList.toggle("active", document.body.classList.contains("show-panel"));
+  });
 
   // First paint.
   if (pendingTrack) setTrack(pendingTrack);

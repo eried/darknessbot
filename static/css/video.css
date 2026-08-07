@@ -344,10 +344,12 @@ button { font-family: inherit; }
     padding: 0;
 }
 #tl-tools button svg { width: 11px; height: 11px; flex: none; }
-/* Snap is the one labeled tool: magnet icon (Bootstrap Icons, MIT) + text. */
-#tlz-snap { width: auto; padding: 0 8px; gap: 5px; }
-#tlz-snap svg { fill: currentColor; stroke: none; width: 11px; height: 11px; }
-#tlz-snap span { font-size: 0.64rem; letter-spacing: 0.03em; }
+/* Snap is the one labeled tool: magnet icon (Bootstrap Icons, MIT) + text.
+   Doubled ids out-rank the fixed-width base rule above, so the button
+   actually sizes to its content instead of squeezing the icon. */
+#tl-tools #tlz-snap { width: auto; padding: 0 8px; gap: 5px; }
+#tl-tools #tlz-snap svg { fill: currentColor; stroke: none; width: 10px; height: 10px; }
+#tl-tools #tlz-snap span { font-size: 0.64rem; letter-spacing: 0.03em; }
 #tl-tools button { transition: background 0.12s, color 0.12s, border-color 0.12s; }
 #tl-tools button:hover { background: rgba(0, 229, 255, 0.18); color: #00e5ff; }
 #tl-tools button.active {
@@ -355,10 +357,10 @@ button { font-family: inherit; }
     border-color: rgba(0, 229, 255, 0.6);
     color: #00e5ff;
 }
-#tl-ruler { display: block; margin-left: 142px; height: 20px; cursor: pointer; }
+#tl-ruler { display: block; margin-left: 170px; height: 20px; cursor: pointer; }
 .tl-row { display: flex; align-items: stretch; height: 46px; margin-top: 2px; overflow: hidden; }
 .tl-label {
-    width: 142px;
+    width: 170px;
     flex: none;
     display: flex;
     align-items: center;
@@ -526,6 +528,7 @@ button { font-family: inherit; }
     border: 1px solid rgba(179, 136, 255, 0.5);
     color: #e6dbff;
 }
+.xp-go:disabled { opacity: 0.35; cursor: default; }
 .xp-stop {
     background: rgba(255, 90, 90, 0.1);
     border: 1px solid rgba(255, 90, 90, 0.4);
@@ -572,6 +575,21 @@ button { font-family: inherit; }
     text-align: center;
 }
 
+/* Tight desktop widths (landscape phones included): the brand and the
+   button labels yield before anything useful does. */
+@media (max-width: 1200px) {
+    .tb-brand span { display: none; }
+    .tb-brand { padding-right: 8px; margin-right: 4px; }
+}
+@media (max-width: 1020px) {
+    .tb-brand { display: none; }
+    .tb-title { display: none; }
+    .tb-left .tb-btn span { display: none; }
+}
+@media (max-width: 880px) {
+    #btn-save-cfg span { display: none; }
+}
+
 /* ============================= Phone ============================= */
 @media (max-width: 760px) {
     body {
@@ -615,10 +633,10 @@ button { font-family: inherit; }
     }
     #tl-tools button svg { width: 16px; height: 16px; }
     /* Reset + Snap live on the right edge, reset first. */
-    #tlz-reset { margin-left: auto; }
-    #tlz-snap { width: auto; padding: 0 14px; gap: 7px; }
-    #tlz-snap svg { width: 15px; height: 15px; }
-    #tlz-snap span { font-size: 0.78rem; }
+    #tl-tools #tlz-reset { margin-left: auto; }
+    #tl-tools #tlz-snap { width: auto; padding: 0 12px; gap: 6px; }
+    #tl-tools #tlz-snap svg { width: 13px; height: 13px; }
+    #tl-tools #tlz-snap span { font-size: 0.78rem; }
     .tl-label { width: 34px; padding-left: 9px; }
     .tl-label span { display: none; }
     .tl-label svg { width: 15px; height: 15px; }

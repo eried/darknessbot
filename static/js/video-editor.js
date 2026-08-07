@@ -1030,7 +1030,11 @@
   });
   // Reset: a small modal where the user picks what goes back to default.
   const rsModal = $("reset-modal");
-  $("tlz-reset").addEventListener("click", () => rsModal.classList.remove("hidden"));
+  const rsApplySync = () => {
+    $("rs-apply").disabled = !rsModal.querySelector("input:checked");
+  };
+  rsModal.querySelectorAll(".rs-opt input").forEach((i) => i.addEventListener("change", rsApplySync));
+  $("tlz-reset").addEventListener("click", () => { rsApplySync(); rsModal.classList.remove("hidden"); });
   rsModal.querySelectorAll("[data-rs-close]").forEach((el) =>
     el.addEventListener("click", () => rsModal.classList.add("hidden")));
   $("rs-apply").addEventListener("click", () => {

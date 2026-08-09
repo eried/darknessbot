@@ -1948,6 +1948,51 @@
     panView(Math.sign(e.deltaY || e.deltaX) * span * 0.05);
   }, { passive: false });
 
+  // The highlighted band itself drags the whole section. A plain click on
+  // it still scrubs, and a grab that starts near the playhead scrubs too,
+  // so moving the region never fights moving the playhead.
+  scrubAbFill.style.pointerEvents = "auto";
+  scrubAbFill.style.cursor = "grab";
+  let abDrag = null;
+  const scrubAtPointer = (clientX) => {
+    const rect = scrub.getBoundingClientRect();
+    setCurrentTime(clampTime(((clientX - rect.left) / rect.width) * duration));
+  };
+  scrubAbFill.addEventListener("pointerdown", (e) => {
+    const rect = scrub.getBoundingClientRect();
+    const playPx = (currentTime / duration) * rect.width;
+    const x = e.clientX - rect.left;
+    const mode = Math.abs(x - playPx) < 12 ? "scrub" : "region";
+    abDrag = { mode, x0: e.clientX, a0: viewT0, moved: false };
+    scrubAbFill.setPointerCapture(e.pointerId);
+    scrubAbFill.style.cursor = "grabbing";
+    e.preventDefault();
+    if (mode === "scrub") scrubAtPointer(e.clientX);
+  });
+  scrubAbFill.addEventListener("pointermove", (e) => {
+    if (!abDrag) return;
+    const dx = e.clientX - abDrag.x0;
+    if (Math.abs(dx) > 3) abDrag.moved = true;
+    if (abDrag.mode === "scrub") {
+      scrubAtPointer(e.clientX);
+    } else if (abDrag.moved) {
+      const rect = scrub.getBoundingClientRect();
+      const span = viewT1 - viewT0;
+      let a = abDrag.a0 + (dx / rect.width) * duration;
+      if (a < 0) a = 0;
+      if (a + span > duration) a = duration - span;
+      setView(a, a + span);
+    }
+  });
+  const abDragEnd = (e) => {
+    if (!abDrag) return;
+    if (abDrag.mode === "region" && !abDrag.moved) scrubAtPointer(e.clientX);
+    abDrag = null;
+    scrubAbFill.style.cursor = "grab";
+  };
+  scrubAbFill.addEventListener("pointerup", abDragEnd);
+  scrubAbFill.addEventListener("pointercancel", () => { abDrag = null; scrubAbFill.style.cursor = "grab"; });
+
   // Wheel zoom anchored on the cursor's time. Up = zoom in, down = out.
   function attachZoomControls(c) {
     c.canvas.addEventListener("wheel", (e) => {

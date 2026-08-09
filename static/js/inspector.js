@@ -1929,6 +1929,25 @@
 
   function resetView() { setView(0, duration); }
 
+  // Pan the zoom window without resizing it: clamped at the trip edges so
+  // the span survives (setView alone would shrink it against an edge).
+  function panView(shift) {
+    const span = viewT1 - viewT0;
+    let a = viewT0 + shift;
+    if (a < 0) a = 0;
+    if (a + span > duration) a = duration - span;
+    setView(a, a + span);
+  }
+
+  // Scroll on the position bar nudges the selected section left / right,
+  // 5% of the window per notch, so fine-tuning doesn't need handle drags.
+  scrub.parentElement.addEventListener("wheel", (e) => {
+    if (!isZoomed()) return;
+    e.preventDefault();
+    const span = viewT1 - viewT0;
+    panView(Math.sign(e.deltaY || e.deltaX) * span * 0.05);
+  }, { passive: false });
+
   // Wheel zoom anchored on the cursor's time. Up = zoom in, down = out.
   function attachZoomControls(c) {
     c.canvas.addEventListener("wheel", (e) => {

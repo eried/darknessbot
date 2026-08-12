@@ -448,6 +448,32 @@
   let currentTraceMode = "trail-fixed"; // trail-fixed | trail-dynamic | whole
   let currentRouteIdx = 0;
 
+  // Per-timeseries-sample index into coords, matched by GPS position.
+  // The map marker used to scale ts index onto coords index proportionally,
+  // which drifts badly when the recording has gaps (wheel off, GPS lost,
+  // stitched trips): the charts are time-correct but the marker landed
+  // minutes away. Both arrays come from the same recording in order, so a
+  // monotonic nearest-point walk lines them up exactly; samples without a
+  // fix hold the previous route index.
+  let tsRouteIdx = null;
+  function buildTsRouteMap() {
+    tsRouteIdx = new Float64Array(ts.length);
+    if (!coords.length) return;
+    const d2 = (j, la, lo) => {
+      const c = coords[j];
+      const dLat = c[1] - la, dLon = c[0] - lo;
+      return dLat * dLat + dLon * dLon;
+    };
+    let j = 0, last = 0;
+    for (let i = 0; i < ts.length; i++) {
+      const la = ts[i][LAT], lo = ts[i][LON];
+      if (!la && !lo) { tsRouteIdx[i] = last; continue; }
+      while (j < coords.length - 1 && d2(j + 1, la, lo) <= d2(j, la, lo)) j++;
+      tsRouteIdx[i] = j;
+      last = j;
+    }
+  }
+
   // Trace style, mirroring the main viewer: "neon" = blurred glow layers,
   // "normal" = flat lines, "dark" = dark casing so colors read on light
   // tiles. Follows the map theme (satellite → normal, dark → neon,
@@ -842,6 +868,7 @@
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.5 });
 
       coords = routePoints.map((p) => [p[P_LON], p[P_LAT]]);
+      tsRouteIdx = null; // rebuilt lazily against the fresh coords
       map.addSource("track", {
         type: "geojson",
         lineMetrics: true,
@@ -1725,6 +1752,16 @@
   }
 
   function lerp(a, b, f) { return a + (b - a) * f; }
+  // Test hook: playback/map state for automated checks.
+  window.__inspDebug = () => ({
+    currentTime, duration,
+    sampleIdx: currentSampleIdx,
+    sampleLat: sampleAt(LAT), sampleLon: sampleAt(LON),
+    routeIdx: currentRouteIdx,
+    routeLon: coords[currentRouteIdx] ? coords[currentRouteIdx][0] : null,
+    routeLat: coords[currentRouteIdx] ? coords[currentRouteIdx][1] : null,
+    tsLen: ts.length, coordsLen: coords.length,
+  });
   function sampleAt(col) {
     const r0 = ts[currentSampleIdx];
     const r1 = currentSampleIdx < ts.length - 1 ? ts[currentSampleIdx + 1] : r0;
@@ -1793,7 +1830,13 @@
     // Map marker + traveled line (marker lerped between adjacent coords)
     if (map && riderMarker && map.isStyleLoaded() && map.getSource("traveled")) {
       if (coords.length > 1) {
-        const fracRoute = (currentSampleIdx + sampleFraction) / Math.max(1, ts.length - 1) * (coords.length - 1);
+        if (!tsRouteIdx) buildTsRouteMap();
+        // Position-matched indices for the samples around the playhead;
+        // interpolating between them keeps the marker gliding along the
+        // actual geometry while staying on chart time.
+        const j0 = tsRouteIdx[currentSampleIdx];
+        const j1 = tsRouteIdx[Math.min(ts.length - 1, currentSampleIdx + 1)];
+        const fracRoute = lerp(j0, j1, sampleFraction);
         const routeIdx = Math.floor(fracRoute);
         const routeFrac = fracRoute - routeIdx;
         currentRouteIdx = Math.max(0, Math.min(coords.length - 1, routeIdx));

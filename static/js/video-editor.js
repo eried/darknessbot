@@ -197,6 +197,12 @@
     // GPS path for the track map (skip 0,0 rows).
     out.path = [];
     for (let i = 0; i < n; i++) if (out.lat[i] && out.lon[i]) out.path.push([out.lat[i], out.lon[i], out.t[i]]);
+    // Recording holes (wheel off, stitched trips): the row clock jumps.
+    // The overlay stays locked to the footage — it can't skip like the
+    // inspector — so during a hole it must read "no data" instead of
+    // freezing the last speed. Store the holes; sampleAt flags them.
+    out.gaps = [];
+    for (let i = 1; i < n; i++) if (out.t[i] - out.t[i - 1] > 30) out.gaps.push([out.t[i - 1], out.t[i]]);
     return out;
   }
 
@@ -216,7 +222,12 @@
     if (!S) return null;
     let tau = t - cfg.teleOffset;
     const s0 = cfg.trimStart, s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
-    const inRange = tau >= s0 - 0.5 && tau <= s1 + 0.5;
+    // Out of range = outside the trims, or inside a recording hole where
+    // there is genuinely nothing to show.
+    let inRange = tau >= s0 - 0.5 && tau <= s1 + 0.5;
+    if (inRange) {
+      for (const [a, b] of S.gaps) if (tau > a + 0.5 && tau < b - 0.5) { inRange = false; break; }
+    }
     tau = Math.min(Math.max(tau, s0), s1);
     const g = (arr) => lerpAt(S.t, arr, tau);
     return {

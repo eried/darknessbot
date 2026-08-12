@@ -459,18 +459,25 @@
   function buildTsRouteMap() {
     tsRouteIdx = new Float64Array(ts.length);
     if (!coords.length) return;
-    const d2 = (j, la, lo) => {
-      const c = coords[j];
-      const dLat = c[1] - la, dLon = c[0] - lo;
-      return dLat * dLat + dLon * dLon;
-    };
-    let j = 0, last = 0;
+    // The route array holds this recording's GPS-bearing rows in order
+    // (the parser drops fixless rows from points), and the timeseries is
+    // every row downsampled uniformly by index. So the fraction of
+    // GPS-bearing timeseries rows seen by a sample equals the fraction of
+    // the route ridden by then: count them and scale onto the route.
+    // Pure row counting is immune to GPS jitter, loops and out-and-back
+    // streets; a geometric nearest-point walk (the first attempt) stalled
+    // on noisy real tracks, and index-ratio mapping (the original code)
+    // drifted across fixless stretches.
+    let cnt = 0;
+    const prefix = new Float64Array(ts.length);
     for (let i = 0; i < ts.length; i++) {
-      const la = ts[i][LAT], lo = ts[i][LON];
-      if (!la && !lo) { tsRouteIdx[i] = last; continue; }
-      while (j < coords.length - 1 && d2(j + 1, la, lo) <= d2(j, la, lo)) j++;
-      tsRouteIdx[i] = j;
-      last = j;
+      if (ts[i][LAT] !== 0 || ts[i][LON] !== 0) cnt++;
+      prefix[i] = cnt;
+    }
+    if (cnt < 2) return; // no usable fixes; marker stays at the start
+    for (let i = 0; i < ts.length; i++) {
+      const frac = (Math.max(1, prefix[i]) - 1) / (cnt - 1);
+      tsRouteIdx[i] = Math.max(0, Math.min(coords.length - 1, frac * (coords.length - 1)));
     }
   }
 

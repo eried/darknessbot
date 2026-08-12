@@ -156,13 +156,22 @@
     if (!dur || dur < 1) dur = Math.max(1, pts.length);
     const usePts = pts.length > ts.length;
     const n = usePts ? pts.length : ts.length;
+    // Real row clocks for the points path: the timeseries is this same
+    // recording downsampled uniformly by index, so its SEC column maps
+    // back through index space. Without this, rows were assumed evenly
+    // spaced and a recording hole (wheel off) shifted every later value.
+    const tsSecAt = (fi) => {
+      const lo = Math.floor(fi), hi = Math.min(ts.length - 1, lo + 1);
+      const a = ts[lo][0] - t0, b = ts[hi][0] - t0;
+      return a + (b - a) * (fi - lo);
+    };
     const arr = () => new Float64Array(n);
     const out = { dur, n, t: arr(), spd: arr(), volt: arr(), temp: arr(), batt: arr(),
       pwm: arr(), cur: arr(), pow: arr(), gps: arr(), lat: arr(), lon: arr(), maxSpd: arr() };
     for (let i = 0; i < n; i++) {
       if (usePts) {
         const p = pts[i];
-        out.t[i] = (i / (n - 1)) * dur;
+        out.t[i] = ts.length >= 2 ? tsSecAt(i / (n - 1) * (ts.length - 1)) : (i / (n - 1)) * dur;
         out.lat[i] = p[0]; out.lon[i] = p[1]; out.spd[i] = p[2] || 0;
         out.volt[i] = p[4] || 0; out.temp[i] = p[5] || 0; out.batt[i] = p[6] || 0;
         out.pwm[i] = p[7] || 0; out.cur[i] = p[8] || 0;

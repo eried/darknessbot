@@ -487,7 +487,13 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     background: rgba(255, 80, 80, 0.15);
     color: #ffb0b0;
 }
-#source-instructions .dbx-bottom-row { justify-content: flex-end; }
+/* The generic .src-action top border reads as a stray line under the
+   Dropbox listing card; the row stands on its own there. */
+#source-instructions .dbx-bottom-row {
+    justify-content: flex-end;
+    border-top: none;
+    padding-top: 0;
+}
 #source-instructions .dbx-cached-count {
     color: rgba(128, 230, 180, 0.9);
     font-weight: 600;

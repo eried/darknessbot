@@ -1768,6 +1768,8 @@
     routeLon: coords[currentRouteIdx] ? coords[currentRouteIdx][0] : null,
     routeLat: coords[currentRouteIdx] ? coords[currentRouteIdx][1] : null,
     tsLen: ts.length, coordsLen: coords.length,
+    gaps: recordingGaps.map((g) => [Math.round(g.start), Math.round(g.end)]),
+    skipFrom: (t) => skipGaps(t),
   });
   function sampleAt(col) {
     const r0 = ts[currentSampleIdx];
@@ -1870,11 +1872,43 @@
     }
   }
 
+  // Recording holes (wheel powered off, stitched trips): the wall clock
+  // jumps between adjacent samples. Playback hops over anything longer
+  // than this instead of crawling through minutes of frozen values;
+  // scrubbing by hand still reaches every second.
+  const GAP_SKIP_MIN = 30;
+  const recordingGaps = (() => {
+    const out = [];
+    for (let i = 1; i < ts.length; i++) {
+      const a = ts[i - 1][SEC] - t0, b = ts[i][SEC] - t0;
+      if (b - a > GAP_SKIP_MIN) out.push({ start: a, end: b });
+    }
+    return out;
+  })();
+  function skipGaps(t) {
+    for (const g of recordingGaps) {
+      if (t > g.start + 0.5 && t < g.end - 0.5) return g.end;
+    }
+    return t;
+  }
+  // Stripe the holes on the position bar so the playback hop reads as
+  // intentional: nothing was recorded there.
+  if (duration > 0) {
+    for (const g of recordingGaps) {
+      const el = document.createElement("div");
+      el.className = "scrub-gap";
+      el.style.left = (g.start / duration * 100) + "%";
+      el.style.width = ((g.end - g.start) / duration * 100) + "%";
+      el.title = "No recording here (wheel off) — playback skips it";
+      scrub.parentElement.appendChild(el);
+    }
+  }
+
   function loop(now) {
     if (!playing) return;
     const dt = (now - lastFrame) / 1000;
     lastFrame = now;
-    let nt = currentTime + dt * playSpeed;
+    let nt = skipGaps(currentTime + dt * playSpeed);
     // The section is the current zoom window. When zoomed, hitting the
     // window's right edge either wraps to viewT0 (loop on) or stops
     // playback. When not zoomed, the whole trip is the section.

@@ -451,6 +451,17 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     align-items: center;
     position: relative;
 }
+/* Recording holes on the position bar: striped = no data, playback hops. */
+.scrub-gap {
+    position: absolute;
+    top: 50%;
+    height: 6px;
+    transform: translateY(-50%);
+    background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0 3px, transparent 3px 6px);
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 0;
+}
 .scrub-ab-fill {
     position: absolute;
     top: 50%;

@@ -2083,6 +2083,55 @@ document.addEventListener("DOMContentLoaded", function () {
     refresh();
   }
 
+  // Per-trip "Tools" popover (Make video / Inspector). A single floating
+  // menu reused by every row and positioned next to the clicked button,
+  // so it's never clipped by the scrolling trip list.
+  let toolsMenu = null, toolsOpenFor = -1, toolsBtnEl = null;
+  function ensureToolsMenu() {
+    if (toolsMenu) return toolsMenu;
+    toolsMenu = document.createElement("div");
+    toolsMenu.id = "trip-tools-menu";
+    toolsMenu.className = "hidden";
+    toolsMenu.innerHTML =
+      `<a data-act="video" target="_blank" rel="noopener">` +
+      `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 11.5 A6 6 0 1 1 13.5 11.5"/><line x1="8" y1="11" x2="11.2" y2="6.2"/><circle cx="8" cy="11" r="1.2" fill="currentColor" stroke="none"/></svg>` +
+      `Make video</a>` +
+      `<a data-act="inspect" target="_blank" rel="noopener">` +
+      `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>` +
+      `Inspector</a>`;
+    document.body.appendChild(toolsMenu);
+    toolsMenu.addEventListener("click", () => closeToolsMenu());
+    document.addEventListener("click", (e) => {
+      if (toolsOpenFor < 0) return;
+      if (!toolsMenu.contains(e.target) && !e.target.closest(".tools-btn")) closeToolsMenu();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeToolsMenu(); });
+    window.addEventListener("resize", closeToolsMenu);
+    const list = document.getElementById("trip-list");
+    if (list) list.addEventListener("scroll", closeToolsMenu, true);
+    return toolsMenu;
+  }
+  function closeToolsMenu() {
+    if (toolsMenu) toolsMenu.classList.add("hidden");
+    if (toolsBtnEl) toolsBtnEl.classList.remove("active");
+    toolsOpenFor = -1; toolsBtnEl = null;
+  }
+  function toggleToolsMenu(btn, i) {
+    if (toolsOpenFor === i) { closeToolsMenu(); return; }
+    const m = ensureToolsMenu();
+    m.querySelector('[data-act="video"]').href = "video.html?i=" + i;
+    m.querySelector('[data-act="inspect"]').href = "inspector.html?i=" + i;
+    m.classList.remove("hidden");
+    const r = btn.getBoundingClientRect();
+    let left = r.right - m.offsetWidth;
+    let top = r.bottom + 4;
+    if (top + m.offsetHeight > window.innerHeight - 8) top = r.top - m.offsetHeight - 4;
+    m.style.left = Math.max(8, left) + "px";
+    m.style.top = Math.max(8, top) + "px";
+    btn.classList.add("active");
+    toolsOpenFor = i; toolsBtnEl = btn;
+  }
+
   function buildTripList() {
     tripList.innerHTML = "";
     const header = document.getElementById("panel-header");
@@ -2309,13 +2358,11 @@ document.addEventListener("DOMContentLoaded", function () {
               <button type="button" class="share-btn" data-idx="${i}" title="Copy a shareable viewer link">
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4.5"/><line x1="5.7" y1="9" x2="10.3" y2="11.5"/></svg>
               </button>` : ""}
-              <a class="inspect-btn" href="video.html?i=${i}" target="_blank" rel="noopener" title="Overlay this trip's telemetry on your ride footage (new tab)">
-                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 11.5 A6 6 0 1 1 13.5 11.5"/><line x1="8" y1="11" x2="11.2" y2="6.2"/><circle cx="8" cy="11" r="1.2" fill="currentColor" stroke="none"/></svg>
-              </a>
-              <a class="inspect-btn" href="inspector.html?i=${i}" target="_blank" rel="noopener" title="Inspect this trip: 3D map, charts, playback (new tab)">
-                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>
-                <span>Inspect</span>
-              </a>
+              <button type="button" class="tools-btn" data-idx="${i}" title="Make a video or inspect this trip">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1.4"/><path d="M8 2.5v1.6M8 11.9v1.6M2.5 8h1.6M11.9 8h1.6M4.1 4.1l1.1 1.1M10.8 10.8l1.1 1.1M11.9 4.1l-1.1 1.1M5.2 10.8l-1.1 1.1"/></svg>
+                <span>Tools</span>
+                <svg class="tools-caret" viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>
+              </button>
             </div>
             <div class="trip-meta">${meta}</div>
           </div>
@@ -2355,6 +2402,14 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         });
       });
+
+      const toolsBtn = li.querySelector(".tools-btn");
+      if (toolsBtn) {
+        toolsBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleToolsMenu(toolsBtn, i);
+        });
+      }
 
       const shareBtn = li.querySelector(".share-btn");
       if (shareBtn) {
@@ -2414,6 +2469,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (e.target.closest(".trip-check")) return;
         if (e.target.closest(".inspect-btn")) { e.stopPropagation(); return; }
         if (e.target.closest(".share-btn")) { e.stopPropagation(); return; }
+        if (e.target.closest(".tools-btn")) { e.stopPropagation(); return; }
         if (e.target.closest(".chart-wrap")) return;
         if (e.target.closest('.detail-row[data-toggle="1"]')) return;
         selectTrip(i);

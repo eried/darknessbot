@@ -1329,6 +1329,54 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.tools-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 8px 0 7px;
+    border: 1px solid rgba(0, 229, 255, 0.28);
+    border-radius: 5px;
+    background: rgba(0, 229, 255, 0.06);
+    color: #7fe7f5;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.tools-btn:hover, .tools-btn.active {
+    background: rgba(0, 229, 255, 0.16);
+    border-color: rgba(0, 229, 255, 0.5);
+    color: #00e5ff;
+}
+.tools-btn .tools-caret { opacity: 0.8; margin-left: -1px; }
+.tools-btn.active .tools-caret { transform: rotate(180deg); }
+
+#trip-tools-menu {
+    position: fixed;
+    z-index: 1300;
+    min-width: 148px;
+    padding: 4px;
+    background: #10151d;
+    border: 1px solid rgba(0, 229, 255, 0.25);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+#trip-tools-menu.hidden { display: none; }
+#trip-tools-menu a {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    color: #cfe0e8;
+    font-size: 12.5px;
+    text-decoration: none;
+    cursor: pointer;
+}
+#trip-tools-menu a:hover { background: rgba(0, 229, 255, 0.12); color: #00e5ff; }
+#trip-tools-menu a svg { flex: none; color: #7fe7f5; }
+
 .inspect-btn {
     flex-shrink: 0;
     display: inline-flex;

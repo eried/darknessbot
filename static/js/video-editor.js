@@ -833,9 +833,10 @@
   document.addEventListener("keydown", (e) => {
     if (e.target.closest("input,select,textarea")) return;
     const k = e.key.toLowerCase();
-    // Space stays a button activation when one is focused (e.g. just after
-    // clicking In); arrows and I/O work no matter what has focus.
-    if (e.key === " ") { if (e.target.closest("button")) return; e.preventDefault(); setPlaying(!playing); }
+    // Space always toggles play/pause, even when a transport button still
+    // holds focus — clicking Out must not turn the next Space into another
+    // Out press. preventDefault swallows the focused button's activation.
+    if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); setPlaying(false); setPlayhead(curT - (e.shiftKey ? 1 : FRAME)); }
     else if (e.key === "ArrowRight") { e.preventDefault(); setPlaying(false); setPlayhead(curT + (e.shiftKey ? 1 : FRAME)); }
     else if (e.key === "Home") { e.preventDefault(); goToInMarker(); }
@@ -845,9 +846,11 @@
   videoEl.addEventListener("ended", () => setPlaying(false));
 
   const btnIn = $("btn-in"), btnOut = $("btn-out"), btnInoutClear = $("btn-inout-clear");
-  if (btnIn) btnIn.addEventListener("click", () => setTrimIn());
-  if (btnOut) btnOut.addEventListener("click", () => setTrimOut());
-  if (btnInoutClear) btnInoutClear.addEventListener("click", resetTrim);
+  // Blur after use so the button doesn't keep keyboard focus (otherwise
+  // Space/Enter would re-fire it instead of playing).
+  if (btnIn) btnIn.addEventListener("click", () => { setTrimIn(); btnIn.blur(); });
+  if (btnOut) btnOut.addEventListener("click", () => { setTrimOut(); btnOut.blur(); });
+  if (btnInoutClear) btnInoutClear.addEventListener("click", () => { resetTrim(); btnInoutClear.blur(); });
   function updateInOutLabel() {
     const el = $("inout-label");
     if (!el || !S) return;

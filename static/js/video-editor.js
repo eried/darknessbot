@@ -856,9 +856,18 @@
     if (!el || !S) return;
     const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
     const trimmed = cfg.trimStart > 0.05 || s1 < S.dur - 0.05;
-    el.classList.toggle("hidden", !trimmed);
-    // Shown in video time so it lines up with the playhead readout.
-    el.textContent = "Trim " + fmtT(cfg.teleOffset + cfg.trimStart) + " → " + fmtT(cfg.teleOffset + s1);
+    const hasOffset = Math.abs(cfg.teleOffset || 0) > 0.005;
+    const parts = [];
+    if (hasOffset) {
+      const a = Math.abs(cfg.teleOffset);
+      parts.push("offset " + (cfg.teleOffset < 0 ? "-" : "+") + (a < 60 ? a.toFixed(2) + "s" : fmtT(a)));
+    }
+    // Trim shown in video time so it lines up with the playhead readout.
+    if (trimmed) parts.push("trim " + fmtT(cfg.teleOffset + cfg.trimStart) + " → " + fmtT(cfg.teleOffset + s1));
+    el.classList.toggle("hidden", parts.length === 0);
+    el.textContent = parts.join("  ·  ");
+    // The × clears the trim only (the offset has its own Reset); show it
+    // whenever a trim is set.
     if (btnInoutClear) btnInoutClear.classList.toggle("hidden", !trimmed);
   }
 
@@ -1217,6 +1226,7 @@
       cfg.debug = DEFAULT_CFG.debug;
     }
     persistCfg(); buildSidebar(); layoutTimeline(); drawTeleGraph(); positionTrims(); requestDraw();
+    updateInOutLabel();
     toast("Reset done.");
   });
 
@@ -1289,7 +1299,7 @@
       cfg.trimEnd = Math.max(Math.min(S.dur, pos - cfg.teleOffset), cfg.trimStart + 1);
       positionTrims(); drawTeleGraph();
     }
-    persistCfg(); requestDraw();
+    persistCfg(); requestDraw(); updateInOutLabel();
   });
   teleTrack.addEventListener("pointerup", () => { tlDrag = null; });
 
@@ -2029,7 +2039,7 @@
     get cfg() { return cfg; }, get samples() { return S; },
     setTrack, requestDraw, sampleAt, applyCfg,
     exportWebCodecs, exportDuration, exportRange,
-    setPlayhead, setTrimIn, setTrimOut, resetTrim, exportMediaRecorder,
+    setPlayhead, setTrimIn, setTrimOut, resetTrim, exportMediaRecorder, updateInOutLabel,
     renderProbe(t) {
       const c = document.createElement("canvas");
       c.width = 64; c.height = 64;

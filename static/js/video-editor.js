@@ -148,61 +148,55 @@
   // fixed cadence, so this holds within a second or two). timeseries
   // (<= 500 rows) supplies mileage and the fallback when points is thin.
   function buildSamples(t) {
+    // The timeseries is the time authority: every row carries a real clock
+    // (SEC) and NO row is dropped. The points array is tempting for its
+    // full resolution, but the parser drops no-GPS rows from it, so a
+    // wheel-off / no-GPS stretch that stays in the timeseries is missing
+    // from points — mapping points onto time then shifted everything after
+    // the gap (the reported ~20-min offset). Drive values off ts only, the
+    // same source the inspector trusts.
     const ts = t.timeseries || [];
-    const pts = t.points || [];
     const t0 = ts.length ? ts[0][0] : 0;
     let dur = ts.length ? ts[ts.length - 1][0] - t0 : 0;
     if (!dur && t.dateStart && t.dateEnd) dur = (new Date(t.dateEnd) - new Date(t.dateStart)) / 1000;
-    if (!dur || dur < 1) dur = Math.max(1, pts.length);
-    const usePts = pts.length > ts.length;
-    const n = usePts ? pts.length : ts.length;
-    // Real row clocks for the points path: the timeseries is this same
-    // recording downsampled uniformly by index, so its SEC column maps
-    // back through index space. Without this, rows were assumed evenly
-    // spaced and a recording hole (wheel off) shifted every later value.
-    const tsSecAt = (fi) => {
-      const lo = Math.floor(fi), hi = Math.min(ts.length - 1, lo + 1);
-      const a = ts[lo][0] - t0, b = ts[hi][0] - t0;
-      return a + (b - a) * (fi - lo);
-    };
+    if (!dur || dur < 1) dur = Math.max(1, ts.length);
+    const n = ts.length;
     const arr = () => new Float64Array(n);
     const out = { dur, n, t: arr(), spd: arr(), volt: arr(), temp: arr(), batt: arr(),
-      pwm: arr(), cur: arr(), pow: arr(), gps: arr(), lat: arr(), lon: arr(), maxSpd: arr() };
+      pwm: arr(), cur: arr(), pow: arr(), gps: arr(), lat: arr(), lon: arr(), mil: arr(), maxSpd: arr() };
     for (let i = 0; i < n; i++) {
-      if (usePts) {
-        const p = pts[i];
-        out.t[i] = ts.length >= 2 ? tsSecAt(i / (n - 1) * (ts.length - 1)) : (i / (n - 1)) * dur;
-        out.lat[i] = p[0]; out.lon[i] = p[1]; out.spd[i] = p[2] || 0;
-        out.volt[i] = p[4] || 0; out.temp[i] = p[5] || 0; out.batt[i] = p[6] || 0;
-        out.pwm[i] = p[7] || 0; out.cur[i] = p[8] || 0;
-        out.pow[i] = p[9] !== undefined ? p[9] : (out.volt[i] * out.cur[i]);
-        out.gps[i] = p[10] || 0;
-      } else {
-        const r = ts[i];
-        out.t[i] = r[0] - t0;
-        out.spd[i] = r[1] || 0; out.volt[i] = r[2] || 0; out.temp[i] = r[3] || 0;
-        out.batt[i] = r[4] || 0; out.lat[i] = r[6] || 0; out.lon[i] = r[7] || 0;
-        out.pwm[i] = r[9] || 0; out.cur[i] = r[10] || 0;
-        out.pow[i] = r[11] !== undefined ? r[11] : (out.volt[i] * out.cur[i]);
-        out.gps[i] = r[12] || 0;
-      }
+      const r = ts[i];
+      out.t[i] = r[0] - t0;
+      out.spd[i] = r[1] || 0; out.volt[i] = r[2] || 0; out.temp[i] = r[3] || 0;
+      out.batt[i] = r[4] || 0; out.lat[i] = r[6] || 0; out.lon[i] = r[7] || 0;
+      out.mil[i] = r[8] || 0;
+      out.pwm[i] = r[9] || 0; out.cur[i] = r[10] || 0;
+      out.pow[i] = r[11] !== undefined ? r[11] : (out.volt[i] * out.cur[i]);
+      out.gps[i] = r[12] || 0;
       out.maxSpd[i] = Math.max(i ? out.maxSpd[i - 1] : 0, out.spd[i]);
     }
-    // Mileage always interpolates off timeseries (points lacks it).
-    out.tsT = new Float64Array(ts.length);
-    out.tsMil = new Float64Array(ts.length);
-    for (let i = 0; i < ts.length; i++) { out.tsT[i] = ts[i][0] - t0; out.tsMil[i] = ts[i][8] || 0; }
+    out.tsT = out.t; out.tsMil = out.mil;
     out.peak = out.maxSpd[n - 1] || 30;
     out.dateStart = t.dateStart ? new Date(t.dateStart) : null;
     // GPS path for the track map (skip 0,0 rows).
     out.path = [];
     for (let i = 0; i < n; i++) if (out.lat[i] && out.lon[i]) out.path.push([out.lat[i], out.lon[i], out.t[i]]);
-    // Recording holes (wheel off, stitched trips): the row clock jumps.
-    // The overlay stays locked to the footage — it can't skip like the
-    // inspector — so during a hole it must read "no data" instead of
-    // freezing the last speed. Store the holes; sampleAt flags them.
+    // Recording holes: the overlay stays locked to the footage (it can't
+    // skip like the inspector), so during a hole it must read "no data"
+    // instead of freezing the last speed. Two hole shapes: the row clock
+    // jumps (recording stopped and resumed), or the wheel stayed connected
+    // as rows but lost GPS for a sustained stretch (lat/lon pinned at 0).
     out.gaps = [];
     for (let i = 1; i < n; i++) if (out.t[i] - out.t[i - 1] > 30) out.gaps.push([out.t[i - 1], out.t[i]]);
+    let run0 = -1;
+    for (let i = 0; i <= n; i++) {
+      const dead = i < n && out.lat[i] === 0 && out.lon[i] === 0;
+      if (dead && run0 < 0) run0 = i;
+      else if (!dead && run0 >= 0) {
+        if (out.t[i - 1] - out.t[run0] > 30) out.gaps.push([out.t[run0], out.t[i - 1]]);
+        run0 = -1;
+      }
+    }
     return out;
   }
 

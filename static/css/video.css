@@ -497,37 +497,6 @@ button { font-family: inherit; }
 }
 #playhead.scrubbing #ph-time { display: block; }
 
-/* Render In / Out markers + the band between them. In = green, Out = red,
-   both distinct from the cyan trims and the red playhead knob. */
-.render-mark {
-    position: absolute;
-    bottom: 4px;
-    width: 2px;
-    pointer-events: none;
-    z-index: 1;
-}
-.render-mark.in { background: #69f0ae; box-shadow: 0 0 5px rgba(105, 240, 174, 0.7); }
-.render-mark.out { background: #ff7043; box-shadow: 0 0 5px rgba(255, 112, 67, 0.7); }
-.render-mark::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    width: 0; height: 0;
-    border-top: 7px solid currentColor;
-}
-.render-mark.in { color: #69f0ae; }
-.render-mark.out { color: #ff7043; }
-.render-mark.in::before { left: 0; border-right: 7px solid transparent; }
-.render-mark.out::before { right: 0; border-left: 7px solid transparent; }
-#render-band {
-    position: absolute;
-    bottom: 4px;
-    background: rgba(105, 240, 174, 0.1);
-    border-top: 1px solid rgba(105, 240, 174, 0.35);
-    pointer-events: none;
-    z-index: 0;
-}
-
 /* --- Export modal --- */
 #export-modal { position: fixed; inset: 0; z-index: 1000; }
 .xp-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(3px); }

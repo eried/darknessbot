@@ -66,7 +66,6 @@
     gauge: { on: true, scale: 100, hPos: 48, vPos: 76, numSize: 138, unitSize: 90, numY: -15, unitY: -5 },
     map: { on: false, source: "trip", hPos: 84, vPos: 30, size: 30, opacity: 100 },
     teleOffset: 0, trimStart: 0, trimEnd: null,
-    renderIn: null, renderOut: null,
   };
   let cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
   try {
@@ -75,7 +74,7 @@
   } catch (_) {}
   function applyCfg(c) {
     if (!c || typeof c !== "object") return;
-    for (const k of ["chroma", "useIcons", "debug", "teleOffset", "trimStart", "trimEnd", "renderIn", "renderOut"])
+    for (const k of ["chroma", "useIcons", "debug", "teleOffset", "trimStart", "trimEnd"])
       if (k in c) cfg[k] = c[k];
     if (Array.isArray(c.order)) cfg.order = DEFAULT_ORDER.filter((k) => c.order.includes(k))
       .sort((a, b) => c.order.indexOf(a) - c.order.indexOf(b))
@@ -779,21 +778,32 @@
     if (hasVideo) videoEl.currentTime = curT;
     updatePlayhead(); updateTimeLabel(); requestDraw();
   }
-  // In / Out render markers, set at the playhead.
-  function setRenderIn(t) {
-    cfg.renderIn = Math.round((t ?? curT) * 1000) / 1000;
-    if (cfg.renderOut != null && cfg.renderOut <= cfg.renderIn) cfg.renderOut = null;
-    onRenderRangeChange();
+  // In / Out set the TRIP TRIM edges at the playhead — the same trim the
+  // handles drag, so there is one range, not a second marker. The trim is
+  // telemetry time (tau = playhead - offset).
+  function setTrimIn(t) {
+    if (!S) return;
+    const tau = Math.round(((t ?? curT) - cfg.teleOffset) * 1000) / 1000;
+    const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
+    cfg.trimStart = Math.min(Math.max(0, tau), s1 - 0.1);
+    afterTrimChange();
   }
-  function setRenderOut(t) {
-    cfg.renderOut = Math.round((t ?? curT) * 1000) / 1000;
-    if (cfg.renderIn != null && cfg.renderIn >= cfg.renderOut) cfg.renderIn = null;
-    onRenderRangeChange();
+  function setTrimOut(t) {
+    if (!S) return;
+    const tau = Math.round(((t ?? curT) - cfg.teleOffset) * 1000) / 1000;
+    cfg.trimEnd = Math.max(Math.min(S.dur, tau), cfg.trimStart + 0.1);
+    afterTrimChange();
   }
-  function clearRenderRange() { cfg.renderIn = cfg.renderOut = null; onRenderRangeChange(); }
-  function onRenderRangeChange() {
+  function resetTrim() {
+    if (!S) return;
+    cfg.trimStart = 0; cfg.trimEnd = S.dur;
+    afterTrimChange();
+  }
+  function afterTrimChange() {
     persistCfg();
-    positionRenderMarkers();
+    positionTrims();
+    drawTeleGraph();
+    requestDraw();
     updateInOutLabel();
   }
 
@@ -805,23 +815,24 @@
     if (e.key === " ") { if (e.target.closest("button")) return; e.preventDefault(); setPlaying(!playing); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); setPlaying(false); setPlayhead(curT - (e.shiftKey ? 1 : FRAME)); }
     else if (e.key === "ArrowRight") { e.preventDefault(); setPlaying(false); setPlayhead(curT + (e.shiftKey ? 1 : FRAME)); }
-    else if (k === "i") { e.preventDefault(); setRenderIn(); }
-    else if (k === "o") { e.preventDefault(); setRenderOut(); }
+    else if (k === "i") { e.preventDefault(); setTrimIn(); }
+    else if (k === "o") { e.preventDefault(); setTrimOut(); }
   });
   videoEl.addEventListener("ended", () => setPlaying(false));
 
   const btnIn = $("btn-in"), btnOut = $("btn-out"), btnInoutClear = $("btn-inout-clear");
-  if (btnIn) btnIn.addEventListener("click", () => setRenderIn());
-  if (btnOut) btnOut.addEventListener("click", () => setRenderOut());
-  if (btnInoutClear) btnInoutClear.addEventListener("click", clearRenderRange);
+  if (btnIn) btnIn.addEventListener("click", () => setTrimIn());
+  if (btnOut) btnOut.addEventListener("click", () => setTrimOut());
+  if (btnInoutClear) btnInoutClear.addEventListener("click", resetTrim);
   function updateInOutLabel() {
     const el = $("inout-label");
-    if (!el) return;
-    const inSet = cfg.renderIn != null, outSet = cfg.renderOut != null;
-    if (!inSet && !outSet) { el.textContent = ""; el.classList.add("hidden"); return; }
-    el.classList.remove("hidden");
-    el.textContent = "In " + (inSet ? fmtT(cfg.renderIn) : "–") + " · Out " + (outSet ? fmtT(cfg.renderOut) : "–");
-    if (btnInoutClear) btnInoutClear.classList.toggle("hidden", !inSet && !outSet);
+    if (!el || !S) return;
+    const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
+    const trimmed = cfg.trimStart > 0.05 || s1 < S.dur - 0.05;
+    el.classList.toggle("hidden", !trimmed);
+    // Shown in video time so it lines up with the playhead readout.
+    el.textContent = "Trim " + fmtT(cfg.teleOffset + cfg.trimStart) + " → " + fmtT(cfg.teleOffset + s1);
+    if (btnInoutClear) btnInoutClear.classList.toggle("hidden", !trimmed);
   }
 
   function fmtT(sec) {
@@ -927,34 +938,6 @@
     // Playhead spans the ruler + rows only, never the tools above them.
     playheadEl.style.top = tlRuler.offsetTop + "px";
     updatePlayhead();
-    positionRenderMarkers();
-  }
-
-  // In / Out markers + the band between them, in the render clock.
-  function positionRenderMarkers() {
-    const inEl = $("render-in"), outEl = $("render-out"), band = $("render-band");
-    if (!inEl) return;
-    const label = document.querySelector(".tl-label");
-    const off = label ? label.offsetWidth : 70;
-    const top = tlRuler.offsetTop;
-    const xOf = (t) => off + (t - tlView) * pxPerSec;
-    const place = (el, t) => {
-      if (t == null) { el.classList.add("hidden"); return null; }
-      const x = xOf(t);
-      el.classList.toggle("hidden", x < off - 2 || x > off + trackW() + 2);
-      el.style.left = x + "px";
-      el.style.top = top + "px";
-      return x;
-    };
-    place(inEl, cfg.renderIn);
-    place(outEl, cfg.renderOut);
-    if (cfg.renderIn != null && cfg.renderOut != null) {
-      const a = Math.max(off, xOf(cfg.renderIn)), b = Math.min(off + trackW(), xOf(cfg.renderOut));
-      band.classList.toggle("hidden", b <= a);
-      band.style.left = a + "px";
-      band.style.width = Math.max(0, b - a) + "px";
-      band.style.top = top + "px";
-    } else band.classList.add("hidden");
   }
 
   function drawRuler(w) {
@@ -1668,21 +1651,14 @@
     buildResOptions();
     buildFpsOptions();
     const sel = $("xp-range");
-    // The In → Out option only exists once a range is set; it becomes the
-    // default then since the user set it deliberately.
-    const inoutOpt = sel.querySelector('option[value="inout"]');
-    if (inoutOpt) inoutOpt.disabled = !hasInOut();
-    // Without footage the only thing to render is the trip on chroma, so
-    // the picker locks to "Trip trim only"; with footage it defaults to
-    // the full video.
-    if (hasVideo) {
-      sel.disabled = false;
-      if (hasInOut()) sel.value = "inout";
-      else if (sel.value === "trip" || sel.value === "inout") sel.value = "video";
-    } else {
-      sel.value = hasInOut() ? "inout" : "trip";
-      sel.disabled = !hasInOut();
-    }
+    // Without footage there is nothing to choose — the output is always
+    // the trip (trimmed, if trimmed) on chroma — so the Render row is
+    // hidden. With footage it defaults to the trim when one is set, else
+    // the whole video.
+    const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
+    const trimmed = cfg.trimStart > 0.05 || s1 < S.dur - 0.05;
+    $("xp-range-row").classList.toggle("hidden", !hasVideo);
+    sel.value = hasVideo ? (trimmed ? "trip" : "video") : "trip";
     refreshExportInfo();
     $("xp-setup").classList.remove("hidden");
     $("xp-progress").classList.add("hidden");
@@ -1699,13 +1675,11 @@
   //   video       - the whole clip, 0..videoDur.
   //   trip        - the trim, clamped to where footage exists (no chroma).
   //   trip-chroma - the whole trim; frames past the video get chroma tails.
-  const hasInOut = () => cfg.renderIn != null && cfg.renderOut != null && cfg.renderOut > cfg.renderIn;
   function exportRange() {
     const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
     const tripS = cfg.teleOffset + cfg.trimStart;
     const tripE = cfg.teleOffset + s1;
     const mode = $("xp-range") ? $("xp-range").value : (hasVideo ? "video" : "trip");
-    if (mode === "inout" && hasInOut()) return { vStart: cfg.renderIn, vEnd: cfg.renderOut, mode };
     if (!hasVideo) return { vStart: tripS, vEnd: tripE, mode: "trip" };
     const vd = videoEl.duration || 0;
     if (mode === "video") return { vStart: 0, vEnd: vd, mode };
@@ -1970,7 +1944,7 @@
     get cfg() { return cfg; }, get samples() { return S; },
     setTrack, requestDraw, sampleAt, applyCfg,
     exportWebCodecs, exportDuration, exportRange,
-    setPlayhead, setRenderIn, setRenderOut, clearRenderRange, exportMediaRecorder,
+    setPlayhead, setTrimIn, setTrimOut, resetTrim, exportMediaRecorder,
     renderProbe(t) {
       const c = document.createElement("canvas");
       c.width = 64; c.height = 64;

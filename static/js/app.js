@@ -2207,7 +2207,7 @@ document.addEventListener("DOMContentLoaded", function () {
       wheelSel.disabled = true;
       wheelSel.title = only && !only.unknown
         ? "Every loaded trip is from this wheel"
-        : "None of the loaded trips carry a wheel identity; assign one in Manage trips";
+        : "None of the loaded trips carry a wheel identity; assign one in Batch edit";
     }
     const analyticsBtn = document.createElement("a");
     analyticsBtn.className = "forensics-btn";
@@ -2256,12 +2256,11 @@ document.addEventListener("DOMContentLoaded", function () {
     allRow.innerHTML = `
       <label><input type="checkbox" class="all-check" checked> All trips</label>
       <div class="tree-actions">
-        <span class="tree-btn manage-trips" title="Assign wheels, remove trips">
+        <span class="tree-btn manage-trips" title="Batch edit: assign wheels or remove across many trips at once">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M11.3 2.7a1.4 1.4 0 0 1 2 2L5.5 12.5l-2.9.9.9-2.9z"/>
-            <line x1="9.6" y1="4.4" x2="11.6" y2="6.4"/>
+            <rect x="2" y="2.5" width="5" height="5" rx="1"/><rect x="9" y="2.5" width="5" height="5" rx="1"/><rect x="2" y="9.5" width="5" height="5" rx="1"/><rect x="9" y="9.5" width="5" height="5" rx="1"/>
           </svg>
-          Manage trips
+          Batch edit
         </span>
         <span class="tree-btn expand-all" title="Expand all">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2358,8 +2357,8 @@ document.addEventListener("DOMContentLoaded", function () {
               <button type="button" class="share-btn" data-idx="${i}" title="Copy a shareable viewer link">
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4.5"/><line x1="5.7" y1="9" x2="10.3" y2="11.5"/></svg>
               </button>` : ""}
-              <button type="button" class="tools-btn" data-idx="${i}" title="Make a video or inspect this trip">
-                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1.4"/><path d="M8 2.5v1.6M8 11.9v1.6M2.5 8h1.6M11.9 8h1.6M4.1 4.1l1.1 1.1M10.8 10.8l1.1 1.1M11.9 4.1l-1.1 1.1M5.2 10.8l-1.1 1.1"/></svg>
+              <button type="button" class="tools-btn" data-idx="${i}" title="Trip tools: make a video, inspect, change wheel, split or extend">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
                 <span>Tools</span>
                 <svg class="tools-caret" viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>
               </button>

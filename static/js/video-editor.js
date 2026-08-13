@@ -1107,13 +1107,35 @@
   }
 
   // Zoom: buttons and wheel (anchored at the cursor). Fit resets.
+  // Max zoom is dynamic: a short clip on a long ride needs a much deeper
+  // zoom than a clip that already fills the ride, and the timeline renders
+  // only the visible window so deep zoom is cheap.
+  function maxZoom() {
+    const vd = hasVideo ? (videoEl.duration || 0) : 0;
+    const need = vd > 0 ? (tlSpan() / vd) * 1.6 : 0;
+    return Math.max(120, Math.ceil(need));
+  }
   function setZoom(z, anchorT, anchorX) {
     const w = trackW();
-    tlZoom = Math.min(120, Math.max(1, z));
+    tlZoom = Math.min(maxZoom(), Math.max(1, z));
     if (anchorT !== undefined) {
       const pps = (w / tlSpan()) * tlZoom;
       tlView = anchorT - anchorX / pps;
     }
+    layoutTimeline();
+  }
+  // Frame the video: fill ~76% of the viewport with the clip, centered. On
+  // a long ride this jumps straight to the footage instead of leaving it a
+  // hair-thin sliver at the far left; when the clip already spans the ride
+  // it just fits everything.
+  function frameVideo() {
+    const w = trackW();
+    if (!w) return;
+    const vd = hasVideo ? (videoEl.duration || 0) : 0;
+    if (vd <= 0) { tlZoom = 1; tlView = 0; layoutTimeline(); return; }
+    tlZoom = Math.min(maxZoom(), Math.max(1, 0.76 * tlSpan() / vd));
+    const pps = (w / tlSpan()) * tlZoom;
+    tlView = vd / 2 - (w / pps) / 2;
     layoutTimeline();
   }
   $("tlz-in").addEventListener("click", () => {
@@ -1125,6 +1147,8 @@
     setZoom(tlZoom / 1.6, tlView + w / pxPerSec / 2, w / 2);
   });
   $("tlz-fit").addEventListener("click", () => { tlZoom = 1; tlView = 0; layoutTimeline(); });
+  const tlzVideoBtn = $("tlz-video");
+  if (tlzVideoBtn) tlzVideoBtn.addEventListener("click", frameVideo);
 
   // Snap: dragging the telemetry (or its trims) sticks to the video start
   // and the playhead when close, so "align to the beginning" is a flick
@@ -1294,10 +1318,13 @@
       $("tl-video-empty").classList.add("hidden");
       $("btn-lrv").disabled = false;
       if ($("mr-sync")) $("mr-sync").disabled = false;
+      if (tlzVideoBtn) tlzVideoBtn.classList.remove("hidden");
       setStatus("ms-video", `${fmtT(videoEl.duration || 0)} · ${videoEl.videoWidth}x${videoEl.videoHeight}`);
       setStatus("ms-sync", "pick the full source recording (.lrv)");
       curT = 0;
       layoutTimeline(); drawTeleGraph(); buildThumbs(); requestDraw();
+      // A short clip on a long ride is unusable at fit zoom — frame it.
+      frameVideo();
       toast(`Video loaded: ${(videoEl.duration || 0) > 0 ? fmtT(videoEl.duration) : "?"} at ${videoEl.videoWidth}x${videoEl.videoHeight}`);
       detectVideoFps().then((f) => {
         videoFps = f;

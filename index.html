@@ -6,7 +6,7 @@
     <title>EUC Planet Trip Viewer</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/style.css?v=72" />
+    <link rel="stylesheet" href="static/css/style.css?v=73" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -140,6 +140,20 @@
         </div>
     </div>
 
+    <div id="trip-tool-modal" class="hidden" role="dialog" aria-label="Trip tool">
+        <div class="tm-backdrop" data-ttmod-close></div>
+        <div class="tm-panel ttmod-panel">
+            <header class="tm-header">
+                <span class="tm-tag" id="ttmod-tag">TOOL</span>
+                <h3 id="ttmod-title">Tool</h3>
+                <button type="button" class="tm-close" data-ttmod-close aria-label="Close">&times;</button>
+            </header>
+            <div class="ttmod-sub" id="ttmod-sub"></div>
+            <div class="ttmod-body" id="ttmod-body"></div>
+            <footer class="tm-actions ttmod-foot" id="ttmod-foot"></footer>
+        </div>
+    </div>
+
     <div id="page-footer">
         <a href="https://github.com/eried/eucviewer" target="_blank" rel="noopener" title="View / contribute on GitHub">
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -161,7 +175,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="static/js/app.js?v=126"></script>
+    <script src="static/js/app.js?v=131"></script>
     <script src="static/js/dropbox-source.js?v=5"></script>
     <script src="static/js/source-hints.js?v=35"></script>
 </body>

@@ -2091,6 +2091,8 @@ document.addEventListener("DOMContentLoaded", function () {
     inspect: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>`,
     wheel: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.6"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>`,
     back: `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 3 5 8 9 13"/></svg>`,
+    split: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><line x1="5.6" y1="5.4" x2="14" y2="11.5"/><line x1="5.6" y1="10.6" x2="14" y2="4.5"/></svg>`,
+    extend: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h6M2 11h6"/><path d="M8 5v6"/><polyline points="10.5 6 13.5 8 10.5 10"/><line x1="8" y1="8" x2="13.5" y2="8"/></svg>`,
   };
   let toolsMenu = null, toolsOpenFor = -1, toolsBtnEl = null;
   function ensureToolsMenu() {
@@ -2129,46 +2131,18 @@ document.addEventListener("DOMContentLoaded", function () {
       `<a class="ttm-item" href="video.html?i=${i}" target="_blank" rel="noopener">${ICON.video}Make video</a>` +
       `<a class="ttm-item" href="inspector.html?i=${i}" target="_blank" rel="noopener">${ICON.inspect}Inspector</a>` +
       `<div class="ttm-sep"></div>` +
-      `<button type="button" class="ttm-item" data-act="wheel">${ICON.wheel}Change wheel<span class="ttm-arrow">›</span></button>`;
+      `<button type="button" class="ttm-item" data-act="wheel">${ICON.wheel}Change wheel…</button>` +
+      `<button type="button" class="ttm-item" data-act="split">${ICON.split}Split trip…</button>` +
+      `<button type="button" class="ttm-item" data-act="extend">${ICON.extend}Extend trip…</button>`;
     m.querySelectorAll("a.ttm-item").forEach((a) => a.addEventListener("click", () => closeToolsMenu()));
-    m.querySelector('[data-act="wheel"]').addEventListener("click", (e) => {
-      e.stopPropagation(); toolsMenuWheels(i); positionToolsMenu();
+    const wire = (act, fn) => m.querySelector(`[data-act="${act}"]`).addEventListener("click", (e) => {
+      e.stopPropagation(); closeToolsMenu(); fn(i);
     });
+    wire("wheel", openChangeWheelDialog);
+    wire("split", openSplitDialog);
+    wire("extend", openExtendDialog);
   }
-  function toolsMenuWheels(i) {
-    const m = toolsMenu;
-    const groups = computeWheelGroups().filter((g) => !g.unknown);
-    const cur = wheelLabelOf(allTracks[i]);
-    let html = `<button type="button" class="ttm-item ttm-back" data-act="back">${ICON.back}Change wheel</button><div class="ttm-sep"></div>`;
-    groups.forEach((g, gi) => {
-      const on = g.label === cur ? " ttm-on" : "";
-      html += `<button type="button" class="ttm-item${on}" data-wheel="${gi}">${escapeHtml(g.label)}</button>`;
-    });
-    if (!groups.length) html += `<div class="ttm-note">No wheels in the library yet</div>`;
-    html += `<div class="ttm-sep"></div>` +
-      `<button type="button" class="ttm-item" data-wheel="new">New wheel…</button>` +
-      `<button type="button" class="ttm-item" data-wheel="clear">No wheel</button>`;
-    m.innerHTML = html;
-    m._groups = groups;
-    m.querySelector('[data-act="back"]').addEventListener("click", (e) => {
-      e.stopPropagation(); toolsMenuMain(i); positionToolsMenu();
-    });
-    m.querySelectorAll("[data-wheel]").forEach((b) => b.addEventListener("click", (e) => {
-      e.stopPropagation(); applyWheelToTrip(i, b.dataset.wheel); closeToolsMenu();
-    }));
-  }
-  function applyWheelToTrip(i, sel) {
-    let wheel;
-    if (sel === "clear") wheel = null;
-    else if (sel === "new") {
-      const name = (window.prompt("Wheel name (e.g. KS-16SZ or Lynx-2317):") || "").trim();
-      if (!name) return;
-      wheel = { name };
-    } else {
-      const g = (toolsMenu._groups || [])[parseInt(sel)];
-      const w = g && g.wheel ? g.wheel : {};
-      wheel = { name: w.name, mac: w.mac, make: w.make, model: w.model, serial: w.serial };
-    }
+  function applyWheelToTrip(i, wheel) {
     if (wheel) allTracks[i].wheel = { ...wheel }; else delete allTracks[i].wheel;
     delete allTracks[i].wheels;
     saveTracks(allTracks);
@@ -2184,6 +2158,426 @@ document.addEventListener("DOMContentLoaded", function () {
     toolsMenuMain(i);
     positionToolsMenu();
     btn.classList.add("active");
+  }
+
+  // ===================================================================
+  // Trip tool dialogs: Change wheel / Split trip / Extend trip.
+  // All three are modal (eucplanet-style), sharing one reusable panel.
+  // Split and Extend re-derive tracks from the stored timeseries (the
+  // time-authoritative array), rebuild points from its GPS rows, and
+  // recompute stats with the same formulas the parser uses, so the
+  // results are indistinguishable from freshly-parsed trips.
+  // ===================================================================
+  const ttmod = document.getElementById("trip-tool-modal");
+  function ttmodClose() { if (ttmod) ttmod.classList.add("hidden"); }
+  if (ttmod) {
+    ttmod.querySelectorAll("[data-ttmod-close]").forEach((el) => el.addEventListener("click", ttmodClose));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !ttmod.classList.contains("hidden")) ttmodClose();
+    });
+  }
+  function ttmodShow(tag, title, subHtml, bodyHtml, footNodes) {
+    if (!ttmod) return null;
+    ttmod.querySelector("#ttmod-tag").textContent = tag;
+    ttmod.querySelector("#ttmod-title").textContent = title;
+    ttmod.querySelector("#ttmod-sub").innerHTML = subHtml || "";
+    ttmod.querySelector("#ttmod-body").innerHTML = bodyHtml || "";
+    const foot = ttmod.querySelector("#ttmod-foot");
+    foot.innerHTML = "";
+    (footNodes || []).forEach((n) => foot.appendChild(n));
+    ttmod.classList.remove("hidden");
+    return ttmod;
+  }
+  function ttBtn(label, cls) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label; if (cls) b.className = cls;
+    return b;
+  }
+
+  // Lightweight toast (bottom-center, auto-dismiss).
+  let _toastEl = null, _toastT = null;
+  function appToast(msg) {
+    if (!_toastEl) {
+      _toastEl = document.createElement("div");
+      _toastEl.id = "app-toast";
+      document.body.appendChild(_toastEl);
+    }
+    _toastEl.textContent = msg;
+    _toastEl.classList.add("show");
+    clearTimeout(_toastT);
+    _toastT = setTimeout(() => _toastEl.classList.remove("show"), 3200);
+  }
+
+  // --- track math (mirrors parser-worker.js so re-derived tracks match) ---
+  const _rn = (v, d) => Number(v.toFixed(d));
+  function _hav(lat1, lon1, lat2, lon2) {
+    const R = 6371000, p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+    const dP = (lat2 - lat1) * Math.PI / 180, dL = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dP / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dL / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function _maxOf(a) { if (!a.length) return 0; let m = a[0]; for (const v of a) if (v > m) m = v; return _rn(m, 1); }
+  function _minOf(a) { if (!a.length) return 0; let m = a[0]; for (const v of a) if (v < m) m = v; return _rn(m, 1); }
+  // timeseries row -> points row (schema in CLAUDE.md).
+  function _pointFromRow(r) { return [r[6], r[7], r[1], r[5], r[2], r[3], r[4], r[9], r[10], r[11], r[12]]; }
+  function _statsFrom(points, ts) {
+    const speeds = [], volts = [], temps = [], alts = [];
+    for (const r of ts) {
+      if (r[1] > 0) speeds.push(r[1]);
+      if (r[2] !== 0) volts.push(r[2]);
+      if (r[3] !== 0) temps.push(r[3]);
+      if (r[5] !== 0) alts.push(r[5]);
+    }
+    let dist = 0;
+    for (let i = 1; i < points.length; i++) dist += _hav(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
+    let distanceKm = _rn(dist / 1000, 2);
+    if (distanceKm === 0 && ts.length) {
+      const m0 = ts[0][8] || 0, m1 = ts[ts.length - 1][8] || 0;
+      if (m1 > m0) distanceKm = _rn(m1 - m0, 2);
+    }
+    return {
+      points: points.length, rows: ts.length, distanceKm,
+      maxSpeed: _maxOf(speeds),
+      avgSpeed: speeds.length ? _rn(speeds.reduce((s, v) => s + v, 0) / speeds.length, 1) : 0,
+      maxAlt: _maxOf(alts), minAlt: _minOf(alts),
+      maxVoltage: _maxOf(volts), minVoltage: _minOf(volts),
+      maxTemp: _maxOf(temps),
+    };
+  }
+  function _downsampleTs(ts, limit) {
+    limit = limit || 500;
+    if (ts.length <= limit) return ts;
+    const step = ts.length / limit, out = [];
+    for (let i = 0; i < ts.length; i += step) out.push(ts[Math.floor(i)]);
+    return out;
+  }
+  // The parser stores dateStart/dateEnd as naive local wall-clock ISO
+  // strings (no Z) and reads them back with Date.parse (browser-local).
+  // Re-derived pieces must match that convention, so format with LOCAL
+  // components — toISOString() would round-trip through UTC and shift hours.
+  function _localIso(ms) {
+    const d = new Date(ms), p = (n, w) => String(n).padStart(w || 2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T` +
+      `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+  }
+  const _isoAt = (baseMs, ts0, sec) =>
+    isFinite(baseMs) ? _localIso(baseMs + (sec - ts0) * 1000) : undefined;
+
+  // Slice one track to [aSec, bSec) in its own timeseries clock. sec and
+  // mileage columns are rebased to start at 0 so each piece looks native.
+  function sliceTrackByTime(track, aSec, bSec, name) {
+    const ts = track.timeseries;
+    if (!Array.isArray(ts) || !ts.length) return null;
+    const ts0 = ts[0][0];
+    const rows = ts.filter((r) => r[0] >= aSec && r[0] < bSec);
+    if (rows.length < 2) return null;
+    const firstSec = rows[0][0], firstMile = rows[0][8] || 0;
+    const outTs = rows.map((r) => {
+      const c = r.slice();
+      c[0] = _rn(r[0] - firstSec, 1);
+      c[8] = _rn((r[8] || 0) - firstMile, 3);
+      return c;
+    });
+    const outPoints = [];
+    for (const r of rows) if (r[6] !== 0 || r[7] !== 0) outPoints.push(_pointFromRow(r));
+    const baseMs = Date.parse(track.dateStart || "");
+    const out = {
+      name,
+      date: track.date || (_isoAt(baseMs, ts0, firstSec) || "").slice(0, 10),
+      dateStart: _isoAt(baseMs, ts0, rows[0][0]),
+      dateEnd: _isoAt(baseMs, ts0, rows[rows.length - 1][0]),
+      points: outPoints,
+      timeseries: outTs,
+      stats: _statsFrom(outPoints, outTs),
+    };
+    if (track.wheel) out.wheel = JSON.parse(JSON.stringify(track.wheel));
+    if (track.wheels) out.wheels = JSON.parse(JSON.stringify(track.wheels));
+    return out;
+  }
+
+  // Merge tracks (passed oldest->newest) into one continuous track. The
+  // global clock preserves real wall-time gaps between rides; per-track
+  // mileage accumulates across (never the straight-line hop between one
+  // ride's end and the next's start — that's distance nobody rode); the
+  // result is re-downsampled to the 500-row cap.
+  function mergeTracksInTime(tracks, name) {
+    const full = [];
+    const base0 = Date.parse(tracks[0].dateStart || "");
+    let cumMile = 0, sumDist = 0;
+    tracks.forEach((tk, ti) => {
+      const ts = tk.timeseries;
+      if (!Array.isArray(ts) || !ts.length) return;
+      const ts0 = ts[0][0], mile0 = ts[0][8] || 0;
+      const tkMs = Date.parse(tk.dateStart || "");
+      let baseSec;
+      if (ti === 0) baseSec = 0;
+      else if (isFinite(tkMs) && isFinite(base0)) baseSec = (tkMs - base0) / 1000;
+      else baseSec = full.length ? full[full.length - 1][0] : 0;
+      for (const r of ts) {
+        const c = r.slice();
+        c[0] = _rn(baseSec + (r[0] - ts0), 1);
+        c[8] = _rn(cumMile + ((r[8] || 0) - mile0), 3);
+        full.push(c);
+      }
+      cumMile += (ts[ts.length - 1][8] || 0) - mile0;
+      sumDist += (tk.stats && tk.stats.distanceKm) || 0;
+    });
+    if (full.length < 2) return null;
+    full.sort((a, b) => a[0] - b[0]);
+    // Mileage was assigned in ride order; the clock sort keeps it monotonic
+    // for adjacent rides, but combining time-overlapping rides (a trip plus
+    // its own split parts) would interleave rows — clamp to non-decreasing.
+    let mx = 0;
+    for (const r of full) { if (r[8] < mx) r[8] = mx; else mx = r[8]; }
+    const dsTs = _downsampleTs(full, 500);
+    const outPoints = [];
+    for (const r of dsTs) if (r[6] !== 0 || r[7] !== 0) outPoints.push(_pointFromRow(r));
+    const last = tracks[tracks.length - 1];
+    const stats = _statsFrom(outPoints, dsTs);
+    // The GPS-summed distance over the merged path would count the hop
+    // between rides; the true ridden distance is the sum of the parts.
+    stats.distanceKm = _rn(sumDist, 2);
+    const out = {
+      name,
+      date: tracks[0].date || (tracks[0].dateStart || "").slice(0, 10),
+      dateStart: tracks[0].dateStart,
+      dateEnd: last.dateEnd || tracks[0].dateEnd,
+      points: outPoints,
+      timeseries: dsTs,
+      stats,
+    };
+    const ids = [];
+    for (const tk of tracks) for (const w of (wheelIdsOf(tk) || [])) {
+      if (labelOfWheel(w) && !ids.some((x) => labelOfWheel(x) === labelOfWheel(w))) ids.push(w);
+    }
+    if (ids.length === 1) out.wheel = JSON.parse(JSON.stringify(ids[0]));
+    else if (ids.length > 1) out.wheels = JSON.parse(JSON.stringify(ids));
+    return out;
+  }
+
+  // Natural split points: recording gaps (time discontinuities) and long
+  // stops (sustained near-zero speed). Wheel-change boundaries aren't
+  // recoverable from the viewer's downsampled data, so they aren't offered.
+  function detectCutPoints(track) {
+    const ts = track.timeseries;
+    const cuts = [];
+    if (!Array.isArray(ts) || ts.length < 6) return cuts;
+    const dts = [];
+    for (let i = 1; i < ts.length; i++) dts.push(ts[i][0] - ts[i - 1][0]);
+    const srt = dts.slice().sort((a, b) => a - b);
+    const medDt = srt[Math.floor(srt.length / 2)] || 1;
+    const gapTh = Math.max(60, medDt * 8);
+    for (let i = 1; i < ts.length; i++) {
+      const dt = ts[i][0] - ts[i - 1][0];
+      if (dt > gapTh) cuts.push({ sec: (ts[i - 1][0] + ts[i][0]) / 2, kind: "gap", dur: dt });
+    }
+    const STOP_KMH = 1.5, STOP_SEC = 300;
+    let runStart = null;
+    for (let i = 0; i <= ts.length; i++) {
+      const stopped = i < ts.length && (ts[i][1] || 0) < STOP_KMH;
+      if (stopped && runStart === null) runStart = i;
+      if ((!stopped || i === ts.length) && runStart !== null) {
+        const a = ts[runStart][0], b = ts[Math.min(i, ts.length - 1)][0];
+        if (b - a > STOP_SEC && !cuts.some((c) => Math.abs(c.sec - (a + b) / 2) < gapTh)) {
+          cuts.push({ sec: (a + b) / 2, kind: "stop", dur: b - a });
+        }
+        runStart = null;
+      }
+    }
+    cuts.sort((a, b) => a.sec - b.sec);
+    return cuts;
+  }
+
+  // After structurally editing allTracks: re-sort newest-first (matching
+  // loadTracks so inspector/studio indices line up), persist, and refresh
+  // the panel + map without the full first-load choreography.
+  function commitEditedTracks(toastMsg) {
+    // Assign a NEW array (never mutate in place): the map's geometry and
+    // metric-scale caches are keyed on the allTracks reference, so an
+    // in-place sort/push would leave them stale and mis-indexed. This
+    // mirrors loadTracks, which also replaces the reference.
+    const next = allTracks.slice().sort((a, b) => {
+      const pa = a.dateStart || ((a.date || "").split(".").reverse().join("-"));
+      const pb = b.dateStart || ((b.date || "").split(".").reverse().join("-"));
+      return String(pb).localeCompare(String(pa));
+    });
+    allTracks = next;
+    trackVisible = new Set(allTracks.map((_, i) => i));
+    selectedIdx = -1;
+    document.querySelectorAll(".trip-item.active").forEach((el) => el.classList.remove("active"));
+    if (tooltip) tooltip.classList.add("hidden");
+    if (typeof hideChartMarker === "function") hideChartMarker();
+    saveTracks(allTracks);
+    buildTripList();
+    updateGlow();
+    updateVisibilityUI();
+    fitAll();
+    if (toastMsg) appToast(toastMsg);
+  }
+
+  // --- small time formatters for the dialogs ---
+  function fmtClock(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+  function fmtGap(sec) {
+    sec = Math.round(sec);
+    if (sec < 90) return `${sec}s`;
+    const m = Math.round(sec / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60), mm = m % 60;
+    return `${h}h ${String(mm).padStart(2, "0")}m`;
+  }
+
+  // --- Change wheel dialog ---
+  function openChangeWheelDialog(i) {
+    const t = allTracks[i];
+    const groups = computeWheelGroups().filter((g) => !g.unknown);
+    const cur = wheelLabelOf(t);
+    let body = '<div class="tt-radios">';
+    groups.forEach((g, gi) => {
+      const on = g.label === cur ? " checked" : "";
+      body += `<label class="tt-radio"><input type="radio" name="cw" value="g:${gi}"${on}><span>${escapeHtml(g.label)}</span></label>`;
+    });
+    body += `<label class="tt-radio"><input type="radio" name="cw" value="new"><span>New wheel…</span></label>`;
+    body += `<div class="tt-newrow hidden"><input type="text" id="cw-name" placeholder="e.g. KS-16SZ or Lynx-2317" maxlength="60"></div>`;
+    body += `<label class="tt-radio"><input type="radio" name="cw" value="none"${cur ? "" : " checked"}><span>No wheel</span></label>`;
+    body += "</div>";
+    const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
+    const apply = ttBtn("Apply", "tt-primary");
+    ttmodShow("WHEEL", "Change wheel",
+      `<div class="tt-trip">${escapeHtml(formatTripLabel(t))}</div>`, body, [cancel, apply]);
+    const nameRow = ttmod.querySelector(".tt-newrow"), nameInp = ttmod.querySelector("#cw-name");
+    const sync = () => {
+      const v = (ttmod.querySelector('input[name="cw"]:checked') || {}).value;
+      nameRow.classList.toggle("hidden", v !== "new");
+      if (v === "new") setTimeout(() => nameInp.focus(), 0);
+    };
+    ttmod.querySelectorAll('input[name="cw"]').forEach((r) => r.addEventListener("change", sync));
+    sync();
+    apply.addEventListener("click", () => {
+      const v = (ttmod.querySelector('input[name="cw"]:checked') || {}).value;
+      if (!v) return;
+      let wheel = null;
+      if (v === "none") wheel = null;
+      else if (v === "new") {
+        const nm = (nameInp.value || "").trim();
+        if (!nm) { nameInp.focus(); return; }
+        wheel = { name: nm };
+      } else {
+        const w = (groups[parseInt(v.slice(2))] || {}).wheel || {};
+        wheel = { name: w.name, mac: w.mac, make: w.make, model: w.model, serial: w.serial };
+      }
+      applyWheelToTrip(i, wheel);
+      ttmodClose();
+      appToast(wheel ? `Wheel set to ${wheel.name || "wheel"}.` : "Wheel cleared.");
+    });
+  }
+
+  // --- Split trip dialog ---
+  function openSplitDialog(i) {
+    const t = allTracks[i];
+    const cuts = detectCutPoints(t);
+    const sub = `<div class="tt-trip">${escapeHtml(formatTripLabel(t))}</div>` +
+      `<div class="tt-facts">${fmtDurH(tripDurH(t))} · ${UNITS.dist(t.stats.distanceKm).toFixed(1)} ${UNITS.distUnit}</div>`;
+    const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
+    if (!cuts.length) {
+      ttmodShow("SPLIT", "Split trip", sub,
+        `<div class="tt-empty">No recording gaps or long stops were found in this trip, so there's nothing to split on.</div>`,
+        [cancel]);
+      return;
+    }
+    const ts0 = t.timeseries[0][0];
+    let body = `<div class="tt-hint">Cut the ride at the points below into separate trips. The original stays in your library.</div><div class="tt-cuts">`;
+    cuts.forEach((c) => {
+      const why = c.kind === "gap" ? `recording gap of ${fmtGap(c.dur)}` : `stopped for ${fmtGap(c.dur)}`;
+      body += `<label class="tt-cut"><input type="checkbox" class="tt-cutcb" data-sec="${c.sec}" checked>` +
+        `<span class="tt-cut-when">${fmtClock(c.sec - ts0)}</span><span class="tt-cut-why">${why}</span></label>`;
+    });
+    body += "</div>";
+    const go = ttBtn("Split", "tt-primary");
+    ttmodShow("SPLIT", "Split trip", sub, body, [cancel, go]);
+    const cbs = [...ttmod.querySelectorAll(".tt-cutcb")];
+    const sync = () => {
+      const n = cbs.filter((c) => c.checked).length;
+      go.textContent = n ? `Split into ${n + 1} trips` : "Split";
+      go.disabled = !n;
+    };
+    cbs.forEach((c) => c.addEventListener("change", sync));
+    sync();
+    go.addEventListener("click", () => {
+      const secs = cbs.filter((c) => c.checked).map((c) => parseFloat(c.dataset.sec)).sort((a, b) => a - b);
+      if (!secs.length) return;
+      const bounds = [-Infinity, ...secs, Infinity];
+      const segs = [];
+      for (let k = 0; k < bounds.length - 1; k++) {
+        const seg = sliceTrackByTime(t, bounds[k], bounds[k + 1], `${t.name || "Trip"} · part ${k + 1}`);
+        if (seg) segs.push(seg);
+      }
+      if (segs.length < 2) { appToast("Couldn't split (segments too short)."); return; }
+      allTracks.push(...segs);
+      ttmodClose();
+      commitEditedTracks(`Split into ${segs.length} trips.`);
+    });
+  }
+
+  // --- Extend trip dialog ---
+  function openExtendDialog(i) {
+    const t = allTracks[i];
+    const order = allTracks.map((_, idx) => idx).sort((a, b) =>
+      (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
+    const pos = order.indexOf(i);
+    const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
+    if (order.length < 2) {
+      ttmodShow("EXTEND", "Extend trip",
+        `<div class="tt-trip">${escapeHtml(formatTripLabel(t))}</div>`,
+        `<div class="tt-empty">There are no other trips to absorb.</div>`, [cancel]);
+      return;
+    }
+    const opts = (sel) => order.map((idx, p) =>
+      `<option value="${p}"${p === sel ? " selected" : ""}>${escapeHtml(formatTripLabel(allTracks[idx]))}</option>`).join("");
+    const body =
+      `<div class="tt-hint">Combine this trip with its neighbours into one longer trip. Everything between the chosen ends comes along. The originals stay in your library.</div>` +
+      `<div class="tt-range"><label>From<select id="ex-from">${opts(pos)}</select></label>` +
+      `<label>To<select id="ex-to">${opts(pos)}</select></label></div>` +
+      `<div class="tt-preview" id="ex-preview"></div>`;
+    const go = ttBtn("Combine", "tt-primary");
+    ttmodShow("EXTEND", "Extend trip",
+      `<div class="tt-trip">${escapeHtml(formatTripLabel(t))}</div>`, body, [cancel, go]);
+    const fromSel = ttmod.querySelector("#ex-from"), toSel = ttmod.querySelector("#ex-to");
+    const preview = ttmod.querySelector("#ex-preview");
+    const sync = () => {
+      let a = parseInt(fromSel.value), b = parseInt(toSel.value);
+      if (a > pos) { a = pos; fromSel.value = pos; }
+      if (b < pos) { b = pos; toSel.value = pos; }
+      if (a > b) { b = a; toSel.value = a; }
+      const idxs = [];
+      for (let p = a; p <= b; p++) idxs.push(order[p]);
+      let km = 0;
+      idxs.forEach((idx) => { km += allTracks[idx].stats.distanceKm || 0; });
+      const spanH = (Date.parse(allTracks[order[b]].dateEnd || allTracks[order[b]].dateStart || "") -
+        Date.parse(allTracks[order[a]].dateStart || "")) / 3600000;
+      preview.textContent = idxs.length < 2
+        ? "Pick at least one neighbour to combine."
+        : `${idxs.length} trips → ${UNITS.dist(km).toFixed(1)} ${UNITS.distUnit}${isFinite(spanH) && spanH > 0 ? `, ${fmtDurH(spanH)} span` : ""}.`;
+      go.disabled = idxs.length < 2;
+      go._idxs = idxs;
+    };
+    fromSel.addEventListener("change", sync);
+    toSel.addEventListener("change", sync);
+    sync();
+    go.addEventListener("click", () => {
+      const idxs = (go._idxs || []).slice();
+      if (idxs.length < 2) return;
+      idxs.sort((a, b) => (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
+      const merged = mergeTracksInTime(idxs.map((idx) => allTracks[idx]), "Combined ride");
+      if (!merged) { appToast("Couldn't combine those trips."); return; }
+      allTracks.push(merged);
+      ttmodClose();
+      commitEditedTracks(`Combined ${idxs.length} trips.`);
+    });
   }
 
   function buildTripList() {
@@ -2411,9 +2805,8 @@ document.addEventListener("DOMContentLoaded", function () {
               <button type="button" class="share-btn" data-idx="${i}" title="Copy a shareable viewer link">
                 <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4.5"/><line x1="5.7" y1="9" x2="10.3" y2="11.5"/></svg>
               </button>` : ""}
-              <button type="button" class="tools-btn" data-idx="${i}" title="Trip tools: make a video, inspect, change wheel, split or extend">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
-                <span>Tools</span>
+              <button type="button" class="tools-btn" data-idx="${i}" aria-label="Trip tools" title="Trip tools: make a video, inspect, change wheel, split or extend">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
                 <svg class="tools-caret" viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>
               </button>
             </div>

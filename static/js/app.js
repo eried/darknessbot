@@ -2526,52 +2526,55 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Extend trip dialog ---
   function openExtendDialog(i) {
     const t = allTracks[i];
-    // Chronological order (oldest -> newest). Extend reaches FORWARD from
-    // "this trip" into the rides that follow, and only a handful of them,
-    // picked with a From / To pair (like the app).
+    // Chronological order (oldest -> newest). Extend spans a range around
+    // "this trip": the From combo reaches BACK into older rides, the To
+    // combo reaches FORWARD into newer ones, and "this trip" is the anchor
+    // in both. Any span that includes this trip is valid — older→this,
+    // this→newer, or older→newer.
     const order = allTracks.map((_, idx) => idx).sort((a, b) =>
       (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
-    const pos = order.indexOf(i);
-    const MAX_FWD = 6;
-    // The pick list is "this trip" (index 0) plus the next few trips.
-    const list = [i, ...order.slice(pos + 1, pos + 1 + MAX_FWD)];
+    const pos = order.indexOf(i); // this trip's chronological position
     const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
     const sub =
       `<div class="tt-trip">This trip <span class="tt-when">· ${escapeHtml(formatTripLabel(t))}</span></div>` +
       `<div class="tt-facts">${fmtDurH(tripDurH(t))} · ${UNITS.dist(t.stats.distanceKm).toFixed(1)} ${UNITS.distUnit}</div>`;
-    if (list.length < 2) {
+    if (order.length < 2) {
       ttmodShow("EXTEND", "Extend trip", sub,
-        `<div class="tt-empty">There are no later trips to absorb into this one.</div>`, [cancel]);
+        `<div class="tt-empty">There are no other trips to absorb into this one.</div>`, [cancel]);
       return;
     }
-    const label = (k) => k === 0 ? "This trip" : formatTripLabel(allTracks[list[k]]);
-    const opts = (selK) => list.map((_, k) =>
-      `<option value="${k}"${k === selK ? " selected" : ""}>${escapeHtml(label(k))}</option>`).join("");
+    const hasOlder = pos > 0, hasNewer = pos < order.length - 1;
+    // From = this trip then progressively older; To = this trip then newer.
+    const fromPos = [pos]; for (let p = pos - 1; p >= 0; p--) fromPos.push(p);
+    const toPos = [pos]; for (let p = pos + 1; p < order.length; p++) toPos.push(p);
+    const optOf = (p) => `<option value="${p}">${p === pos ? "This trip" : escapeHtml(formatTripLabel(allTracks[order[p]]))}</option>`;
     const body =
-      `<div class="tt-hint">Combine this trip with the rides that follow into one longer trip. Everything between the ends comes along. The originals stay in your library.</div>` +
-      `<div class="tt-range"><label>From<select id="ex-from">${opts(0)}</select></label>` +
-      `<label>To<select id="ex-to">${opts(0)}</select></label></div>` +
-      `<div class="tt-preview" id="ex-preview"></div>`;
+      `<div class="tt-hint">Combine this trip with neighbouring rides into one longer trip — reach back into older rides, forward into newer ones, or both. Everything in between comes along. The originals stay in your library.</div>` +
+      `<div class="tt-range">` +
+        `<label>From (older)<select id="ex-from"${hasOlder ? "" : " disabled"}>${fromPos.map(optOf).join("")}</select></label>` +
+        `<label>To (newer)<select id="ex-to"${hasNewer ? "" : " disabled"}>${toPos.map(optOf).join("")}</select></label>` +
+      `</div><div class="tt-preview" id="ex-preview"></div>`;
     const go = ttBtn("Combine", "tt-primary");
     ttmodShow("EXTEND", "Extend trip", sub, body, [cancel, go]);
     const fromSel = ttmod.querySelector("#ex-from"), toSel = ttmod.querySelector("#ex-to");
     const preview = ttmod.querySelector("#ex-preview");
-    const sync = (changed) => {
-      let a = parseInt(fromSel.value), b = parseInt(toSel.value);
-      // Keep From <= To: nudge the other end to whichever the user moved.
-      if (a > b) { if (changed === "to") { a = b; fromSel.value = b; } else { b = a; toSel.value = a; } }
-      const idxs = list.slice(a, b + 1);
+    const sync = () => {
+      // From is this-trip-or-older, To is this-trip-or-newer, so a<=pos<=b
+      // always holds and the span [a..b] always contains this trip.
+      const a = parseInt(fromSel.value), b = parseInt(toSel.value);
+      const idxs = [];
+      for (let p = a; p <= b; p++) idxs.push(order[p]);
       let km = 0; idxs.forEach((idx) => { km += allTracks[idx].stats.distanceKm || 0; });
-      const spanH = (Date.parse(allTracks[list[b]].dateEnd || allTracks[list[b]].dateStart || "") -
-        Date.parse(allTracks[list[a]].dateStart || "")) / 3600000;
+      const spanH = (Date.parse(allTracks[order[b]].dateEnd || allTracks[order[b]].dateStart || "") -
+        Date.parse(allTracks[order[a]].dateStart || "")) / 3600000;
       preview.textContent = idxs.length < 2
-        ? "Pick a From and To that span at least two trips."
+        ? "Pick an older or newer trip to combine with this one."
         : `${idxs.length} trips → ${UNITS.dist(km).toFixed(1)} ${UNITS.distUnit}${isFinite(spanH) && spanH > 0 ? `, ${fmtDurH(spanH)} span` : ""}.`;
       go.disabled = idxs.length < 2;
       go._idxs = idxs;
     };
-    fromSel.addEventListener("change", () => sync("from"));
-    toSel.addEventListener("change", () => sync("to"));
+    fromSel.addEventListener("change", sync);
+    toSel.addEventListener("change", sync);
     sync();
     go.addEventListener("click", () => {
       const idxs = (go._idxs || []).slice();

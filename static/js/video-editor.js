@@ -456,8 +456,13 @@
   }
 
   function drawFrame(ctx, W, H, t, forPreview) {
-    // Background: footage or chroma fill.
-    if (hasVideo && videoEl.readyState >= 2) {
+    // Background: footage where the render time falls inside the video,
+    // chroma elsewhere. "Trip trim only" exports can run past the video on
+    // either side (the trim is free to sit outside it); those frames get
+    // the chroma fill so the overlay still renders on a keyable colour.
+    const vd = videoEl.duration || 0;
+    const onFootage = hasVideo && videoEl.readyState >= 2 && t >= -0.05 && t <= vd + 0.05;
+    if (onFootage) {
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, W, H);
       const vw = videoEl.videoWidth, vh = videoEl.videoHeight;
@@ -1523,20 +1528,51 @@
   function openExport() {
     if (!S) { toast("Load a trip first."); return; }
     buildResOptions();
-    $("xp-duration").textContent = fmtT(exportDuration());
+    const sel = $("xp-range");
+    // Without footage the only thing to render is the trip on chroma, so
+    // the picker locks to "Trip trim only"; with footage it defaults to
+    // the full video.
+    if (hasVideo) { sel.disabled = false; if (sel.value === "trip") sel.value = "video"; }
+    else { sel.value = "trip"; sel.disabled = true; }
+    refreshExportInfo();
     $("xp-setup").classList.remove("hidden");
     $("xp-progress").classList.add("hidden");
     xpModal.classList.remove("hidden");
   }
   $("btn-export").addEventListener("click", openExport);
   if ($("mr-generate")) $("mr-generate").addEventListener("click", openExport);
+  $("xp-range").addEventListener("change", refreshExportInfo);
   xpModal.querySelectorAll("[data-xp-close]").forEach((el) =>
     el.addEventListener("click", () => { if (!exporting) xpModal.classList.add("hidden"); }));
 
-  function exportDuration() {
-    if (hasVideo) return videoEl.duration || 0;
+  // The render window, in the drawFrame clock (= video time with footage,
+  // = teleOffset+trim without). Three shapes:
+  //   video       - the whole clip, 0..videoDur.
+  //   trip        - the trim, clamped to where footage exists (no chroma).
+  //   trip-chroma - the whole trim; frames past the video get chroma tails.
+  function exportRange() {
     const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
-    return Math.max(1, s1 - cfg.trimStart);
+    const tripS = cfg.teleOffset + cfg.trimStart;
+    const tripE = cfg.teleOffset + s1;
+    if (!hasVideo) return { vStart: tripS, vEnd: tripE, mode: "trip" };
+    const vd = videoEl.duration || 0;
+    const mode = $("xp-range") ? $("xp-range").value : "video";
+    if (mode === "video") return { vStart: 0, vEnd: vd, mode };
+    if (mode === "trip-chroma") return { vStart: tripS, vEnd: tripE, mode };
+    return { vStart: Math.max(0, tripS), vEnd: Math.min(vd, tripE), mode: "trip" };
+  }
+  function exportDuration() {
+    const r = exportRange();
+    return Math.max(0, r.vEnd - r.vStart);
+  }
+  function refreshExportInfo() {
+    const dur = exportDuration();
+    $("xp-duration").textContent = fmtT(dur);
+    // "Trip trim only" can clamp to nothing when the trim sits entirely
+    // off the footage; block the export and say why.
+    const empty = dur < 0.3;
+    $("xp-start").disabled = empty;
+    $("xp-start").textContent = empty ? "Trip trim is outside the video" : "Start";
   }
 
   let cancelExport = false;
@@ -1577,13 +1613,13 @@
   }
 
   async function exportWebCodecs(W, H, fps) {
-    const dur = exportDuration();
+    const { vStart, vEnd } = exportRange();
+    const dur = Math.max(0.1, vEnd - vStart);
+    const vd = videoEl.duration || 0;
     const total = Math.max(1, Math.floor(dur * fps));
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
-    // No-video exports start at the trimmed telemetry, so t maps into τ.
-    const tBase = hasVideo ? 0 : cfg.teleOffset + cfg.trimStart;
 
     // Audio: keep the original when it decodes and the file is sane in size.
     let audioBuf = null;
@@ -1631,16 +1667,23 @@
       });
       aEnc.configure({ codec: audioCodec.codec, sampleRate: audioBuf.sampleRate, numberOfChannels: audioCodec.chans, bitrate: 160000 });
       const chunkFrames = 4800;
-      const totalFrames = Math.min(audioBuf.length, Math.floor(dur * audioBuf.sampleRate));
+      const sr = audioBuf.sampleRate;
+      // Only the source audio that overlaps the render window; any chroma
+      // tail before/after the footage stays silent. Timestamps rebase so
+      // the audio lines up with where the footage begins in the output.
+      const aFrom = Math.max(0, vStart), aTo = Math.min(vd, vEnd);
+      const startSample = Math.max(0, Math.floor(aFrom * sr));
+      const endSample = Math.min(audioBuf.length, Math.floor(aTo * sr));
+      const tsBaseUs = Math.max(0, (aFrom - vStart)) * 1e6;
       const planes = [];
       for (let c = 0; c < audioCodec.chans; c++) planes.push(audioBuf.getChannelData(c));
-      for (let off = 0; off < totalFrames; off += chunkFrames) {
-        const nfr = Math.min(chunkFrames, totalFrames - off);
+      for (let off = startSample; off < endSample; off += chunkFrames) {
+        const nfr = Math.min(chunkFrames, endSample - off);
         const data = new Float32Array(nfr * audioCodec.chans);
         for (let c = 0; c < audioCodec.chans; c++) data.set(planes[c].subarray(off, off + nfr), c * nfr);
         aEnc.encode(new AudioData({
-          format: "f32-planar", sampleRate: audioBuf.sampleRate, numberOfFrames: nfr,
-          numberOfChannels: audioCodec.chans, timestamp: Math.round(off / audioBuf.sampleRate * 1e6), data,
+          format: "f32-planar", sampleRate: sr, numberOfFrames: nfr,
+          numberOfChannels: audioCodec.chans, timestamp: Math.round(tsBaseUs + (off - startSample) / sr * 1e6), data,
         }));
       }
       await aEnc.flush();
@@ -1650,9 +1693,9 @@
     const t0 = performance.now();
     for (let i = 0; i < total; i++) {
       if (cancelExport) break;
-      const t = i / fps;
-      await seekVideo(t);
-      drawFrame(ctx, W, H, tBase + t, false);
+      const rt = vStart + i / fps;
+      if (hasVideo && rt >= 0 && rt <= vd) await seekVideo(rt);
+      drawFrame(ctx, W, H, rt, false);
       const frame = new VideoFrame(canvas, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
       encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
       frame.close();
@@ -1675,12 +1718,17 @@
 
   async function exportMediaRecorder(W, H, fps) {
     // Realtime fallback: draw into a canvas while the footage plays and
-    // let MediaRecorder do the encoding (audio comes along natively).
-    const dur = exportDuration();
+    // let MediaRecorder do the encoding (audio comes along natively). It
+    // renders the footage-overlapping window; chroma tails of a
+    // trip-chroma export are omitted on this legacy path.
+    const range = exportRange();
+    const vd = videoEl.duration || 0;
+    const playStart = hasVideo ? Math.max(0, range.vStart) : range.vStart;
+    const playEnd = hasVideo ? Math.min(vd, range.vEnd) : range.vEnd;
+    const dur = Math.max(0.1, playEnd - playStart);
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
-    const tBase = hasVideo ? 0 : cfg.teleOffset + cfg.trimStart;
     const stream = canvas.captureStream(fps);
     if (hasVideo) {
       try {
@@ -1698,13 +1746,14 @@
     const done = new Promise((res) => { rec.onstop = res; });
     rec.start(1000);
     const t0 = performance.now();
-    if (hasVideo) { videoEl.currentTime = 0; await videoEl.play(); }
+    if (hasVideo) { videoEl.currentTime = playStart; await videoEl.play(); }
     await new Promise((res) => {
       const step = () => {
-        const t = hasVideo ? videoEl.currentTime : (performance.now() - t0) / 1000;
-        drawFrame(ctx, W, H, tBase + t, false);
-        xpStatus(`Recording ${fmtT(t)} / ${fmtT(dur)} (realtime)`, t / dur);
-        if (cancelExport || t >= dur - 0.05 || (hasVideo && videoEl.ended)) return res();
+        const rt = hasVideo ? videoEl.currentTime : (playStart + (performance.now() - t0) / 1000);
+        drawFrame(ctx, W, H, rt, false);
+        const prog = (rt - playStart) / dur;
+        xpStatus(`Recording ${fmtT(rt - playStart)} / ${fmtT(dur)} (realtime)`, prog);
+        if (cancelExport || rt >= playEnd - 0.05 || (hasVideo && videoEl.ended)) return res();
         requestAnimationFrame(step);
       };
       step();
@@ -1719,7 +1768,8 @@
 
   function exportName(ext) {
     const base = (track && (track.date || track.name) || "trip").replace(/[^\w.-]+/g, "_");
-    return base + "_overlay." + ext;
+    const trimmed = hasVideo && exportRange().mode !== "video";
+    return base + "_overlay" + (trimmed ? "_trim" : "") + "." + ext;
   }
   function downloadBlob(blob, name) {
     const a = document.createElement("a");
@@ -1762,6 +1812,13 @@
   window.__eucVideo = {
     get cfg() { return cfg; }, get samples() { return S; },
     setTrack, requestDraw, sampleAt, applyCfg,
-    exportWebCodecs, exportDuration,
+    exportWebCodecs, exportDuration, exportRange,
+    renderProbe(t) {
+      const c = document.createElement("canvas");
+      c.width = 64; c.height = 64;
+      drawFrame(c.getContext("2d"), 64, 64, t, false);
+      const d = c.getContext("2d").getImageData(2, 2, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    },
   };
 })();

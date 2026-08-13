@@ -180,6 +180,14 @@
                 <button class="xp-close" data-xp-close aria-label="Close">&times;</button>
             </header>
             <div class="xp-body" id="xp-setup">
+                <div class="xp-row" id="xp-range-row">
+                    <label>Render</label>
+                    <select id="xp-range">
+                        <option value="video" selected>Whole video</option>
+                        <option value="trip">Trip trim only</option>
+                        <option value="trip-chroma">Trip trim + chroma tails</option>
+                    </select>
+                </div>
                 <div class="xp-row">
                     <label>Resolution</label>
                     <select id="xp-res">
@@ -240,6 +248,6 @@
     <input type="file" id="file-cfg" accept=".json" class="hidden" />
 
     <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
-    <script src="static/js/video-editor.js?v=21"></script>
+    <script src="static/js/video-editor.js?v=23"></script>
 </body>
 </html>

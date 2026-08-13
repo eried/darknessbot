@@ -1115,6 +1115,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 .tt-cut input { accent-color: #00e5ff; }
 .tt-cut-when { color: #bfeef7; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 58px; }
 .tt-cut-why { color: #8aa; }
+.tt-when { color: #8aa; font-weight: 400; }
 .tt-range { display: flex; gap: 12px; margin-bottom: 10px; }
 .tt-range label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 0.72rem; color: #789; }
 .tt-range select {
@@ -1124,7 +1125,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     color-scheme: dark; min-width: 0;
 }
 .tt-range select option { background: #0f1419; color: #cfe; }
-.tt-preview { color: #bfeef7; font-size: 0.8rem; min-height: 1.2em; }
+.tt-preview { color: #bfeef7; font-size: 0.8rem; min-height: 1.2em; margin-top: 8px; }
 .ttmod-foot { justify-content: flex-end; }
 .ttmod-foot .tt-primary {
     background: rgba(0, 229, 255, 0.14);

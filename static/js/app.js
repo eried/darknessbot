@@ -2526,47 +2526,52 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Extend trip dialog ---
   function openExtendDialog(i) {
     const t = allTracks[i];
+    // Chronological order (oldest -> newest). Extend reaches FORWARD from
+    // "this trip" into the rides that follow, and only a handful of them,
+    // picked with a From / To pair (like the app).
     const order = allTracks.map((_, idx) => idx).sort((a, b) =>
       (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
     const pos = order.indexOf(i);
+    const MAX_FWD = 6;
+    // The pick list is "this trip" (index 0) plus the next few trips.
+    const list = [i, ...order.slice(pos + 1, pos + 1 + MAX_FWD)];
     const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
-    if (order.length < 2) {
-      ttmodShow("EXTEND", "Extend trip",
-        `<div class="tt-trip">${escapeHtml(formatTripLabel(t))}</div>`,
-        `<div class="tt-empty">There are no other trips to absorb.</div>`, [cancel]);
+    const sub =
+      `<div class="tt-trip">This trip <span class="tt-when">· ${escapeHtml(formatTripLabel(t))}</span></div>` +
+      `<div class="tt-facts">${fmtDurH(tripDurH(t))} · ${UNITS.dist(t.stats.distanceKm).toFixed(1)} ${UNITS.distUnit}</div>`;
+    if (list.length < 2) {
+      ttmodShow("EXTEND", "Extend trip", sub,
+        `<div class="tt-empty">There are no later trips to absorb into this one.</div>`, [cancel]);
       return;
     }
-    const opts = (sel) => order.map((idx, p) =>
-      `<option value="${p}"${p === sel ? " selected" : ""}>${escapeHtml(formatTripLabel(allTracks[idx]))}</option>`).join("");
+    const label = (k) => k === 0 ? "This trip" : formatTripLabel(allTracks[list[k]]);
+    const opts = (selK) => list.map((_, k) =>
+      `<option value="${k}"${k === selK ? " selected" : ""}>${escapeHtml(label(k))}</option>`).join("");
     const body =
-      `<div class="tt-hint">Combine this trip with its neighbours into one longer trip. Everything between the chosen ends comes along. The originals stay in your library.</div>` +
-      `<div class="tt-range"><label>From<select id="ex-from">${opts(pos)}</select></label>` +
-      `<label>To<select id="ex-to">${opts(pos)}</select></label></div>` +
+      `<div class="tt-hint">Combine this trip with the rides that follow into one longer trip. Everything between the ends comes along. The originals stay in your library.</div>` +
+      `<div class="tt-range"><label>From<select id="ex-from">${opts(0)}</select></label>` +
+      `<label>To<select id="ex-to">${opts(0)}</select></label></div>` +
       `<div class="tt-preview" id="ex-preview"></div>`;
     const go = ttBtn("Combine", "tt-primary");
-    ttmodShow("EXTEND", "Extend trip",
-      `<div class="tt-trip">${escapeHtml(formatTripLabel(t))}</div>`, body, [cancel, go]);
+    ttmodShow("EXTEND", "Extend trip", sub, body, [cancel, go]);
     const fromSel = ttmod.querySelector("#ex-from"), toSel = ttmod.querySelector("#ex-to");
     const preview = ttmod.querySelector("#ex-preview");
-    const sync = () => {
+    const sync = (changed) => {
       let a = parseInt(fromSel.value), b = parseInt(toSel.value);
-      if (a > pos) { a = pos; fromSel.value = pos; }
-      if (b < pos) { b = pos; toSel.value = pos; }
-      if (a > b) { b = a; toSel.value = a; }
-      const idxs = [];
-      for (let p = a; p <= b; p++) idxs.push(order[p]);
-      let km = 0;
-      idxs.forEach((idx) => { km += allTracks[idx].stats.distanceKm || 0; });
-      const spanH = (Date.parse(allTracks[order[b]].dateEnd || allTracks[order[b]].dateStart || "") -
-        Date.parse(allTracks[order[a]].dateStart || "")) / 3600000;
+      // Keep From <= To: nudge the other end to whichever the user moved.
+      if (a > b) { if (changed === "to") { a = b; fromSel.value = b; } else { b = a; toSel.value = a; } }
+      const idxs = list.slice(a, b + 1);
+      let km = 0; idxs.forEach((idx) => { km += allTracks[idx].stats.distanceKm || 0; });
+      const spanH = (Date.parse(allTracks[list[b]].dateEnd || allTracks[list[b]].dateStart || "") -
+        Date.parse(allTracks[list[a]].dateStart || "")) / 3600000;
       preview.textContent = idxs.length < 2
-        ? "Pick at least one neighbour to combine."
+        ? "Pick a From and To that span at least two trips."
         : `${idxs.length} trips → ${UNITS.dist(km).toFixed(1)} ${UNITS.distUnit}${isFinite(spanH) && spanH > 0 ? `, ${fmtDurH(spanH)} span` : ""}.`;
       go.disabled = idxs.length < 2;
       go._idxs = idxs;
     };
-    fromSel.addEventListener("change", sync);
-    toSel.addEventListener("change", sync);
+    fromSel.addEventListener("change", () => sync("from"));
+    toSel.addEventListener("change", () => sync("to"));
     sync();
     go.addEventListener("click", () => {
       const idxs = (go._idxs || []).slice();
@@ -3169,9 +3174,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Selection-aware export bar. Idempotent: safe to call on every UI refresh.
   //   0 selected     → static "Export selected" label, dimmed
-  //   1 selected     → "Export trip" + .csv / .xlsx / .gpx chips
-  //   1<n<total      → "Export selected (N)" + .dbb chip
-  //   n === total    → "Export all"          + .dbb chip
+  //   1 selected     → "Export trip" + .csv / .xlsx / .gpx / .zip chips
+  //   1<n<total      → "Export selected (N)" + .zip chip
+  //   n === total    → "Export all"          + .zip chip
   function renderExportButton(exportBtn) {
     const n = trackVisible.size;
     const total = allTracks.length;
@@ -3188,7 +3193,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let chips;
     if (n === 1) {
       label = "Export trip";
-      chips = [["csv", ".csv"], ["xlsx", ".xlsx"], ["gpx", ".gpx"]];
+      chips = [["csv", ".csv"], ["xlsx", ".xlsx"], ["gpx", ".gpx"], ["dbb", ".zip"]];
     } else if (n === total) {
       label = "Export all";
       chips = [["dbb", ".zip"]];
@@ -3395,39 +3400,28 @@ document.addEventListener("DOMContentLoaded", function () {
   async function exportSelected() {
     const indices = [...trackVisible];
     if (indices.length === 0) return;
-
-    if (indices.length === 1) {
-      const track = allTracks[indices[0]];
-      const csv = trackToCSV(track);
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = (track.name || "trip") + ".csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    } else {
-      if (typeof JSZip === "undefined") {
-        alert("Export library not loaded. Please refresh and try again.");
-        return;
-      }
-      const zip = new JSZip();
-      for (const idx of indices) {
-        const track = allTracks[idx];
-        const csv = trackToCSV(track);
-        zip.file((track.name || `trip_${idx}`) + ".csv", csv);
-      }
-      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      // Plain .zip: phones and desktops open it natively, and unzipping
-      // straight into Dropbox/Apps/EUC Planet/trips just works. The
-      // importer accepts .dbb and .zip alike.
-      a.download = "trips_export.zip";
-      a.click();
-      URL.revokeObjectURL(url);
+    if (typeof JSZip === "undefined") {
+      alert("Export library not loaded. Please refresh and try again.");
+      return;
     }
+    // Always a .zip — even for a single trip (the raw single-file formats
+    // live on their own chips). Plain .zip: phones and desktops open it
+    // natively, and unzipping straight into Dropbox/Apps/EUC Planet/trips
+    // just works. The importer accepts .dbb and .zip alike.
+    const zip = new JSZip();
+    for (const idx of indices) {
+      const track = allTracks[idx];
+      zip.file((track.name || `trip_${idx}`) + ".csv", trackToCSV(track));
+    }
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = indices.length === 1
+      ? ((allTracks[indices[0]].name || "trip") + ".zip")
+      : "trips_export.zip";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // --- Mini chart rendering ---

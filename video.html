@@ -7,7 +7,7 @@
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="static/video-manifest.webmanifest" />
     <meta name="theme-color" content="#0d1017" />
-    <link rel="stylesheet" href="static/css/video.css?v=19" />
+    <link rel="stylesheet" href="static/css/video.css?v=20" />
 </head>
 <body data-mtab="media">
     <header id="topbar">
@@ -71,7 +71,7 @@
             </div>
         </div>
         <div id="transport">
-            <button id="btn-restart" title="Back to start">
+            <button id="btn-restart" title="Back to the trim start">
                 <svg viewBox="0 0 16 16"><path d="M4.2 3v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M12.8 3.6 6.8 8l6 4.4z"/></svg>
             </button>
             <button id="btn-play" title="Play / pause (space)">
@@ -79,6 +79,7 @@
                 <svg id="ic-pause" viewBox="0 0 16 16" class="hidden"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg>
             </button>
             <span id="time-label">00:00 / 00:00</span>
+            <span id="frame-label" title="Current frame (← → step one)">f 0</span>
             <div class="tp-inout">
                 <button id="btn-in" title="Trim the trip start to the playhead (I)">
                     <svg viewBox="0 0 16 16"><path d="M4 2v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M7 8h7M11 5l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
@@ -91,7 +92,6 @@
                 <span id="inout-label" class="hidden" title="The current trip trim"></span>
                 <button id="btn-inout-clear" class="hidden" title="Reset the trip trim to the whole ride">&times;</button>
             </div>
-            <span id="transport-hint">← → step one frame (Shift = 1 s). I / O trim the trip to the playhead.</span>
         </div>
     </section>
 
@@ -263,6 +263,6 @@
     <input type="file" id="file-cfg" accept=".json" class="hidden" />
 
     <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
-    <script src="static/js/video-editor.js?v=33"></script>
+    <script src="static/js/video-editor.js?v=35"></script>
 </body>
 </html>

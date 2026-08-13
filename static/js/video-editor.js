@@ -728,16 +728,24 @@
   }
   window.addEventListener("resize", () => { fitPreviewCanvas(); layoutTimeline(); drawTeleGraph(); requestDraw(); });
 
+  // Trim edges in the render clock (= video time with footage, else the
+  // telemetry offset into it). The playhead scrubs freely across the whole
+  // trip, but PLAYBACK halts at the out-marker (see setPlaying/playStopAt).
+  function trimStartClock() { return cfg.teleOffset + (cfg.trimStart || 0); }
+  function trimEndClock() {
+    const s1 = !S ? 0 : (cfg.trimEnd == null ? S.dur : cfg.trimEnd);
+    return cfg.teleOffset + s1;
+  }
+  let playStopAt = Infinity;
+
   let lastTick = performance.now();
   function loop(now) {
     const dt = (now - lastTick) / 1000;
     lastTick = now;
     if (playing && !exporting) {
       if (hasVideo) curT = videoEl.currentTime;
-      else {
-        curT += dt;
-        if (curT >= playSpan()) { curT = playSpan(); setPlaying(false); }
-      }
+      else curT += dt;
+      if (curT >= playStopAt) { curT = playStopAt; setPlaying(false); }
       needDraw = true;
       updatePlayhead();
     }
@@ -754,14 +762,22 @@
   function playSpan() {
     if (hasVideo) return videoEl.duration || 0;
     if (!S) return 0;
-    const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
-    return Math.max(0.1, s1 - cfg.trimStart) + Math.max(0, cfg.teleOffset);
+    // Without footage the playhead scrubs the WHOLE trip (offset into the
+    // render clock), exactly like the video case spans the whole clip. The
+    // trim only bounds what gets exported — it must not cage the playhead.
+    return Math.max(0.1, Math.max(0, cfg.teleOffset) + S.dur);
   }
 
   function setPlaying(p) {
     playing = p;
     $("ic-play").classList.toggle("hidden", p);
     $("ic-pause").classList.toggle("hidden", !p);
+    if (p) {
+      // Halt at the out-marker when starting before it; if the head is
+      // already past the trim, play on to the end of the trip / clip.
+      const te = trimEndClock();
+      playStopAt = curT < te - 0.05 ? Math.min(te, playSpan()) : playSpan();
+    }
     if (hasVideo) { p ? videoEl.play().catch(() => {}) : videoEl.pause(); }
   }
   $("btn-play").addEventListener("click", () => setPlaying(!playing));
@@ -842,6 +858,8 @@
   }
   function updateTimeLabel() {
     $("time-label").textContent = fmtT(curT) + " / " + fmtT(playSpan());
+    const fl = $("frame-label");
+    if (fl) fl.textContent = "f " + Math.round(curT / FRAME);
   }
 
   // --- Preview dragging (whole groups: chip bar, dial, map) ---
@@ -1289,10 +1307,8 @@
     });
   }
   $("btn-restart").addEventListener("click", () => {
-    curT = 0;
-    if (hasVideo) videoEl.currentTime = 0;
-    tlView = 0;
-    layoutTimeline(); requestDraw();
+    // "Back to start" now means the trip's in-marker, not raw zero.
+    setPlayhead(trimStartClock());
   });
 
   // --- File loading ---
@@ -1673,19 +1689,33 @@
     sel.innerHTML = opts.map(([f, tag]) =>
       `<option value="${f}"${f === preferred ? " selected" : ""}>${fmtFps(f)} fps${tag ? " (" + tag + ")" : ""}</option>`).join("");
   }
+  // The Render options depend on whether there's footage. With a video:
+  // whole clip / trim on the footage / trim with chroma tails. Without
+  // one, the output is a chroma-background render of the telemetry, so the
+  // choice is just how much of it — the trim (default) or the whole trip.
+  function buildRangeOptions() {
+    const sel = $("xp-range");
+    const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
+    const trimmed = cfg.trimStart > 0.05 || s1 < S.dur - 0.05;
+    if (hasVideo) {
+      sel.innerHTML =
+        '<option value="video">Whole video</option>' +
+        '<option value="trip">Trip (in-out markers)</option>' +
+        '<option value="trip-chroma">In-out markers + chroma tails</option>';
+      sel.value = trimmed ? "trip" : "video";
+    } else {
+      sel.innerHTML =
+        '<option value="trip">Trip (in-out markers)</option>' +
+        '<option value="whole-trip">Whole trip</option>';
+      sel.value = "trip"; // the in-out region is the default
+    }
+  }
   function openExport() {
     if (!S) { toast("Load a trip first."); return; }
     buildResOptions();
     buildFpsOptions();
-    const sel = $("xp-range");
-    // Without footage there is nothing to choose — the output is always
-    // the trip (trimmed, if trimmed) on chroma — so the Render row is
-    // hidden. With footage it defaults to the trim when one is set, else
-    // the whole video.
-    const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
-    const trimmed = cfg.trimStart > 0.05 || s1 < S.dur - 0.05;
-    $("xp-range-row").classList.toggle("hidden", !hasVideo);
-    sel.value = hasVideo ? (trimmed ? "trip" : "video") : "trip";
+    buildRangeOptions();
+    $("xp-range-row").classList.remove("hidden");
     refreshExportInfo();
     $("xp-setup").classList.remove("hidden");
     $("xp-progress").classList.add("hidden");
@@ -1707,7 +1737,11 @@
     const tripS = cfg.teleOffset + cfg.trimStart;
     const tripE = cfg.teleOffset + s1;
     const mode = $("xp-range") ? $("xp-range").value : (hasVideo ? "video" : "trip");
-    if (!hasVideo) return { vStart: tripS, vEnd: tripE, mode: "trip" };
+    if (!hasVideo) {
+      // Whole trip ignores the trim; both render telemetry on chroma.
+      if (mode === "whole-trip") return { vStart: cfg.teleOffset, vEnd: cfg.teleOffset + S.dur, mode: "trip" };
+      return { vStart: tripS, vEnd: tripE, mode: "trip" };
+    }
     const vd = videoEl.duration || 0;
     if (mode === "video") return { vStart: 0, vEnd: vd, mode };
     if (mode === "trip-chroma") return { vStart: tripS, vEnd: tripE, mode };

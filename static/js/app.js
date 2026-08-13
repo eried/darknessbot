@@ -2083,24 +2083,22 @@ document.addEventListener("DOMContentLoaded", function () {
     refresh();
   }
 
-  // Per-trip "Tools" popover (Make video / Inspector). A single floating
-  // menu reused by every row and positioned next to the clicked button,
-  // so it's never clipped by the scrolling trip list.
+  // Per-trip "Tools" popover. A single floating menu reused by every row
+  // and positioned next to the clicked button, so it's never clipped by
+  // the scrolling trip list. Two main actions on top, then per-trip edits.
+  const ICON = {
+    video: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 11.5 A6 6 0 1 1 13.5 11.5"/><line x1="8" y1="11" x2="11.2" y2="6.2"/><circle cx="8" cy="11" r="1.2" fill="currentColor" stroke="none"/></svg>`,
+    inspect: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>`,
+    wheel: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.6"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2"/></svg>`,
+    back: `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 3 5 8 9 13"/></svg>`,
+  };
   let toolsMenu = null, toolsOpenFor = -1, toolsBtnEl = null;
   function ensureToolsMenu() {
     if (toolsMenu) return toolsMenu;
     toolsMenu = document.createElement("div");
     toolsMenu.id = "trip-tools-menu";
     toolsMenu.className = "hidden";
-    toolsMenu.innerHTML =
-      `<a data-act="video" target="_blank" rel="noopener">` +
-      `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 11.5 A6 6 0 1 1 13.5 11.5"/><line x1="8" y1="11" x2="11.2" y2="6.2"/><circle cx="8" cy="11" r="1.2" fill="currentColor" stroke="none"/></svg>` +
-      `Make video</a>` +
-      `<a data-act="inspect" target="_blank" rel="noopener">` +
-      `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.4" y1="10.4" x2="14" y2="14"/></svg>` +
-      `Inspector</a>`;
     document.body.appendChild(toolsMenu);
-    toolsMenu.addEventListener("click", () => closeToolsMenu());
     document.addEventListener("click", (e) => {
       if (toolsOpenFor < 0) return;
       if (!toolsMenu.contains(e.target) && !e.target.closest(".tools-btn")) closeToolsMenu();
@@ -2116,20 +2114,76 @@ document.addEventListener("DOMContentLoaded", function () {
     if (toolsBtnEl) toolsBtnEl.classList.remove("active");
     toolsOpenFor = -1; toolsBtnEl = null;
   }
+  function positionToolsMenu() {
+    const m = toolsMenu, btn = toolsBtnEl;
+    if (!m || !btn) return;
+    const r = btn.getBoundingClientRect();
+    let top = r.bottom + 4;
+    if (top + m.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - m.offsetHeight - 4);
+    m.style.left = Math.max(8, r.right - m.offsetWidth) + "px";
+    m.style.top = top + "px";
+  }
+  function toolsMenuMain(i) {
+    const m = toolsMenu;
+    m.innerHTML =
+      `<a class="ttm-item" href="video.html?i=${i}" target="_blank" rel="noopener">${ICON.video}Make video</a>` +
+      `<a class="ttm-item" href="inspector.html?i=${i}" target="_blank" rel="noopener">${ICON.inspect}Inspector</a>` +
+      `<div class="ttm-sep"></div>` +
+      `<button type="button" class="ttm-item" data-act="wheel">${ICON.wheel}Change wheel<span class="ttm-arrow">›</span></button>`;
+    m.querySelectorAll("a.ttm-item").forEach((a) => a.addEventListener("click", () => closeToolsMenu()));
+    m.querySelector('[data-act="wheel"]').addEventListener("click", (e) => {
+      e.stopPropagation(); toolsMenuWheels(i); positionToolsMenu();
+    });
+  }
+  function toolsMenuWheels(i) {
+    const m = toolsMenu;
+    const groups = computeWheelGroups().filter((g) => !g.unknown);
+    const cur = wheelLabelOf(allTracks[i]);
+    let html = `<button type="button" class="ttm-item ttm-back" data-act="back">${ICON.back}Change wheel</button><div class="ttm-sep"></div>`;
+    groups.forEach((g, gi) => {
+      const on = g.label === cur ? " ttm-on" : "";
+      html += `<button type="button" class="ttm-item${on}" data-wheel="${gi}">${escapeHtml(g.label)}</button>`;
+    });
+    if (!groups.length) html += `<div class="ttm-note">No wheels in the library yet</div>`;
+    html += `<div class="ttm-sep"></div>` +
+      `<button type="button" class="ttm-item" data-wheel="new">New wheel…</button>` +
+      `<button type="button" class="ttm-item" data-wheel="clear">No wheel</button>`;
+    m.innerHTML = html;
+    m._groups = groups;
+    m.querySelector('[data-act="back"]').addEventListener("click", (e) => {
+      e.stopPropagation(); toolsMenuMain(i); positionToolsMenu();
+    });
+    m.querySelectorAll("[data-wheel]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation(); applyWheelToTrip(i, b.dataset.wheel); closeToolsMenu();
+    }));
+  }
+  function applyWheelToTrip(i, sel) {
+    let wheel;
+    if (sel === "clear") wheel = null;
+    else if (sel === "new") {
+      const name = (window.prompt("Wheel name (e.g. KS-16SZ or Lynx-2317):") || "").trim();
+      if (!name) return;
+      wheel = { name };
+    } else {
+      const g = (toolsMenu._groups || [])[parseInt(sel)];
+      const w = g && g.wheel ? g.wheel : {};
+      wheel = { name: w.name, mac: w.mac, make: w.make, model: w.model, serial: w.serial };
+    }
+    if (wheel) allTracks[i].wheel = { ...wheel }; else delete allTracks[i].wheel;
+    delete allTracks[i].wheels;
+    saveTracks(allTracks);
+    buildTripList();
+    updateGlow();
+    updateVisibilityUI();
+  }
   function toggleToolsMenu(btn, i) {
     if (toolsOpenFor === i) { closeToolsMenu(); return; }
-    const m = ensureToolsMenu();
-    m.querySelector('[data-act="video"]').href = "video.html?i=" + i;
-    m.querySelector('[data-act="inspect"]').href = "inspector.html?i=" + i;
-    m.classList.remove("hidden");
-    const r = btn.getBoundingClientRect();
-    let left = r.right - m.offsetWidth;
-    let top = r.bottom + 4;
-    if (top + m.offsetHeight > window.innerHeight - 8) top = r.top - m.offsetHeight - 4;
-    m.style.left = Math.max(8, left) + "px";
-    m.style.top = Math.max(8, top) + "px";
-    btn.classList.add("active");
+    ensureToolsMenu();
     toolsOpenFor = i; toolsBtnEl = btn;
+    toolsMenu.classList.remove("hidden");
+    toolsMenuMain(i);
+    positionToolsMenu();
+    btn.classList.add("active");
   }
 
   function buildTripList() {

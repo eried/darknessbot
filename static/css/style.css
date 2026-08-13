@@ -1363,19 +1363,30 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
 }
 #trip-tools-menu.hidden { display: none; }
-#trip-tools-menu a {
+#trip-tools-menu .ttm-item {
     display: flex;
     align-items: center;
     gap: 9px;
+    width: 100%;
     padding: 8px 10px;
+    border: none;
+    background: none;
     border-radius: 5px;
     color: #cfe0e8;
     font-size: 12.5px;
+    font-family: inherit;
+    text-align: left;
     text-decoration: none;
     cursor: pointer;
 }
-#trip-tools-menu a:hover { background: rgba(0, 229, 255, 0.12); color: #00e5ff; }
-#trip-tools-menu a svg { flex: none; color: #7fe7f5; }
+#trip-tools-menu .ttm-item:hover { background: rgba(0, 229, 255, 0.12); color: #00e5ff; }
+#trip-tools-menu .ttm-item svg { flex: none; color: #7fe7f5; }
+#trip-tools-menu .ttm-arrow { margin-left: auto; color: #7a8a99; font-size: 15px; line-height: 1; }
+#trip-tools-menu .ttm-on { color: #00e5ff; }
+#trip-tools-menu .ttm-on::after { content: "✓"; margin-left: auto; color: #00e5ff; }
+#trip-tools-menu .ttm-back { color: #9ab; font-weight: 600; }
+#trip-tools-menu .ttm-sep { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.08); }
+#trip-tools-menu .ttm-note { padding: 6px 10px; font-size: 11.5px; color: #789; }
 
 .inspect-btn {
     flex-shrink: 0;

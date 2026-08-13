@@ -1701,6 +1701,7 @@
   }
 
   let cancelExport = false;
+  let exportAudioNote = "";
   $("xp-cancel").addEventListener("click", () => { cancelExport = true; });
   $("xp-start").addEventListener("click", async () => {
     const [w, h] = $("xp-res").value.split("x").map(Number);
@@ -1709,11 +1710,12 @@
     $("xp-progress").classList.remove("hidden");
     cancelExport = false;
     exporting = true;
+    exportAudioNote = "";
     setPlaying(false);
     try {
       if ("VideoEncoder" in window && window.Mp4Muxer) await exportWebCodecs(w, h, fps);
       else await exportMediaRecorder(w, h, fps);
-      if (!cancelExport) toast("Video exported.");
+      if (!cancelExport) toast("Video exported." + (exportAudioNote ? " " + exportAudioNote : ""), exportAudioNote ? 6000 : 3500);
     } catch (err) {
       console.error(err);
       toast("Export failed: " + err.message, 6000);
@@ -1746,14 +1748,22 @@
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
 
-    // Audio: keep the original when it decodes and the file is sane in size.
+    // Audio: keep the original. Decoding needs the whole file in memory,
+    // so guard only the genuinely huge cases (a couple of GB / hours of
+    // 4K), which a browser tab can't hold — normal ride clips, long ones
+    // included, keep their sound. The reason is surfaced when skipped.
     let audioBuf = null;
-    if (hasVideo && videoFile.size < 600e6 && dur < 2400) {
-      xpStatus("Decoding audio…", 0);
-      try {
-        const ac = new OfflineAudioContext(2, 2, 48000);
-        audioBuf = await ac.decodeAudioData(await videoFile.arrayBuffer());
-      } catch { audioBuf = null; }
+    let audioSkip = "";
+    if (hasVideo) {
+      if (videoFile.size > 2e9) audioSkip = "video over 2 GB";
+      else if (dur > 3 * 3600) audioSkip = "over 3 hours";
+      else {
+        xpStatus("Decoding audio…", 0);
+        try {
+          const ac = new OfflineAudioContext(2, 2, 48000);
+          audioBuf = await ac.decodeAudioData(await videoFile.arrayBuffer());
+        } catch { audioBuf = null; audioSkip = "audio track could not be decoded"; }
+      }
     }
     let audioCodec = null;
     if (audioBuf && "AudioEncoder" in window) {
@@ -1764,7 +1774,9 @@
         }).catch(() => null);
         if (sup && sup.supported) { audioCodec = { codec: cand[0], mux: cand[1], chans }; break; }
       }
+      if (!audioCodec) audioSkip = "no supported audio encoder";
     }
+    exportAudioNote = audioCodec ? "" : (audioSkip ? "Exported without sound: " + audioSkip + "." : "");
 
     // The muxer needs an integer timescale. Broadcast rates like 29.97
     // (30000/1001) are handled by scaling the timescale ×1000 so the
@@ -1834,7 +1846,7 @@
         const el = (performance.now() - t0) / 1000;
         const rate = (i / fps) / (el || 1);
         const eta = el / Math.max(1, i) * (total - i);
-        xpStatus(`Frame ${i + 1} / ${total} · ${rate.toFixed(1)}x realtime · ~${fmtT(eta)} left${audioCodec ? "" : hasVideo ? " · no audio" : ""}`, i / total);
+        xpStatus(`Frame ${i + 1} / ${total} · ${rate.toFixed(1)}x realtime · ~${fmtT(eta)} left${audioCodec ? "" : (hasVideo && audioSkip) ? " · no sound (" + audioSkip + ")" : ""}`, i / total);
         await new Promise((r) => setTimeout(r, 0));
       }
     }

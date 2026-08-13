@@ -978,22 +978,50 @@
     if (tx1 < x1) c.fillRect(Math.max(tx1, x0), 0, x1 - Math.max(tx1, x0), h);
   }
 
+  // Nearest captured frame to time t (searches outward past any that are
+  // still loading).
+  function thumbFor(t) {
+    const bmps = thumbCache.bmps, m = bmps.length;
+    let idx = Math.round(t / thumbCache.dur * (m - 1));
+    idx = Math.max(0, Math.min(m - 1, idx));
+    if (bmps[idx]) return bmps[idx];
+    for (let d = 1; d < m; d++) {
+      if (bmps[idx - d]) return bmps[idx - d];
+      if (bmps[idx + d]) return bmps[idx + d];
+    }
+    return null;
+  }
+
   function renderThumbs() {
     const w = trackW(), h = rowH() - 2;
     const dpr = window.devicePixelRatio || 1;
     tlThumbs.width = w * dpr; tlThumbs.height = h * dpr;
     tlThumbs.style.width = w + "px"; tlThumbs.style.height = h + "px";
-    if (!thumbCache) return;
+    if (!thumbCache || !thumbCache.aspect) return;
     const c = tlThumbs.getContext("2d");
     c.scale(dpr, dpr);
-    const seg = thumbCache.dur / thumbCache.bmps.length;
-    for (let i = 0; i < thumbCache.bmps.length; i++) {
-      const bmp = thumbCache.bmps[i];
-      if (!bmp) continue;
-      const x = (i * seg - tlView) * pxPerSec;
-      const sw = seg * pxPerSec;
-      if (x + sw < 0 || x > w) continue;
-      c.drawImage(bmp, x, 0, sw + 0.5, h);
+    // Each thumbnail keeps the video's real aspect ratio; nothing stretches.
+    const thumbW = Math.max(24, Math.round(h * thumbCache.aspect));
+    const vx0 = (0 - tlView) * pxPerSec;                 // video start x
+    const vx1 = (thumbCache.dur - tlView) * pxPerSec;     // video end x
+    const vw = vx1 - vx0;
+    if (vw < 4) return;
+    const drawOne = (t, x) => {
+      if (x + thumbW < 0 || x > w) return;
+      const bmp = thumbFor(t);
+      if (bmp) c.drawImage(bmp, x, 0, thumbW, h);
+    };
+    // How many fit side by side across the whole video span. First frame
+    // flush-left, last flush-right, the rest evenly between; if two won't
+    // fit, just the first frame.
+    const slots = Math.floor(vw / thumbW);
+    if (slots < 2) { drawOne(0, vx0); return; }
+    const step = (vw - thumbW) / (slots - 1);
+    // Only iterate the slots whose tiles touch the viewport.
+    const kFrom = Math.max(0, Math.floor((0 - thumbW - vx0) / step));
+    const kTo = Math.min(slots - 1, Math.ceil((w - vx0) / step));
+    for (let k = kFrom; k <= kTo; k++) {
+      drawOne((k / (slots - 1)) * thumbCache.dur, vx0 + step * k);
     }
   }
 
@@ -1220,8 +1248,9 @@
     if (!v.videoWidth || !v.duration) return;
     const count = Math.min(60, Math.max(20, Math.round(v.duration / 5)));
     const h = 72;
-    const w = Math.round(h * v.videoWidth / v.videoHeight);
-    const cache = { dur: v.duration, bmps: new Array(count).fill(null) };
+    const aspect = v.videoWidth / v.videoHeight;
+    const w = Math.round(h * aspect);
+    const cache = { dur: v.duration, aspect, bmps: new Array(count).fill(null) };
     thumbCache = cache;
     const cnv = document.createElement("canvas");
     cnv.width = w; cnv.height = h;

@@ -773,10 +773,17 @@
     $("ic-play").classList.toggle("hidden", p);
     $("ic-pause").classList.toggle("hidden", !p);
     if (p) {
-      // Halt at the out-marker when starting before it; if the head is
-      // already past the trim, play on to the end of the trip / clip.
-      const te = trimEndClock();
-      playStopAt = curT < te - 0.05 ? Math.min(te, playSpan()) : playSpan();
+      const ts = trimStartClock(), te = trimEndClock();
+      if (curT >= te - 0.05 && curT <= te + 0.05) {
+        // Sitting on the out-marker: loop back and replay the in→out region.
+        curT = ts;
+        if (hasVideo) videoEl.currentTime = curT;
+        playStopAt = Math.min(te, playSpan());
+        updatePlayhead(); updateTimeLabel();
+      } else {
+        // Before the out-marker → stop there; past it → run to the end.
+        playStopAt = curT < te - 0.05 ? Math.min(te, playSpan()) : playSpan();
+      }
     }
     if (hasVideo) { p ? videoEl.play().catch(() => {}) : videoEl.pause(); }
   }
@@ -831,6 +838,7 @@
     if (e.key === " ") { if (e.target.closest("button")) return; e.preventDefault(); setPlaying(!playing); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); setPlaying(false); setPlayhead(curT - (e.shiftKey ? 1 : FRAME)); }
     else if (e.key === "ArrowRight") { e.preventDefault(); setPlaying(false); setPlayhead(curT + (e.shiftKey ? 1 : FRAME)); }
+    else if (e.key === "Home") { e.preventDefault(); goToInMarker(); }
     else if (k === "i") { e.preventDefault(); setTrimIn(); }
     else if (k === "o") { e.preventDefault(); setTrimOut(); }
   });
@@ -1306,10 +1314,9 @@
       playheadEl.classList.remove("scrubbing");
     });
   }
-  $("btn-restart").addEventListener("click", () => {
-    // "Back to start" now means the trip's in-marker, not raw zero.
-    setPlayhead(trimStartClock());
-  });
+  // "Back to start" now means the trip's in-marker, not raw zero (Home key).
+  function goToInMarker() { setPlayhead(trimStartClock()); }
+  $("btn-restart").addEventListener("click", goToInMarker);
 
   // --- File loading ---
   $("btn-video").addEventListener("click", () => $("file-video").click());
@@ -1704,10 +1711,12 @@
         '<option value="trip-chroma">In-out markers + chroma tails</option>';
       sel.value = trimmed ? "trip" : "video";
     } else {
+      // With no in-out markers set the two are identical, so default to
+      // Whole trip and disable the redundant in-out option.
       sel.innerHTML =
-        '<option value="trip">Trip (in-out markers)</option>' +
+        `<option value="trip"${trimmed ? "" : " disabled"}>Trip (in-out markers)</option>` +
         '<option value="whole-trip">Whole trip</option>';
-      sel.value = "trip"; // the in-out region is the default
+      sel.value = trimmed ? "trip" : "whole-trip";
     }
   }
   function openExport() {

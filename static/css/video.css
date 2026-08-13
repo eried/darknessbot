@@ -342,18 +342,7 @@ button { font-family: inherit; }
     z-index: 3;
     touch-action: none;
 }
-#tl-resize::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 54px;
-    height: 5px;
-    border-radius: 3px;
-    background: rgba(0, 229, 255, 0.28);
-}
-#tl-resize:hover::after, #tl-resize:active::after { background: rgba(0, 229, 255, 0.7); }
+/* No visible grip — the ns-resize cursor on hover is enough of a hint. */
 #tl-tools {
     position: absolute;
     top: 24px;

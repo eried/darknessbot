@@ -2545,8 +2545,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     const hasOlder = pos > 0, hasNewer = pos < order.length - 1;
     // From = this trip then progressively older; To = this trip then newer.
-    const fromPos = [pos]; for (let p = pos - 1; p >= 0; p--) fromPos.push(p);
-    const toPos = [pos]; for (let p = pos + 1; p < order.length; p++) toPos.push(p);
+    // Cap each direction so a big library doesn't make a giant dropdown.
+    const MAX_EACH = 8;
+    const fromPos = [pos]; for (let p = pos - 1; p >= 0 && fromPos.length <= MAX_EACH; p--) fromPos.push(p);
+    const toPos = [pos]; for (let p = pos + 1; p < order.length && toPos.length <= MAX_EACH; p++) toPos.push(p);
     const optOf = (p) => `<option value="${p}">${p === pos ? "This trip" : escapeHtml(formatTripLabel(allTracks[order[p]]))}</option>`;
     const body =
       `<div class="tt-hint">Combine this trip with neighbouring rides into one longer trip — reach back into older rides, forward into newer ones, or both. Everything in between comes along. The originals stay in your library.</div>` +

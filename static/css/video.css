@@ -287,6 +287,39 @@ button { font-family: inherit; }
 #btn-play svg { width: 13px; height: 13px; fill: currentColor; }
 #btn-restart svg { width: 11px; height: 11px; fill: currentColor; }
 #time-label { font-size: 0.8rem; color: #cfe; font-variant-numeric: tabular-nums; }
+.tp-inout { display: inline-flex; align-items: center; gap: 6px; }
+.tp-inout button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    background: rgba(0, 229, 255, 0.06);
+    border: 1px solid rgba(0, 229, 255, 0.25);
+    border-radius: 6px;
+    color: #bfeef7;
+    font-size: 0.74rem;
+    cursor: pointer;
+}
+.tp-inout button:hover { background: rgba(0, 229, 255, 0.15); }
+.tp-inout button svg { width: 13px; height: 13px; }
+#btn-in svg path[stroke] { stroke: #69f0ae; }
+#btn-out svg path[stroke] { stroke: #ff8a80; }
+#inout-label { font-size: 0.72rem; color: #9ab; font-variant-numeric: tabular-nums; }
+#btn-inout-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: #6a7a88;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+#btn-inout-clear:hover { color: #ffb3b3; background: rgba(255, 255, 255, 0.07); }
 #transport-hint { font-size: 0.7rem; color: #567; flex: 1; text-align: right; }
 
 /* --- Timeline --- */
@@ -463,6 +496,37 @@ button { font-family: inherit; }
     white-space: nowrap;
 }
 #playhead.scrubbing #ph-time { display: block; }
+
+/* Render In / Out markers + the band between them. In = green, Out = red,
+   both distinct from the cyan trims and the red playhead knob. */
+.render-mark {
+    position: absolute;
+    bottom: 4px;
+    width: 2px;
+    pointer-events: none;
+    z-index: 1;
+}
+.render-mark.in { background: #69f0ae; box-shadow: 0 0 5px rgba(105, 240, 174, 0.7); }
+.render-mark.out { background: #ff7043; box-shadow: 0 0 5px rgba(255, 112, 67, 0.7); }
+.render-mark::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 0; height: 0;
+    border-top: 7px solid currentColor;
+}
+.render-mark.in { color: #69f0ae; }
+.render-mark.out { color: #ff7043; }
+.render-mark.in::before { left: 0; border-right: 7px solid transparent; }
+.render-mark.out::before { right: 0; border-left: 7px solid transparent; }
+#render-band {
+    position: absolute;
+    bottom: 4px;
+    background: rgba(105, 240, 174, 0.1);
+    border-top: 1px solid rgba(105, 240, 174, 0.35);
+    pointer-events: none;
+    z-index: 0;
+}
 
 /* --- Export modal --- */
 #export-modal { position: fixed; inset: 0; z-index: 1000; }

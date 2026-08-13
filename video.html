@@ -7,7 +7,7 @@
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="static/video-manifest.webmanifest" />
     <meta name="theme-color" content="#0d1017" />
-    <link rel="stylesheet" href="static/css/video.css?v=16" />
+    <link rel="stylesheet" href="static/css/video.css?v=18" />
 </head>
 <body data-mtab="media">
     <header id="topbar">
@@ -79,7 +79,19 @@
                 <svg id="ic-pause" viewBox="0 0 16 16" class="hidden"><rect x="3.5" y="2.5" width="3.2" height="11" rx="0.8"/><rect x="9.3" y="2.5" width="3.2" height="11" rx="0.8"/></svg>
             </button>
             <span id="time-label">00:00 / 00:00</span>
-            <span id="transport-hint">Drag the overlay parts on the preview. Drag the telemetry strip below to align it with the video.</span>
+            <div class="tp-inout">
+                <button id="btn-in" title="Set render In at the playhead (I)">
+                    <svg viewBox="0 0 16 16"><path d="M4 2v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M7 8h7M11 5l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                    <span>In</span>
+                </button>
+                <button id="btn-out" title="Set render Out at the playhead (O)">
+                    <svg viewBox="0 0 16 16"><path d="M12 2v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M2 8h7M5 5 2 8l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                    <span>Out</span>
+                </button>
+                <span id="inout-label" class="hidden" title="The render range set by In and Out"></span>
+                <button id="btn-inout-clear" class="hidden" title="Clear the In/Out render range">&times;</button>
+            </div>
+            <span id="transport-hint">← → step one frame (Shift = 1 s). I / O set the render range.</span>
         </div>
     </section>
 
@@ -116,6 +128,9 @@
                 <div class="trim-handle" id="trim-r" title="Trim telemetry end"></div>
             </div>
         </div>
+        <div id="render-band" class="hidden"></div>
+        <div id="render-in" class="render-mark in hidden" title="Render In"></div>
+        <div id="render-out" class="render-mark out hidden" title="Render Out"></div>
         <div id="playhead">
             <div id="ph-knob" title="Drag to scrub"></div>
             <div id="ph-time">00:00</div>
@@ -184,6 +199,7 @@
                     <label>Render</label>
                     <select id="xp-range">
                         <option value="video" selected>Whole video</option>
+                        <option value="inout">In → Out range</option>
                         <option value="trip">Trip trim only</option>
                         <option value="trip-chroma">Trip trim + chroma tails</option>
                     </select>
@@ -248,6 +264,6 @@
     <input type="file" id="file-cfg" accept=".json" class="hidden" />
 
     <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
-    <script src="static/js/video-editor.js?v=23"></script>
+    <script src="static/js/video-editor.js?v=29"></script>
 </body>
 </html>

@@ -123,6 +123,8 @@
   const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7, MILEAGE = 8;
   const PWM = 9, CURRENT = 10, POWER = 11;
   const GPSSPD = 12, GFORCE = 13, GFORCEX = 14, GFORCEY = 15;
+  // Derived (computed below) — spare columns for the "… avg" extra graphs.
+  const SPEEDAVG = 16, BATTERYAVG = 17, CURRENTAVG = 18, PWMAVG = 19;
   // Points layout: [lat, lon, speed, alt, volt, temp, battery, pwm, current, power, gpsSpeed]
   const P_LAT = 0, P_LON = 1, P_SPD = 2, P_ALT = 3, P_VOLT = 4, P_TEMP = 5, P_BATT = 6;
   const P_PWM = 7, P_CURRENT = 8, P_POWER = 9, P_GPSSPD = 10;
@@ -132,6 +134,24 @@
 
   const duration = ts[ts.length - 1][SEC] - ts[0][SEC];
   const t0 = ts[0][SEC];
+
+  // Derived "… avg" series: centred moving averages parked in spare columns,
+  // offered as hidden-by-default extra graphs (mirrors EUC Planet's smoothed
+  // charts). Window shrinks at the ends so the curve starts/ends on real data.
+  (function computeAverages() {
+    const half = 10, n = ts.length;
+    const smooth = (srcIdx, dstIdx) => {
+      for (let i = 0; i < n; i++) {
+        let sum = 0, cnt = 0;
+        for (let j = Math.max(0, i - half); j <= Math.min(n - 1, i + half); j++) { sum += ts[j][srcIdx]; cnt++; }
+        ts[i][dstIdx] = cnt ? sum / cnt : ts[i][srcIdx];
+      }
+    };
+    smooth(SPD, SPEEDAVG);
+    smooth(BATT, BATTERYAVG);
+    smooth(CURRENT, CURRENTAVG);
+    smooth(PWM, PWMAVG);
+  })();
 
   // The zoom window IS the playback section. viewT0/viewT1 are seconds
   // from trip start. When viewT0 > 0 or viewT1 < duration we say the trip
@@ -1038,6 +1058,10 @@
     voltage:  { color: "#ff5252", idx: VOLT,    label: "Voltage",  dp: 1, unit: "V" },
     temp:     { color: "#ffa000", idx: TEMP,    label: "Temp",     dp: 1, render: "line", unitKind: "temp" },
     altitude: { color: "#ce93d8", idx: ALT,     label: "Altitude", dp: 0, unitKind: "alt" },
+    speedavg:   { color: "#4dd0e1", idx: SPEEDAVG,   label: "Speed avg",   dp: 1, render: "line", unitKind: "speed" },
+    batteryavg: { color: "#b9f6ca", idx: BATTERYAVG, label: "Battery avg", dp: 0, render: "line", unit: "%" },
+    currentavg: { color: "#ffe57f", idx: CURRENTAVG, label: "Current avg", dp: 1, render: "line", unit: "A" },
+    pwmavg:     { color: "#ff80ab", idx: PWMAVG,     label: "PWM avg",     dp: 1, render: "line", unit: "%" },
   };
   function chartUnit(cfg) {
     if (cfg.unitKind === "speed") return UNITS.speedUnit;
@@ -1048,7 +1072,7 @@
 
   // PWM / Current / Power only exist on some wheels - hide a chart when the
   // trip carries no data for it (incl. legacy cached tracks without the column).
-  const OPTIONAL_CHARTS = new Set(["pwm", "current", "power"]);
+  const OPTIONAL_CHARTS = new Set(["pwm", "current", "power", "batteryavg", "currentavg", "pwmavg"]);
   function chartHasData(idx) {
     for (let i = 0; i < ts.length; i++) {
       const v = ts[i][idx];
@@ -1168,6 +1192,178 @@
     }
     charts.push(c);
   });
+
+  // ---------- Custom combined chart ----------
+  // Build-your-own graph: overlay any set of metrics on one canvas. Scales
+  // differ wildly (km/h vs W vs %), so each series is normalised to its own
+  // visible range — the shapes line up, the header legend carries the real
+  // values. Selection persists per browser.
+  function unitFor(a) {
+    if (a.unitKind === "speed") return UNITS.speedUnit;
+    if (a.unitKind === "temp") return UNITS.tempUnit;
+    if (a.unitKind === "alt") return UNITS.altUnit;
+    return a.unit || "";
+  }
+  // Metrics that can be overlaid on a combined graph — every raw and derived
+  // series that the trip actually carries.
+  const CUSTOM_AVAIL = [];
+  Object.keys(CHART_CONFIG).forEach((k) => {
+    const cfg = CHART_CONFIG[k];
+    if (OPTIONAL_CHARTS.has(k) && !chartHasData(cfg.idx)) return;
+    CUSTOM_AVAIL.push({ key: k, idx: cfg.idx, color: cfg.color, label: cfg.label, unitKind: cfg.unitKind, unit: cfg.unit, dp: cfg.dp });
+  });
+  if (hasGpsSpeed) CUSTOM_AVAIL.push({ key: "gpsspeed", idx: GPSSPD, color: GPS_COLOR, label: "GPS Speed", unitKind: "speed", dp: 1 });
+
+  // Combined graphs: user-built overlays, created / edited / reordered from
+  // the customize dialog. Multiple are allowed. Each series is normalised to
+  // its own visible range so different scales line up; the legend is clean
+  // and non-interactive.
+  let combinedGraphs = [];
+
+  function makeCombinedGraph(def) {
+    const chartsRoot = document.getElementById("charts");
+    const resizeEl = document.getElementById("sidebar-resize");
+    const block = makeEl("div", "chart-block combined-chart");
+    block.dataset.key = def.id;
+    const head = makeEl("div", "chart-head");
+    head.appendChild(makeEl("span", "ch-caret", "▾"));
+    const nameEl = makeEl("span", "ch-label", def.name || "Combined");
+    head.appendChild(nameEl);
+    const legend = makeEl("div", "custom-legend");
+    const body = makeEl("div", "chart-body");
+    const canvas = document.createElement("canvas");
+    body.appendChild(canvas);
+    block.append(head, legend, body);
+    chartsRoot.insertBefore(block, resizeEl);
+
+    const cg = { id: def.id, name: def.name, block, canvas, legend, head, collapsed: false, metricKeys: (def.metrics || []).slice() };
+    cg.selected = () => cg.metricKeys.map((k) => CUSTOM_AVAIL.find((a) => a.key === k)).filter(Boolean);
+    cg.rebuildLegend = function () {
+      legend.innerHTML = "";
+      const sel = cg.selected();
+      if (!sel.length) { legend.innerHTML = '<span class="cc-empty">No metrics — edit in Customize.</span>'; return; }
+      sel.forEach((a) => {
+        const item = makeEl("span", "cc-leg");
+        const dot = makeEl("span", "cc-dot"); dot.style.background = a.color;
+        const val = makeEl("span", "cc-val", "—");
+        item.append(dot, makeEl("span", "cc-name", a.label), val);
+        item._val = val; item._a = a;
+        legend.appendChild(item);
+      });
+    };
+    cg.setMetrics = (arr) => { cg.metricKeys = (arr || []).filter((k) => CUSTOM_AVAIL.some((a) => a.key === k)); cg.rebuildLegend(); if (!cg.collapsed) { resizeChart(cg); drawCombined(cg); } };
+    cg.setName = (nm) => { cg.name = nm; nameEl.textContent = nm || "Combined"; };
+    head.addEventListener("click", () => {
+      cg.collapsed = !cg.collapsed;
+      block.classList.toggle("collapsed", cg.collapsed);
+      if (!cg.collapsed) requestAnimationFrame(() => { resizeChart(cg); drawCombined(cg); });
+    });
+    cg.rebuildLegend();
+
+    attachZoomControls(cg);
+    let dragging = false;
+    const onMove = (clientX) => setCurrentTime(timeFromClientX(canvas, clientX));
+    canvas.addEventListener("mousedown", (e) => { dragging = true; onMove(e.clientX); e.preventDefault(); });
+    window.addEventListener("mousemove", (e) => { if (dragging) onMove(e.clientX); });
+    window.addEventListener("mouseup", () => { dragging = false; });
+    return cg;
+  }
+
+  function updateCombinedLegend(cg) {
+    if (!cg) return;
+    cg.legend.querySelectorAll(".cc-leg").forEach((item) => {
+      const a = item._a;
+      item._val.innerHTML = fmtFixed(convertByKind(a.unitKind, sampleAt(a.idx)), a.dp) +
+        ' <span class="ch-unit">' + unitFor(a) + "</span>";
+    });
+  }
+
+  function drawCombined(cg, fracIdxArg) {
+    if (!cg || cg.collapsed) return;
+    const ctx = cg.canvas.getContext("2d");
+    const w = cg.canvas.width, h = cg.canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, w, h);
+    if (w < 2 || h < 2) return;
+    const n = ts.length, pad = 4, innerW = w - pad * 2;
+    const viewW = (viewT1 - viewT0) || 1;
+
+    { // Time grid (matches the metric charts).
+      const step = chooseTimeStep(viewW);
+      const first = Math.ceil(viewT0 / step) * step, last = Math.floor(viewT1 / step) * step;
+      if (last >= first) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1;
+        ctx.font = (10 * dpr) + "px ui-sans-serif, system-ui, sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.32)"; ctx.textBaseline = "top";
+        let i = 0;
+        for (let t = first; t <= last + 0.001; t += step, i++) {
+          const x = pad + (t - viewT0) / viewW * innerW;
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+          if (i === 0) ctx.fillText(fmtMs(t), x + 4 * dpr, 2 * dpr);
+          else if (i === 1) ctx.fillText(fmtRelativeStep(step), x + 4 * dpr, 2 * dpr);
+        }
+        ctx.restore();
+      }
+    }
+
+    const sel = cg.selected();
+    if (!sel.length) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = (12 * dpr) + "px ui-sans-serif, system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("Add metrics in Customize", w / 2, h / 2);
+      ctx.restore();
+      cg._px = null;
+      return;
+    }
+
+    const iLo = Math.max(0, sampleAtTime(viewT0) - 1);
+    const iHi = Math.min(n - 1, sampleAtTime(viewT1) + 1);
+    const px = (iOrFrac) => {
+      const i0 = Math.floor(iOrFrac), i1 = Math.min(n - 1, i0 + 1), f = iOrFrac - i0;
+      const t = sampleTimes[i0] + (sampleTimes[i1] - sampleTimes[i0]) * f;
+      return pad + (t - viewT0) / viewW * innerW;
+    };
+    // Each series normalised to its own visible min/max so shapes compare.
+    sel.forEach((a) => {
+      let mn = Infinity, mx = -Infinity;
+      for (let i = iLo; i <= iHi; i++) { const v = ts[i][a.idx]; if (typeof v === "number") { if (v < mn) mn = v; if (v > mx) mx = v; } }
+      if (!isFinite(mn)) { mn = 0; mx = 1; }
+      if (mn === mx) mx = mn + 1;
+      const range = mx - mn; mn -= range * 0.08; mx += range * 0.08;
+      a._py = (v) => h - pad - ((v - mn) / (mx - mn)) * (h - pad * 2);
+      ctx.strokeStyle = a.color; ctx.lineWidth = 1.6 * dpr; ctx.lineJoin = "round";
+      ctx.beginPath();
+      let started = false;
+      for (let i = iLo; i <= iHi; i++) {
+        const v = ts[i][a.idx];
+        if (typeof v !== "number") { started = false; continue; }
+        const x = px(i), y = a._py(v);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+    cg._px = px;
+
+    if (currentSampleIdx >= 0) {
+      const fi = fracIdxArg != null ? fracIdxArg : (currentSampleIdx + sampleFraction);
+      const i0 = Math.floor(fi), i1 = Math.min(n - 1, i0 + 1), f = fi - i0;
+      const x = px(fi);
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,160,0,0.7)"; ctx.lineWidth = 1 * dpr;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      sel.forEach((a) => {
+        if (!a._py) return;
+        const v0 = ts[i0][a.idx]; if (typeof v0 !== "number") return;
+        const v1 = ts[i1][a.idx]; const v = v0 + ((typeof v1 === "number" ? v1 : v0) - v0) * f;
+        ctx.fillStyle = a.color;
+        ctx.beginPath(); ctx.arc(x, a._py(v), 3 * dpr, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.restore();
+    }
+  }
 
   // ---------- G-Force instant gauge ----------
   // G-Force is an instantaneous IMU reading, shown as a live dot with a fading
@@ -1325,6 +1521,7 @@
 
   function resizeCharts() {
     charts.forEach(resizeChart);
+    combinedGraphs.forEach((cg) => resizeChart(cg));
     resizeGforce();
     drawAllCharts();
     updateGforceGauge();
@@ -1332,6 +1529,7 @@
 
   function drawAllCharts() {
     charts.forEach((c) => { if (!c.collapsed) drawChart(c); });
+    combinedGraphs.forEach((cg) => { if (!cg.collapsed) drawCombined(cg); });
   }
 
   // 2-colour filled current chart: amber above the 0 A baseline, green below
@@ -1656,11 +1854,37 @@
   const scrub = document.getElementById("scrub");
   const timeMarker = document.getElementById("time-marker");
   let scrubActive = false;
+  // The bubble cycles on click: elapsed → time of day → both → elapsed.
+  const tripStartMs = track && track.dateStart ? Date.parse(track.dateStart) : NaN;
+  let timeMarkerMode = 0;
+  function fmtWall(sec) {
+    if (!isFinite(tripStartMs)) return null;
+    const d = new Date(tripStartMs + sec * 1000);
+    const p = (n) => String(n).padStart(2, "0");
+    return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+  function timeMarkerText() {
+    const el = fmtTime(currentTime);
+    const wall = fmtWall(currentTime);
+    if (!wall) return el;
+    if (timeMarkerMode === 1) return wall;
+    if (timeMarkerMode === 2) return el + " · " + wall;
+    return el;
+  }
   function updateTimeMarker() {
     if (!timeMarker) return;
     timeMarker.style.left = (duration > 0 ? (currentTime / duration) * 100 : 0) + "%";
-    timeMarker.textContent = fmtTime(currentTime);
+    timeMarker.textContent = timeMarkerText();
     timeMarker.classList.toggle("hidden", !(playing || scrubActive));
+  }
+  if (timeMarker && isFinite(tripStartMs)) {
+    timeMarker.style.cursor = "pointer";
+    timeMarker.title = "Click: elapsed → time of day → both";
+    timeMarker.addEventListener("click", (e) => {
+      e.stopPropagation();
+      timeMarkerMode = (timeMarkerMode + 1) % 3;
+      updateTimeMarker();
+    });
   }
   const playBtn = document.getElementById("play-btn");
   const speedSelect = document.getElementById("speed-select");
@@ -1853,6 +2077,10 @@
         c.elDiff.textContent = "Δ " + (diff >= 0 ? "+" : "−") + Math.abs(diff).toFixed(dp) + " " + unit;
       }
       if (!c.collapsed) drawChart(c, fracIdx);
+    });
+    combinedGraphs.forEach((cg) => {
+      updateCombinedLegend(cg);
+      if (!cg.collapsed) drawCombined(cg, fracIdx);
     });
 
     // Map marker + traveled line (marker lerped between adjacent coords)
@@ -2163,6 +2391,257 @@
     c.canvas.addEventListener("pointerleave", dropPointer);
   }
   charts.forEach(attachZoomControls);
+  // Combined graphs wire their own scrub/zoom inside makeCombinedGraph().
+
+  // ---------- Chart layout: reorder / hide / extras / combined graphs ----------
+  // Everything the user arranges — order, which graphs show, and the set of
+  // combined graphs (each with its own name + metrics) — lives in one object,
+  // persisted per browser and export/importable as JSON. The customize dialog
+  // is the only editor; the graphs themselves just render.
+  (function chartLayoutManager() {
+    const chartsRoot = document.getElementById("charts");
+    const resizeEl = document.getElementById("sidebar-resize");
+    const dialog = document.getElementById("charts-dialog");
+    if (!chartsRoot || !dialog) return;
+    const LAYOUT_KEY = "insp-chart-layout";
+    const MAX_COMBINED = 8;
+    const AVG_KEYS = new Set(["speedavg", "batteryavg", "currentavg", "pwmavg"]);
+
+    const staticBlocks = () => [...chartsRoot.querySelectorAll(".chart-block")].filter((b) => b.querySelector(".chart-head") && !b.classList.contains("combined-chart"));
+    const STATIC_ORDER = staticBlocks().map((b) => b.dataset.key);
+    const DEFAULT_HIDDEN = staticBlocks().filter((b) => b.dataset.defaultHidden === "1").map((b) => b.dataset.key);
+    const isCombined = (k) => /^combined-/.test(k);
+
+    let layout = { order: STATIC_ORDER.slice(), hidden: DEFAULT_HIDDEN.slice(), combined: [] };
+    const combDef = (k) => layout.combined.find((d) => d.id === k);
+    const labelOf = (k) => isCombined(k) ? ((combDef(k) || {}).name || "Combined") : ((CHART_CONFIG[k] && CHART_CONFIG[k].label) || k);
+    const cleanMetrics = (arr) => (Array.isArray(arr) ? arr.filter((k) => CUSTOM_AVAIL.some((a) => a.key === k)) : []);
+
+    (function load() {
+      try {
+        const s = JSON.parse(localStorage.getItem(LAYOUT_KEY));
+        if (s && typeof s === "object") {
+          if (Array.isArray(s.combined)) {
+            layout.combined = s.combined.filter((d) => d && typeof d.id === "string")
+              .map((d) => ({ id: d.id, name: String(d.name || "Combined"), metrics: cleanMetrics(d.metrics) }));
+          }
+          const valid = (k) => STATIC_ORDER.includes(k) || layout.combined.some((d) => d.id === k);
+          if (Array.isArray(s.order)) layout.order = s.order.filter(valid);
+          if (Array.isArray(s.hidden)) layout.hidden = s.hidden.filter(valid);
+          // Migrate the earlier single custom-metrics into one combined graph.
+          if (Array.isArray(s.custom) && s.custom.length && !layout.combined.length) {
+            layout.combined.push({ id: "combined-1", name: "Combined", metrics: cleanMetrics(s.custom) });
+            if (!layout.order.includes("combined-1")) layout.order.push("combined-1");
+          }
+        }
+      } catch (_) {}
+      STATIC_ORDER.forEach((k) => { if (!layout.order.includes(k)) layout.order.push(k); });
+      layout.combined.forEach((d) => { if (!layout.order.includes(d.id)) layout.order.push(d.id); });
+    })();
+
+    const save = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (_) {} };
+
+    function rebuildCombined() {
+      combinedGraphs.slice().forEach((cg) => {
+        if (!layout.combined.some((d) => d.id === cg.id)) { cg.block.remove(); combinedGraphs.splice(combinedGraphs.indexOf(cg), 1); }
+      });
+      layout.combined.forEach((d) => {
+        let cg = combinedGraphs.find((c) => c.id === d.id);
+        if (!cg) { cg = makeCombinedGraph(d); combinedGraphs.push(cg); }
+        else { cg.setName(d.name); cg.setMetrics(d.metrics); }
+      });
+    }
+
+    function apply() {
+      rebuildCombined();
+      layout.order.forEach((k) => { const b = chartsRoot.querySelector(`.chart-block[data-key="${k}"]`); if (b) chartsRoot.insertBefore(b, resizeEl); });
+      chartsRoot.querySelectorAll(".chart-block").forEach((b) => { if (b.querySelector(".chart-head")) b.classList.toggle("chart-hidden", layout.hidden.includes(b.dataset.key)); });
+      resizeCharts();
+    }
+
+    // ---- Dialog ----
+    const listEl = document.getElementById("cd-list");
+    const metricsEl = document.getElementById("cd-metrics");
+    const mainView = document.getElementById("cd-main");
+    const editorView = document.getElementById("cd-editor");
+    const newBtn = document.getElementById("cd-new");
+    const nameInput = document.getElementById("cd-edit-name");
+    let editingId = null;
+
+    function buildList() {
+      listEl.innerHTML = "";
+      layout.order.forEach((k) => {
+        const row = makeEl("li", "cd-row"); row.dataset.key = k;
+        const grip = makeEl("span", "cd-grip", "⠿"); grip.title = "Drag to reorder";
+        const shown = !layout.hidden.includes(k);
+        const sw = makeEl("label", "cd-switch");
+        sw.title = shown ? "Shown" : "Hidden";
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = shown;
+        sw.append(cb, makeEl("span", "cd-knob"));
+        sw.addEventListener("click", (e) => e.stopPropagation());
+        cb.addEventListener("change", () => {
+          if (cb.checked) layout.hidden = layout.hidden.filter((x) => x !== k);
+          else if (!layout.hidden.includes(k)) layout.hidden.push(k);
+          row.classList.toggle("is-hidden", !cb.checked);
+          sw.title = cb.checked ? "Shown" : "Hidden";
+          save(); apply();
+        });
+        const name = makeEl("span", "cd-name", labelOf(k));
+        if (AVG_KEYS.has(k)) name.append(makeEl("span", "cd-tag", "avg"));
+        if (isCombined(k)) name.append(makeEl("span", "cd-tag", "combined"));
+        row.append(grip, sw, name);
+        if (isCombined(k)) {
+          const edit = makeEl("button", "cd-rowbtn", "Edit"); edit.type = "button";
+          edit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(k); });
+          const del = makeEl("button", "cd-rowdel"); del.type = "button"; del.title = "Delete graph";
+          del.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1l.5-9"/></svg>';
+          del.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!window.confirm(`Delete the "${labelOf(k)}" graph?`)) return;
+            layout.combined = layout.combined.filter((d) => d.id !== k);
+            layout.order = layout.order.filter((x) => x !== k);
+            layout.hidden = layout.hidden.filter((x) => x !== k);
+            save(); apply(); buildList();
+          });
+          row.append(edit, del);
+        }
+        if (!shown) row.classList.add("is-hidden");
+        attachRowDrag(row, grip);
+        listEl.appendChild(row);
+      });
+      newBtn.disabled = layout.combined.length >= MAX_COMBINED;
+      newBtn.textContent = layout.combined.length >= MAX_COMBINED ? "Max 8 graphs" : "+ New graph";
+    }
+
+    function attachRowDrag(row, grip) {
+      grip.style.touchAction = "none";
+      grip.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+        row.classList.add("cd-dragging");
+        const move = (ev) => {
+          const rows = [...listEl.querySelectorAll(".cd-row")].filter((r) => r !== row);
+          let target = null;
+          for (const other of rows) { const r = other.getBoundingClientRect(); if (ev.clientY < r.top + r.height / 2) { target = other; break; } }
+          if (target) { if (row.nextSibling !== target) listEl.insertBefore(row, target); }
+          else listEl.appendChild(row);
+        };
+        const up = () => {
+          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
+          row.classList.remove("cd-dragging");
+          grip.removeEventListener("pointermove", move);
+          grip.removeEventListener("pointerup", up);
+          layout.order = [...listEl.querySelectorAll(".cd-row")].map((r) => r.dataset.key);
+          save(); apply();
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+      });
+    }
+
+    // ---- Combined-graph editor (metrics + name) ----
+    function buildMetrics() {
+      metricsEl.innerHTML = "";
+      const def = combDef(editingId);
+      CUSTOM_AVAIL.forEach((a) => {
+        const chip = makeEl("button", "cd-metric"); chip.type = "button";
+        const dot = makeEl("span", "cc-dot"); dot.style.background = a.color;
+        chip.append(dot, document.createTextNode(a.label));
+        chip.classList.toggle("on", def && def.metrics.includes(a.key));
+        chip.addEventListener("click", () => {
+          if (!def) return;
+          const i = def.metrics.indexOf(a.key);
+          if (i >= 0) def.metrics.splice(i, 1); else def.metrics.push(a.key);
+          chip.classList.toggle("on", def.metrics.includes(a.key));
+          save();
+          const cg = combinedGraphs.find((c) => c.id === editingId);
+          if (cg) cg.setMetrics(def.metrics);
+        });
+        metricsEl.appendChild(chip);
+      });
+    }
+    function openEditor(id) {
+      editingId = id;
+      const def = combDef(id);
+      nameInput.value = def ? def.name : "Combined";
+      buildMetrics();
+      mainView.classList.add("hidden");
+      editorView.classList.remove("hidden");
+      dialog.classList.add("cd-editing");
+      setTimeout(() => nameInput.select(), 0);
+    }
+    function backToList() {
+      editingId = null;
+      editorView.classList.add("hidden");
+      mainView.classList.remove("hidden");
+      dialog.classList.remove("cd-editing");
+      buildList();
+    }
+    nameInput.addEventListener("input", () => {
+      const def = combDef(editingId);
+      if (!def) return;
+      def.name = nameInput.value || "Combined";
+      save();
+      const cg = combinedGraphs.find((c) => c.id === editingId);
+      if (cg) cg.setName(def.name);
+    });
+    document.getElementById("cd-edit-back").addEventListener("click", backToList);
+    newBtn.addEventListener("click", () => {
+      if (layout.combined.length >= MAX_COMBINED) return;
+      let n = 1; while (layout.combined.some((d) => d.id === "combined-" + n)) n++;
+      const id = "combined-" + n;
+      layout.combined.push({ id, name: "Combined " + n, metrics: [] });
+      layout.order.push(id);
+      save(); apply();
+      openEditor(id);
+    });
+
+    const closeDialog = () => dialog.classList.add("hidden");
+    dialog.querySelectorAll("[data-cd-close]").forEach((el) => el.addEventListener("click", closeDialog));
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !dialog.classList.contains("hidden")) { if (!editorView.classList.contains("hidden")) backToList(); else closeDialog(); } });
+    document.getElementById("charts-customize").addEventListener("click", () => {
+      backToList();
+      dialog.classList.remove("hidden");
+    });
+
+    document.getElementById("cd-reset").addEventListener("click", () => {
+      layout = { order: STATIC_ORDER.slice(), hidden: DEFAULT_HIDDEN.slice(), combined: [] };
+      save(); apply(); backToList();
+    });
+
+    // Export / import the whole layout as JSON.
+    document.getElementById("cd-export").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(layout, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "euc-graph-layout.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    const importFile = document.getElementById("cd-import-file");
+    document.getElementById("cd-import").addEventListener("click", () => importFile.click());
+    importFile.addEventListener("change", (e) => {
+      const f = e.target.files[0]; e.target.value = "";
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        try {
+          const s = JSON.parse(rd.result);
+          const next = { order: STATIC_ORDER.slice(), hidden: [], combined: [] };
+          if (Array.isArray(s.combined)) next.combined = s.combined.filter((d) => d && typeof d.id === "string").map((d) => ({ id: d.id, name: String(d.name || "Combined"), metrics: cleanMetrics(d.metrics) }));
+          const valid = (k) => STATIC_ORDER.includes(k) || next.combined.some((d) => d.id === k);
+          if (Array.isArray(s.order)) next.order = s.order.filter(valid);
+          STATIC_ORDER.forEach((k) => { if (!next.order.includes(k)) next.order.push(k); });
+          next.combined.forEach((d) => { if (!next.order.includes(d.id)) next.order.push(d.id); });
+          if (Array.isArray(s.hidden)) next.hidden = s.hidden.filter(valid);
+          layout = next; save(); apply(); backToList();
+        } catch (err) { alert("That doesn't look like a valid layout file."); }
+      };
+      rd.readAsText(f);
+    });
+
+    apply();
+  })();
 
   // Loop toggle. Reset-zoom is now the pill click — one less button.
   loopBtn.addEventListener("click", () => {

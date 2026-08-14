@@ -6,7 +6,7 @@
     <title>Trip Inspector &mdash; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="static/css/inspector.css?v=22" />
+    <link rel="stylesheet" href="static/css/inspector.css?v=23" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -172,6 +172,7 @@
             </div>
             <div class="scrub-wrap">
                 <div id="scrub-ab-fill" class="scrub-ab-fill hidden"></div>
+                <div id="time-marker" class="time-marker hidden">0:00</div>
                 <div id="zoom-handle-a" class="zoom-handle hidden" title="Drag to refine section start"></div>
                 <div id="zoom-handle-b" class="zoom-handle hidden" title="Drag to refine section end"></div>
                 <input id="scrub" type="range" min="0" max="1000" step="1" value="0" />
@@ -201,6 +202,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=65"></script>
+    <script src="static/js/inspector.js?v=66"></script>
 </body>
 </html>

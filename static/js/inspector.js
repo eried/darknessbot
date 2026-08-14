@@ -447,6 +447,7 @@
   let currentColorMode = "speed"; // falls back to solid when the trip lacks it
   let currentTraceMode = "trail-fixed"; // trail-fixed | trail-dynamic | whole
   let currentRouteIdx = 0;
+  let lastTrailRouteIdx = -1; // guards the per-frame trail rebuild
 
   // Per-timeseries-sample index into coords, matched by GPS position.
   // The map marker used to scale ts index onto coords index proportionally,
@@ -1653,6 +1654,14 @@
   let lastFrame = 0;
 
   const scrub = document.getElementById("scrub");
+  const timeMarker = document.getElementById("time-marker");
+  let scrubActive = false;
+  function updateTimeMarker() {
+    if (!timeMarker) return;
+    timeMarker.style.left = (duration > 0 ? (currentTime / duration) * 100 : 0) + "%";
+    timeMarker.textContent = fmtTime(currentTime);
+    timeMarker.classList.toggle("hidden", !(playing || scrubActive));
+  }
   const playBtn = document.getElementById("play-btn");
   const speedSelect = document.getElementById("speed-select");
 
@@ -1672,6 +1681,7 @@
     playing = next;
     playBtn.textContent = playing ? "\u2759\u2759" : "\u25b6";
     playBtn.classList.toggle("playing", playing);
+    updateTimeMarker();
     const themeSel = document.getElementById("theme-select");
     if (themeSel) {
       themeSel.disabled = playing;
@@ -1731,6 +1741,14 @@
     const t = (e.target.value / 1000) * duration;
     setCurrentTime(t);
   });
+  // Show the time bubble while dragging the scrub, hide it on release
+  // (unless playback keeps it up).
+  const scrubStart = () => { scrubActive = true; updateTimeMarker(); };
+  const scrubEnd = () => { scrubActive = false; updateTimeMarker(); };
+  scrub.addEventListener("pointerdown", scrubStart);
+  scrub.addEventListener("pointerup", scrubEnd);
+  scrub.addEventListener("pointercancel", scrubEnd);
+  scrub.addEventListener("blur", scrubEnd);
 
   speedSelect.addEventListener("change", e => {
     playSpeed = parseFloat(e.target.value);
@@ -1807,6 +1825,7 @@
     if (document.activeElement !== scrub) {
       scrub.value = duration > 0 ? (currentTime / duration) * 1000 : 0;
     }
+    updateTimeMarker();
     // Re-evaluate handle priority — when the playhead moves into the same
     // pixel as a section edge handle, the handle becomes non-interactive
     // so click+drag from there scrubs the playhead instead.
@@ -1854,16 +1873,23 @@
         const markerPos = [lerp(a[0], b[0], routeFrac), lerp(a[1], b[1], routeFrac)];
         riderMarker.setLngLat(markerPos);
 
-        // Trail ends exactly on coords[currentRouteIdx] — no interpolated marker
-        // point — so the gradient's line-progress matches the geometry and the
-        // colours stay pinned to the ground instead of crawling each frame.
-        const traveled = coords.slice(0, currentRouteIdx + 1);
-        if (traveled.length >= 2) {
-          map.getSource("traveled").setData({
-            type: "Feature", geometry: { type: "LineString", coordinates: traveled }
-          });
-
-          updateTraceGradient();
+        // Trail geometry + gradient depend ONLY on currentRouteIdx. While the
+        // marker glides between two coords at the same index, rebuilding them
+        // is wasted work — and on a long dense trip that per-frame setData +
+        // line-gradient is exactly what drops the frame rate and makes the
+        // gauges feel sluggish. Only rebuild when the index actually advances.
+        if (currentRouteIdx !== lastTrailRouteIdx) {
+          lastTrailRouteIdx = currentRouteIdx;
+          // Trail ends exactly on coords[currentRouteIdx] so the gradient's
+          // line-progress matches the geometry and the colours stay pinned to
+          // the ground instead of crawling.
+          const traveled = coords.slice(0, currentRouteIdx + 1);
+          if (traveled.length >= 2) {
+            map.getSource("traveled").setData({
+              type: "Feature", geometry: { type: "LineString", coordinates: traveled }
+            });
+            updateTraceGradient();
+          }
         }
         if ((followPan || followRotate || followZoom) && playing) {
           followGlide(markerPos, sampleAt(SPD));

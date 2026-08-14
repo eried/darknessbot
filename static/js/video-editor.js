@@ -1555,7 +1555,7 @@
       } else {
         // No absolute anchor: assume the telemetry started with the source.
         cfg.teleOffset = -clipStart;
-        toast(`Clip starts ${fmtT(clipStart)} into the source. Telemetry assumed to start with it; fine-tune by dragging.`, 6000);
+        toast(`Clip starts ${fmtT(clipStart)} into the source. Telemetry aligned to it. Drag to fine-tune.`, 6000);
       }
       setStatus("ms-sync", `synced · offset ${cfg.teleOffset.toFixed(1)}s`);
       persistCfg(); layoutTimeline(); requestDraw();

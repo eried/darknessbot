@@ -2485,12 +2485,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
     if (!cuts.length) {
       ttmodShow("SPLIT", "Split trip", sub,
-        `<div class="tt-empty">No recording gaps or long stops were found in this trip, so there's nothing to split on.</div>`,
+        `<div class="tt-empty">No recording gaps or long stops to split on.</div>`,
         [cancel]);
       return;
     }
     const ts0 = t.timeseries[0][0];
-    let body = `<div class="tt-hint">Cut the ride at the points below into separate trips. The original stays in your library.</div><div class="tt-cuts">`;
+    let body = `<div class="tt-hint">Cut the ride at these points. The original stays.</div><div class="tt-cuts">`;
     cuts.forEach((c) => {
       const why = c.kind === "gap" ? `recording gap of ${fmtGap(c.dur)}` : `stopped for ${fmtGap(c.dur)}`;
       body += `<label class="tt-cut"><input type="checkbox" class="tt-cutcb" data-sec="${c.sec}" checked>` +
@@ -2540,7 +2540,7 @@ document.addEventListener("DOMContentLoaded", function () {
       `<div class="tt-facts">${fmtDurH(tripDurH(t))} · ${UNITS.dist(t.stats.distanceKm).toFixed(1)} ${UNITS.distUnit}</div>`;
     if (order.length < 2) {
       ttmodShow("EXTEND", "Extend trip", sub,
-        `<div class="tt-empty">There are no other trips to absorb into this one.</div>`, [cancel]);
+        `<div class="tt-empty">No other trips to absorb.</div>`, [cancel]);
       return;
     }
     const hasOlder = pos > 0, hasNewer = pos < order.length - 1;
@@ -2551,7 +2551,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const toPos = [pos]; for (let p = pos + 1; p < order.length && toPos.length <= MAX_EACH; p++) toPos.push(p);
     const optOf = (p) => `<option value="${p}">${p === pos ? "This trip" : escapeHtml(formatTripLabel(allTracks[order[p]]))}</option>`;
     const body =
-      `<div class="tt-hint">Combine this trip with neighbouring rides into one longer trip — reach back into older rides, forward into newer ones, or both. Everything in between comes along. The originals stay in your library.</div>` +
+      `<div class="tt-hint">Combine this trip with older or newer rides into one. Everything between comes along. Originals stay.</div>` +
       `<div class="tt-range">` +
         `<label>From (older)<select id="ex-from"${hasOlder ? "" : " disabled"}>${fromPos.map(optOf).join("")}</select></label>` +
         `<label>To (newer)<select id="ex-to"${hasNewer ? "" : " disabled"}>${toPos.map(optOf).join("")}</select></label>` +
@@ -2570,7 +2570,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const spanH = (Date.parse(allTracks[order[b]].dateEnd || allTracks[order[b]].dateStart || "") -
         Date.parse(allTracks[order[a]].dateStart || "")) / 3600000;
       preview.textContent = idxs.length < 2
-        ? "Pick an older or newer trip to combine with this one."
+        ? "Pick an older or newer trip."
         : `${idxs.length} trips → ${UNITS.dist(km).toFixed(1)} ${UNITS.distUnit}${isFinite(spanH) && spanH > 0 ? `, ${fmtDurH(spanH)} span` : ""}.`;
       go.disabled = idxs.length < 2;
       go._idxs = idxs;

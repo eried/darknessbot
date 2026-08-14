@@ -1799,6 +1799,12 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 }
 #map-controls.collapsed .map-controls-body { display: none; }
 #map-controls.collapsed { padding: 4px; }
+#map-controls .setting-hint {
+    color: #6a828c;
+    font-size: 10px;
+    line-height: 1.35;
+    margin-top: -2px;
+}
 #map-controls label {
     display: flex;
     align-items: center;

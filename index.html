@@ -6,7 +6,7 @@
     <title>EUC Planet Trip Viewer</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/style.css?v=75" />
+    <link rel="stylesheet" href="static/css/style.css?v=76" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -63,6 +63,15 @@
                     <option value="dark">Dark</option>
                 </select>
             </label>
+            <label>
+                <span>Graph resolution</span>
+                <select id="graph-res-select" title="Samples kept per trip. Higher means finer graphs and gauges but more memory.">
+                    <option value="2000">Standard</option>
+                    <option value="4000">High</option>
+                    <option value="8000">Max</option>
+                </select>
+            </label>
+            <div class="setting-hint">Applies to trips you load next. Switching clears the loaded trips.</div>
             <div id="color-legend" class="hidden">
                 <div class="legend-bar"></div>
                 <div class="legend-scale">
@@ -175,7 +184,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="static/js/app.js?v=137"></script>
+    <script src="static/js/app.js?v=138"></script>
     <script src="static/js/dropbox-source.js?v=5"></script>
     <script src="static/js/source-hints.js?v=35"></script>
 </body>

@@ -12,6 +12,18 @@ document.addEventListener("DOMContentLoaded", function () {
   // Liberia or Myanmar. Anything else (including unknown / missing tz)
   // falls through to metric so a European never sees miles by accident.
   const UNITS_STORAGE_KEY = "eucviewer-units";
+
+  // Graph resolution: samples kept per trip after downsampling. Chosen in
+  // the settings cogwheel, applied at parse time (see the worker). Higher =
+  // finer graphs/gauges, more memory. Standard 2000 · High 4000 · Max 8000.
+  const GRAPHRES_KEY = "eucviewer-graph-res";
+  const GRAPHRES_VALUES = [2000, 4000, 8000];
+  const GRAPHRES_DEFAULT = 2000;
+  function currentGraphRes() {
+    const v = parseInt(localStorage.getItem(GRAPHRES_KEY), 10);
+    return GRAPHRES_VALUES.includes(v) ? v : GRAPHRES_DEFAULT;
+  }
+
   const IMPERIAL_TZ_RE = new RegExp("^(?:" +
     "America/(?:Adak|Anchorage|Boise|Chicago|Denver|Detroit|Indiana/[^/]+|Juneau|Kentucky/[^/]+|Los_Angeles|Menominee|Metlakatla|New_York|Nome|North_Dakota/[^/]+|Phoenix|Puerto_Rico|Sitka|St_Thomas|Yakutat)" +
     "|Pacific/(?:Honolulu|Pago_Pago|Guam|Saipan|Midway|Wake)" +
@@ -64,6 +76,38 @@ document.addEventListener("DOMContentLoaded", function () {
         try { localStorage.setItem(UNITS_STORAGE_KEY, next); } catch (_) {}
         location.reload();
       });
+    });
+  })();
+
+  // Graph resolution picker. Resolution is baked in at parse time and the
+  // raw samples are discarded, so an already-loaded trip can't be upscaled —
+  // switching clears the current session and the user re-imports at the new
+  // resolution. With nothing loaded, it just takes effect on the next load.
+  (function setupGraphResToggle() {
+    const sel = document.getElementById("graph-res-select");
+    if (!sel) return;
+    sel.value = String(currentGraphRes());
+    sel.addEventListener("change", async () => {
+      const next = parseInt(sel.value, 10);
+      if (next === currentGraphRes()) return;
+      const hasTrips = Array.isArray(allTracks) && allTracks.length > 0;
+      if (hasTrips && !window.confirm(
+        "Switching graph resolution clears your loaded trips (they were parsed at the old resolution). Re-import to load them at the new one. Continue?")) {
+        sel.value = String(currentGraphRes());
+        return;
+      }
+      try { localStorage.setItem(GRAPHRES_KEY, String(next)); } catch (_) {}
+      if (!hasTrips) return;
+      try {
+        const db = await openRecentDb();
+        if (db) {
+          const tx = db.transaction(SESSION_STORE_NAME, "readwrite");
+          tx.objectStore(SESSION_STORE_NAME).delete(SESSION_KEY);
+          await transactionDone(tx);
+        }
+      } catch (_) {}
+      try { localStorage.removeItem("dbb_tracks"); sessionStorage.removeItem("dbb_tracks"); } catch (_) {}
+      location.reload();
     });
   })();
 
@@ -1243,7 +1287,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createParserWorker() {
-    return new Worker("static/js/parser-worker.js?v=21");
+    return new Worker("static/js/parser-worker.js?v=22");
   }
 
   function createRecentFilesUi() {
@@ -1317,7 +1361,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       worker.addEventListener("message", handleMessage);
       worker.addEventListener("error", handleError);
-      worker.postMessage({ type: "parse", file });
+      worker.postMessage({ type: "parse", file, limit: currentGraphRes() });
     });
   }
 
@@ -2329,7 +2373,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // its own split parts) would interleave rows — clamp to non-decreasing.
     let mx = 0;
     for (const r of full) { if (r[8] < mx) r[8] = mx; else mx = r[8]; }
-    const dsTs = _downsampleTs(full, 500);
+    const dsTs = _downsampleTs(full, currentGraphRes());
     const outPoints = [];
     for (const r of dsTs) if (r[6] !== 0 || r[7] !== 0) outPoints.push(_pointFromRow(r));
     const last = tracks[tracks.length - 1];

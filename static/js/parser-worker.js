@@ -3,7 +3,10 @@
 importScripts("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
 
 const DATE_RE = /(\d{2}\.\d{2}\.\d{4})/;
-const TIMESERIES_LIMIT = 500;
+// Max samples kept per trip after downsampling. The main thread overrides
+// this per parse from the "Graph resolution" setting; higher = finer graphs
+// and gauges, more memory. Default is the Standard tier.
+let TIMESERIES_LIMIT = 2000;
 
 // Parse European "DD.MM.YYYY [HH:mm:ss[.SSS]]" or fall back to native Date.parse.
 // Returns { ms, iso } where ms is milliseconds and iso is a local ISO-8601 string
@@ -35,8 +38,11 @@ function parseDateMs(str) {
 }
 
 self.addEventListener("message", async (event) => {
-  const { type, file } = event.data || {};
+  const { type, file, limit } = event.data || {};
   if (type !== "parse" || !file) return;
+  if (typeof limit === "number" && isFinite(limit)) {
+    TIMESERIES_LIMIT = Math.max(500, Math.min(20000, Math.round(limit)));
+  }
 
   try {
     const name = String(file.name || "");

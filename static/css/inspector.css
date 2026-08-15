@@ -18,6 +18,9 @@ html, body {
        (its metrics scroll) can't stretch the whole page past the screen. */
     grid-template-columns: minmax(0, 1fr);
     height: 100vh;
+    /* dvh tracks the *visible* viewport, so the playback footer stays on
+       screen on phones where the URL bar eats into 100vh. */
+    height: 100dvh;
 }
 
 /* ---------- Dashboard ---------- */
@@ -38,17 +41,19 @@ html, body {
     align-items: center;
     gap: 18px;
 }
-/* Collapse toggle — only shown on narrow screens (wired in the media query). */
+/* Collapse toggle — only shown on narrow screens (wired in the media query).
+   Kept visually identical to the graphs collapse-all button (.ct-iconbtn). */
 .dash-toggle {
     display: none;
     flex-shrink: 0;
-    width: 28px; height: 28px; align-items: center; justify-content: center;
-    background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 7px; color: #90a4ae; cursor: pointer;
+    width: 26px; height: 24px; align-items: center; justify-content: center;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px; color: #8fa7b0; cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
 }
-.dash-toggle:hover, .dash-toggle:active { color: #00e5ff; border-color: rgba(0, 229, 255, 0.35); }
-.dash-toggle svg { width: 15px; height: 15px; transition: transform 0.2s; }
+.dash-toggle:hover, .dash-toggle:active { color: #bfeef7; border-color: rgba(0, 229, 255, 0.35); }
+.dash-toggle svg { width: 14px; height: 14px; transition: transform 0.2s; }
 #inspector.dash-collapsed .dash-toggle svg { transform: rotate(180deg); }
 
 .back-link {
@@ -450,6 +455,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 }
 .ct-iconbtn:hover { color: #bfeef7; border-color: rgba(0, 229, 255, 0.35); }
 .ct-iconbtn.on { color: #00e5ff; border-color: rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.1); }
+.ct-iconbtn svg { transition: transform 0.2s; }
+.ct-iconbtn.on svg { transform: rotate(180deg); }
 
 .chart-block.chart-hidden { display: none; }
 
@@ -1031,8 +1038,10 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     }
     .dash-scroll::-webkit-scrollbar { display: none; }
     /* Fade the scroll edge so the last metric tapers off next to the button
-       instead of hard-clipping (also hints there's more to scroll). */
+       instead of hard-clipping (also hints there's more to scroll). The
+       trailing padding keeps the clock clear of the fade at max scroll. */
     #inspector:not(.dash-collapsed) .dash-scroll {
+        padding-right: 26px;
         -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
         mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
     }

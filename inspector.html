@@ -6,7 +6,7 @@
     <title>Trip Inspector &mdash; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="static/css/inspector.css?v=28" />
+    <link rel="stylesheet" href="static/css/inspector.css?v=33" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -18,6 +18,7 @@
 <body>
     <div id="inspector">
         <header id="dash">
+            <div class="dash-scroll">
             <div class="trip-title">
                 <div id="trip-name">&mdash;</div>
                 <div id="trip-subtitle"></div>
@@ -75,6 +76,11 @@
                 <div class="readout-value mono"><span id="clock-value">00:00:00</span></div>
                 <div class="readout-sub mono">/ <span id="clock-total">00:00:00</span></div>
             </div>
+            </div>
+
+            <button type="button" id="dash-toggle" class="dash-toggle" aria-label="Collapse dashboard" title="Collapse / expand">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 10 8 6 12 10"/></svg>
+            </button>
         </header>
 
         <main id="stage">
@@ -152,6 +158,10 @@
             <aside id="charts">
                 <div class="charts-toolbar">
                     <span class="ct-title">Graphs</span>
+                    <span class="ct-spacer"></span>
+                    <button type="button" id="charts-collapse-all" class="ct-iconbtn" title="Collapse all graphs">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 2.5 12 6"/><polyline points="4 10 8 13.5 12 10"/></svg>
+                    </button>
                     <button type="button" id="charts-customize" class="ct-btn" title="Reorder, hide, or add graphs">
                         <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 4h9M2 8h6M2 12h9"/><circle cx="13" cy="4" r="1.6"/><circle cx="10" cy="8" r="1.6"/><circle cx="13" cy="12" r="1.6"/></svg>
                         Customize
@@ -252,6 +262,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=71"></script>
+    <script src="static/js/inspector.js?v=72"></script>
 </body>
 </html>

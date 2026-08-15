@@ -2393,6 +2393,24 @@
   charts.forEach(attachZoomControls);
   // Combined graphs wire their own scrub/zoom inside makeCombinedGraph().
 
+  // Dashboard collapse (portrait phones): shrink the top strip to just the
+  // essentials. Choice is remembered per browser; the map/charts refit after.
+  (function setupDashToggle() {
+    const btn = document.getElementById("dash-toggle");
+    const insp = document.getElementById("inspector");
+    if (!btn || !insp) return;
+    const KEY = "insp-dash-collapsed";
+    if (localStorage.getItem(KEY) === "1") insp.classList.add("dash-collapsed");
+    btn.addEventListener("click", () => {
+      const on = insp.classList.toggle("dash-collapsed");
+      try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) {}
+      requestAnimationFrame(() => {
+        resizeCharts();
+        if (typeof map !== "undefined" && map && typeof map.resize === "function") map.resize();
+      });
+    });
+  })();
+
   // ---------- Chart layout: reorder / hide / extras / combined graphs ----------
   // Everything the user arranges — order, which graphs show, and the set of
   // combined graphs (each with its own name + metrics) — lives in one object,
@@ -2602,6 +2620,19 @@
     document.getElementById("charts-customize").addEventListener("click", () => {
       backToList();
       dialog.classList.remove("hidden");
+    });
+
+    // Collapse / expand every graph at once.
+    let allCollapsed = false;
+    const collapseAllBtn = document.getElementById("charts-collapse-all");
+    if (collapseAllBtn) collapseAllBtn.addEventListener("click", () => {
+      allCollapsed = !allCollapsed;
+      const set = (c) => { c.collapsed = allCollapsed; c.block.classList.toggle("collapsed", allCollapsed); };
+      charts.forEach(set);
+      combinedGraphs.forEach(set);
+      collapseAllBtn.classList.toggle("on", allCollapsed);
+      collapseAllBtn.title = allCollapsed ? "Expand all graphs" : "Collapse all graphs";
+      if (!allCollapsed) resizeCharts();
     });
 
     document.getElementById("cd-reset").addEventListener("click", () => {

@@ -14,6 +14,9 @@ html, body {
 #inspector {
     display: grid;
     grid-template-rows: auto 1fr auto;
+    /* Constrain the single column to the viewport so a wide dashboard row
+       (its metrics scroll) can't stretch the whole page past the screen. */
+    grid-template-columns: minmax(0, 1fr);
     height: 100vh;
 }
 
@@ -21,11 +24,32 @@ html, body {
 #dash {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 12px;
     padding: 10px 16px;
     background: linear-gradient(180deg, rgba(0, 229, 255, 0.04), rgba(10, 10, 15, 0.95));
     border-bottom: 1px solid rgba(0, 229, 255, 0.15);
 }
+/* The metrics live in their own row so the collapse button never sits on
+   top of them — it's a separate flex item pinned to the right. */
+.dash-scroll {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+/* Collapse toggle — only shown on narrow screens (wired in the media query). */
+.dash-toggle {
+    display: none;
+    flex-shrink: 0;
+    width: 28px; height: 28px; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 7px; color: #90a4ae; cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.dash-toggle:hover, .dash-toggle:active { color: #00e5ff; border-color: rgba(0, 229, 255, 0.35); }
+.dash-toggle svg { width: 15px; height: 15px; transition: transform 0.2s; }
+#inspector.dash-collapsed .dash-toggle svg { transform: rotate(180deg); }
 
 .back-link {
     color: #00e5ff;
@@ -407,8 +431,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .ct-title { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; color: #8fa7b0; text-transform: uppercase; }
+.ct-spacer { flex: 1; }
 .ct-btn {
-    margin-left: auto;
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 0.66rem; color: #bfeef7;
     padding: 3px 9px;
@@ -418,6 +442,14 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     cursor: pointer;
 }
 .ct-btn:hover { background: rgba(0, 229, 255, 0.16); color: #00e5ff; }
+.ct-iconbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 24px; padding: 0;
+    color: #8fa7b0; border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px; background: rgba(255, 255, 255, 0.03); cursor: pointer;
+}
+.ct-iconbtn:hover { color: #bfeef7; border-color: rgba(0, 229, 255, 0.35); }
+.ct-iconbtn.on { color: #00e5ff; border-color: rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.1); }
 
 .chart-block.chart-hidden { display: none; }
 
@@ -861,7 +893,8 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     position: absolute;
     top: 12px;
     left: 12px;
-    z-index: 5;
+    /* Above the charts column so the expanded menu is never clipped by it. */
+    z-index: 30;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -984,5 +1017,38 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 @media (max-width: 900px) {
     #stage { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     #charts { max-height: 40vh; border-left: none; border-top: 1px solid rgba(0, 229, 255, 0.12); }
-    #dash { flex-wrap: wrap; }
+
+    /* One clean scrollable row instead of an ugly multi-line wrap, with a
+       collapse toggle that shrinks it to just the essentials. */
+    .dash-toggle { display: flex; }
+    #dash { padding: 8px 12px; }
+    .dash-scroll {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 14px;
+        scrollbar-width: none;
+    }
+    .dash-scroll::-webkit-scrollbar { display: none; }
+    /* Fade the scroll edge so the last metric tapers off next to the button
+       instead of hard-clipping (also hints there's more to scroll). */
+    #inspector:not(.dash-collapsed) .dash-scroll {
+        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+        mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+    }
+    .clock { padding-right: 2px; }
+
+    /* Collapsed: a tiny bar — speed, battery and the clock only. */
+    #inspector.dash-collapsed #dash { padding: 5px 12px; }
+    #inspector.dash-collapsed .dash-scroll { gap: 14px; overflow: hidden; justify-content: center; }
+    #inspector.dash-collapsed .trip-title,
+    #inspector.dash-collapsed .gauge-gforce,
+    #inspector.dash-collapsed .readout:not(.clock) { display: none; }
+    #inspector.dash-collapsed .gauge-speed { width: 66px; }
+    #inspector.dash-collapsed .gauge-speed .gauge-value { top: 17px; font-size: 0.85rem; }
+    #inspector.dash-collapsed .gauge-value small { display: none; }
+    #inspector.dash-collapsed .gauge-label,
+    #inspector.dash-collapsed .clock .readout-label,
+    #inspector.dash-collapsed .clock .readout-sub { display: none; }
+    #inspector.dash-collapsed .clock .readout-value { font-size: 0.9rem; }
 }

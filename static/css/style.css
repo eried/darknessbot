@@ -1,5 +1,11 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Kill the mobile browser's default tap-highlight. Tapping the wrench inside
+   a trip row (the row itself is clickable) otherwise tints the whole row
+   translucent blue. Every control has its own :hover/:active feedback, so
+   the OS highlight only adds noise. */
+* { -webkit-tap-highlight-color: transparent; }
+
 body, html {
     height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

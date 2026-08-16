@@ -2494,6 +2494,27 @@
       layout.order.forEach((k) => { const b = chartsRoot.querySelector(`.chart-block[data-key="${k}"]`); if (b) chartsRoot.insertBefore(b, resizeEl); });
       chartsRoot.querySelectorAll(".chart-block").forEach((b) => { if (b.querySelector(".chart-head")) b.classList.toggle("chart-hidden", layout.hidden.includes(b.dataset.key)); });
       resizeCharts();
+      // A customize change is invisible if the whole panel is hidden, so
+      // reopen it whenever the layout changes.
+      revealMetricsPanel();
+    }
+
+    // Collapse-all state setter — the sole source of truth is the class on
+    // #charts, so a customize edit can reveal the panel and stay in sync.
+    function setChartsCollapsed(collapsed) {
+      chartsRoot.classList.toggle("charts-collapsed", collapsed);
+      const cb = document.getElementById("charts-collapse-all");
+      if (cb) {
+        cb.classList.toggle("on", collapsed);
+        cb.title = collapsed ? "Show metrics" : "Hide metrics";
+      }
+      requestAnimationFrame(() => {
+        if (!collapsed) resizeCharts();
+        if (typeof map !== "undefined" && map && typeof map.resize === "function") map.resize();
+      });
+    }
+    function revealMetricsPanel() {
+      if (chartsRoot.classList.contains("charts-collapsed")) setChartsCollapsed(false);
     }
 
     // ---- Dialog ----
@@ -2593,6 +2614,7 @@
           save();
           const cg = combinedGraphs.find((c) => c.id === editingId);
           if (cg) cg.setMetrics(def.metrics);
+          revealMetricsPanel();
         });
         metricsEl.appendChild(chip);
       });
@@ -2621,6 +2643,7 @@
       save();
       const cg = combinedGraphs.find((c) => c.id === editingId);
       if (cg) cg.setName(def.name);
+      revealMetricsPanel();
     });
     document.getElementById("cd-edit-back").addEventListener("click", backToList);
     newBtn.addEventListener("click", () => {
@@ -2641,21 +2664,13 @@
       dialog.classList.remove("hidden");
     });
 
-    // Hide / show all graphs at once. This drops the whole list (not a stack
+    // Hide / show all metrics at once. This drops the whole list (not a stack
     // of collapsed headers) so the map takes the freed space; per-graph
-    // collapse still lives in each header for one-off tweaks.
-    let allHidden = false;
+    // collapse still lives in each header for one-off tweaks. State lives on
+    // the #charts element so a customize change can reveal it (revealMetricsPanel).
     const collapseAllBtn = document.getElementById("charts-collapse-all");
-    const chartsEl = document.getElementById("charts");
-    if (collapseAllBtn && chartsEl) collapseAllBtn.addEventListener("click", () => {
-      allHidden = !allHidden;
-      chartsEl.classList.toggle("charts-collapsed", allHidden);
-      collapseAllBtn.classList.toggle("on", allHidden);
-      collapseAllBtn.title = allHidden ? "Show graphs" : "Hide graphs";
-      requestAnimationFrame(() => {
-        if (!allHidden) resizeCharts();
-        if (typeof map !== "undefined" && map && typeof map.resize === "function") map.resize();
-      });
+    if (collapseAllBtn) collapseAllBtn.addEventListener("click", () => {
+      setChartsCollapsed(!chartsRoot.classList.contains("charts-collapsed"));
     });
 
     document.getElementById("cd-reset").addEventListener("click", () => {

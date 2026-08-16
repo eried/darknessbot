@@ -460,6 +460,11 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 
 .chart-block.chart-hidden { display: none; }
 
+/* The toolbar "collapse all" hides every graph so the map gets the room —
+   individual per-graph collapse still lives in each header. Only the sticky
+   toolbar stays, and #charts shrinks to it (map grid row grows to fill). */
+#charts.charts-collapsed .chart-block { display: none; }
+
 /* Customize dialog. */
 .cd-modal { position: fixed; inset: 0; z-index: 3000; }
 .cd-modal.hidden { display: none; }

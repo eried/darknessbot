@@ -892,6 +892,25 @@
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
+    // On phones the grid settles after the map is created, so the GL canvas
+    // can end up shorter than its container (a black strip under the map)
+    // until something else triggers a resize. Watch the container and keep
+    // the canvas fitted through every layout change (load, dashboard/graph
+    // collapse, rotation) instead of relying on a manual toggle.
+    const mapContainerEl = document.getElementById("map");
+    if (mapContainerEl && typeof ResizeObserver !== "undefined") {
+      let rafPending = false;
+      const ro = new ResizeObserver(() => {
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+          rafPending = false;
+          if (map && typeof map.resize === "function") map.resize();
+        });
+      });
+      ro.observe(mapContainerEl);
+    }
+
     map.on("load", () => {
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.5 });
 
@@ -2622,17 +2641,21 @@
       dialog.classList.remove("hidden");
     });
 
-    // Collapse / expand every graph at once.
-    let allCollapsed = false;
+    // Hide / show all graphs at once. This drops the whole list (not a stack
+    // of collapsed headers) so the map takes the freed space; per-graph
+    // collapse still lives in each header for one-off tweaks.
+    let allHidden = false;
     const collapseAllBtn = document.getElementById("charts-collapse-all");
-    if (collapseAllBtn) collapseAllBtn.addEventListener("click", () => {
-      allCollapsed = !allCollapsed;
-      const set = (c) => { c.collapsed = allCollapsed; c.block.classList.toggle("collapsed", allCollapsed); };
-      charts.forEach(set);
-      combinedGraphs.forEach(set);
-      collapseAllBtn.classList.toggle("on", allCollapsed);
-      collapseAllBtn.title = allCollapsed ? "Expand all graphs" : "Collapse all graphs";
-      if (!allCollapsed) resizeCharts();
+    const chartsEl = document.getElementById("charts");
+    if (collapseAllBtn && chartsEl) collapseAllBtn.addEventListener("click", () => {
+      allHidden = !allHidden;
+      chartsEl.classList.toggle("charts-collapsed", allHidden);
+      collapseAllBtn.classList.toggle("on", allHidden);
+      collapseAllBtn.title = allHidden ? "Show graphs" : "Hide graphs";
+      requestAnimationFrame(() => {
+        if (!allHidden) resizeCharts();
+        if (typeof map !== "undefined" && map && typeof map.resize === "function") map.resize();
+      });
     });
 
     document.getElementById("cd-reset").addEventListener("click", () => {

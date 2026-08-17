@@ -2439,6 +2439,7 @@
     const chartsRoot = document.getElementById("charts");
     const resizeEl = document.getElementById("sidebar-resize");
     const dialog = document.getElementById("charts-dialog");
+    const emptyEl = document.getElementById("charts-empty");
     if (!chartsRoot || !dialog) return;
     const LAYOUT_KEY = "insp-chart-layout";
     const MAX_COMBINED = 8;
@@ -2494,9 +2495,19 @@
       layout.order.forEach((k) => { const b = chartsRoot.querySelector(`.chart-block[data-key="${k}"]`); if (b) chartsRoot.insertBefore(b, resizeEl); });
       chartsRoot.querySelectorAll(".chart-block").forEach((b) => { if (b.querySelector(".chart-head")) b.classList.toggle("chart-hidden", layout.hidden.includes(b.dataset.key)); });
       resizeCharts();
+      updateEmptyState();
       // A customize change is invisible if the whole panel is hidden, so
       // reopen it whenever the layout changes.
       revealMetricsPanel();
+    }
+
+    // Show the "add graphs" hint when every graph is toggled off (but not when
+    // the panel is deliberately collapsed to just the toolbar).
+    function updateEmptyState() {
+      if (!emptyEl) return;
+      const collapsed = chartsRoot.classList.contains("charts-collapsed");
+      const visible = chartsRoot.querySelectorAll(".chart-block:not(.chart-hidden)").length;
+      emptyEl.classList.toggle("hidden", collapsed || visible > 0);
     }
 
     // Collapse-all state setter — the sole source of truth is the class on
@@ -2508,6 +2519,7 @@
         cb.classList.toggle("on", collapsed);
         cb.title = collapsed ? "Show metrics" : "Hide metrics";
       }
+      updateEmptyState();
       requestAnimationFrame(() => {
         if (!collapsed) resizeCharts();
         if (typeof map !== "undefined" && map && typeof map.resize === "function") map.resize();

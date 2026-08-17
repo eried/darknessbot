@@ -465,6 +465,17 @@ body.sidebar-resizing * { cursor: col-resize !important; }
    toolbar stays, and #charts shrinks to it (map grid row grows to fill). */
 #charts.charts-collapsed .chart-block { display: none; }
 
+/* Empty state: every graph toggled off in Customize. */
+.charts-empty {
+    padding: 24px 22px;
+    text-align: center;
+    color: #7c8b95;
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+/* Never both an empty message and a collapsed panel. */
+#charts.charts-collapsed .charts-empty { display: none; }
+
 /* Customize dialog. */
 .cd-modal { position: fixed; inset: 0; z-index: 3000; }
 .cd-modal.hidden { display: none; }

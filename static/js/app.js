@@ -206,6 +206,17 @@ document.addEventListener("DOMContentLoaded", function () {
     hour: "numeric", minute: "2-digit",
   });
   function formatTripLabel(t) {
+    if (t.customName) return t.customName;
+    const iso = t.dateStart || "";
+    if (iso) {
+      const d = new Date(iso);
+      if (!isNaN(d.getTime())) return TRIP_LABEL_FMT.format(d);
+    }
+    return t.date || t.name || "Trip";
+  }
+  // The date/time label on its own, ignoring any custom name — used as the
+  // rename field's placeholder so blanking it shows what you'll fall back to.
+  function tripDateLabel(t) {
     const iso = t.dateStart || "";
     if (iso) {
       const d = new Date(iso);
@@ -1287,7 +1298,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createParserWorker() {
-    return new Worker("static/js/parser-worker.js?v=22");
+    return new Worker("static/js/parser-worker.js?v=23");
   }
 
   function createRecentFilesUi() {
@@ -2137,6 +2148,7 @@ document.addEventListener("DOMContentLoaded", function () {
     back: `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 3 5 8 9 13"/></svg>`,
     split: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><line x1="5.6" y1="5.4" x2="14" y2="11.5"/><line x1="5.6" y1="10.6" x2="14" y2="4.5"/></svg>`,
     extend: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h6M2 11h6"/><path d="M8 5v6"/><polyline points="10.5 6 13.5 8 10.5 10"/><line x1="8" y1="8" x2="13.5" y2="8"/></svg>`,
+    rename: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5l3 3M3 13l.6-2.6 7-7 2 2-7 7L3 13z"/></svg>`,
   };
   let toolsMenu = null, toolsOpenFor = -1, toolsBtnEl = null;
   function ensureToolsMenu() {
@@ -2175,6 +2187,7 @@ document.addEventListener("DOMContentLoaded", function () {
       `<a class="ttm-item" href="video.html?i=${i}" target="_blank" rel="noopener">${ICON.video}Make video</a>` +
       `<a class="ttm-item" href="inspector.html?i=${i}" target="_blank" rel="noopener">${ICON.inspect}Inspector</a>` +
       `<div class="ttm-sep"></div>` +
+      `<button type="button" class="ttm-item" data-act="rename">${ICON.rename}Rename trip…</button>` +
       `<button type="button" class="ttm-item" data-act="wheel">${ICON.wheel}Change wheel…</button>` +
       `<button type="button" class="ttm-item" data-act="split">${ICON.split}Split trip…</button>` +
       `<button type="button" class="ttm-item" data-act="extend">${ICON.extend}Extend trip…</button>`;
@@ -2182,6 +2195,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const wire = (act, fn) => m.querySelector(`[data-act="${act}"]`).addEventListener("click", (e) => {
       e.stopPropagation(); closeToolsMenu(); fn(i);
     });
+    wire("rename", openRenameDialog);
     wire("wheel", openChangeWheelDialog);
     wire("split", openSplitDialog);
     wire("extend", openExtendDialog);
@@ -2189,10 +2203,267 @@ document.addEventListener("DOMContentLoaded", function () {
   function applyWheelToTrip(i, wheel) {
     if (wheel) allTracks[i].wheel = { ...wheel }; else delete allTracks[i].wheel;
     delete allTracks[i].wheels;
+    allTracks[i]._dirty = true; // wheel now differs from the Dropbox copy
     saveTracks(allTracks);
     buildTripList();
     updateGlow();
     updateVisibilityUI();
+  }
+  // Custom trip name (stored on the track like the wheel). Blank clears it,
+  // falling back to the date/time. Only the label changes — points/stats are
+  // untouched, so the cached geometry stays valid (no new array needed).
+  function renameTrip(i, name) {
+    const t = allTracks[i];
+    if (!t) return;
+    const prev = t.customName || "";
+    if (name) t.customName = name; else delete t.customName;
+    if ((t.customName || "") !== prev) t._dirty = true; // needs a re-sync to Dropbox
+    saveTracks(allTracks);
+    buildTripList();
+  }
+  function openRenameDialog(i) {
+    const t = allTracks[i];
+    if (!t) return;
+    const dateLabel = tripDateLabel(t);
+    const body =
+      `<div class="tt-newrow" style="padding-left:8px"><input type="text" id="rn-name" maxlength="60" value="${escapeHtml(t.customName || "")}" placeholder="${escapeHtml(dateLabel)}"></div>` +
+      `<div class="tt-hint" style="padding:0 8px">Leave blank to use the date.</div>`;
+    const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
+    const save = ttBtn("Save", "tt-primary");
+    ttmodShow("NAME", "Rename trip",
+      `<div class="tt-trip">${escapeHtml(dateLabel)}</div>`, body, [cancel, save]);
+    const inp = ttmod.querySelector("#rn-name");
+    setTimeout(() => { inp.focus(); inp.select(); }, 0);
+    const commit = () => {
+      const nm = (inp.value || "").trim();
+      renameTrip(i, nm);
+      ttmodClose();
+      appToast(nm ? `Renamed to "${nm}".` : "Name cleared.");
+    };
+    save.addEventListener("click", commit);
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } });
+  }
+
+  // ===================================================================
+  // Sync with Dropbox. A trip's custom name and wheel live inside its own
+  // CSV (the Extra column), so there's no separate metadata file: new trips
+  // upload as CSV, and a renamed / re-wheeled trip (flagged _dirty) has its
+  // file rewritten. Needs the Dropbox app's files.content.write scope (added
+  // in the App Console, then reconnect).
+  // ===================================================================
+  const DBX_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M6 2 0 6l6 4 6-4-6-4zm12 0-6 4 6 4 6-4-6-4zM0 14l6 4 6-4-6-4-6 4zm18-4-6 4 6 4 6-4-6-4zM6 19l6 4 6-4-6-4-6 4z"/></svg>';
+
+  function sanitizeFileName(s) {
+    return String(s || "").replace(/[\/\\:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 80);
+  }
+
+  // --- Sync dialog: one list like the load modal. Local trips (with a
+  // New / Changed / In-sync badge, changed ones on top) plus trips that are
+  // on Dropbox but not loaded here (with a per-row Load). Sync uploads the
+  // new ones + writes the name/wheel sidecar; Load pulls remote ones in.
+  let dbxSyncRoot = null;
+  function ensureSyncModal() {
+    if (dbxSyncRoot) return dbxSyncRoot;
+    dbxSyncRoot = document.createElement("div");
+    dbxSyncRoot.id = "dbx-sync-modal";
+    dbxSyncRoot.className = "hidden";
+    document.body.appendChild(dbxSyncRoot);
+    dbxSyncRoot.addEventListener("click", (e) => { if (e.target === dbxSyncRoot) closeSyncModal(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && dbxSyncRoot && !dbxSyncRoot.classList.contains("hidden")) closeSyncModal();
+    });
+    return dbxSyncRoot;
+  }
+  function closeSyncModal() { if (dbxSyncRoot) dbxSyncRoot.classList.add("hidden"); }
+
+  function openDropboxSyncDialog() {
+    const DS = window.DropboxSource;
+    if (!DS) { appToast("Dropbox is not available."); return; }
+    const root = ensureSyncModal();
+    root.classList.remove("hidden");
+    root.innerHTML =
+      `<div class="src-card is-dropbox" role="dialog" aria-modal="true">` +
+        `<header class="src-head">` +
+          `<svg class="dbx-brand" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M6 2 0 6l6 4 6-4-6-4zm12 0-6 4 6 4 6-4-6-4zM0 14l6 4 6-4-6-4-6 4zm18-4-6 4 6 4 6-4-6-4zM6 19l6 4 6-4-6-4-6 4z"/></svg>` +
+          `<h3>Sync with Dropbox</h3>` +
+          `<button type="button" class="src-close" aria-label="Close">&times;</button>` +
+        `</header>` +
+        `<div class="dbx-sync-main"><div class="dbx-loading">Checking your library…</div></div>` +
+      `</div>`;
+    root.querySelector(".src-close").addEventListener("click", closeSyncModal);
+    const main = root.querySelector(".dbx-sync-main");
+    if (!DS.isAuthenticated()) {
+      main.innerHTML =
+        `<div class="dbx-listing"><div class="dbx-empty">Connect your Dropbox to sync trips with <code>Apps/EUC Planet/trips/</code>.</div></div>` +
+        `<div class="src-action"><div class="src-action-row"><button type="button" class="src-primary-btn" id="dbx-sync-connect">Connect Dropbox</button></div></div>`;
+      main.querySelector("#dbx-sync-connect").addEventListener("click", () => DS.startOAuth());
+      return;
+    }
+    gatherSyncState()
+      .then((state) => renderSyncState(state, main))
+      .catch((e) => { main.innerHTML = `<div class="dbx-listing"><div class="dbx-err">Couldn't reach Dropbox: ${escapeHtml(e.message || String(e))}</div></div>`; });
+  }
+
+  async function gatherSyncState() {
+    const DS = window.DropboxSource;
+    const remote = await DS.listTripFiles().catch(() => []);
+    const localPaths = new Set();
+    const rows = [];
+    for (const t of allTracks) {
+      const path = t.dropboxPath ? String(t.dropboxPath).toLowerCase() : null;
+      if (path) localPaths.add(path);
+      let cat = "synced";
+      if (!path) cat = "new";
+      else if (t._dirty) cat = "edited";
+      rows.push({ kind: "local", cat, track: t, label: formatTripLabel(t) });
+    }
+    for (const f of remote) {
+      if (localPaths.has(String(f.path).toLowerCase())) continue;
+      rows.push({ kind: "remote", cat: "remote", file: f, label: f.name });
+    }
+    const order = { edited: 0, new: 1, remote: 2, synced: 3 };
+    rows.sort((a, b) => (order[a.cat] - order[b.cat]) || String(a.label).localeCompare(String(b.label)));
+    return { rows, account: DS.accountName() };
+  }
+
+  // Round icon per row, matching the load dialog's cached/remote tags.
+  const DBX_TAG_ICONS = {
+    synced: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5l4 4 8-9"/></svg>',
+    new: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5V2.5"/><path d="M4.5 6 8 2.5 11.5 6"/><path d="M2.5 13.5h11"/></svg>',
+    edited: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5l3 3M3 13l.6-2.6 7-7 2 2-7 7L3 13z"/></svg>',
+    remote: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5h6a3 3 0 0 0 .3-5.97A4.5 4.5 0 0 0 2.5 7.7a2.7 2.7 0 0 0 2 3.8z"/><path d="M8 8v4"/><path d="M6 10l2 2 2-2"/></svg>',
+  };
+  const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here" };
+  const DBX_META = { new: "New", edited: "Changed", synced: "In sync" };
+  function dbxFmtBytes(n) {
+    if (!n) return "";
+    const u = ["B", "KB", "MB", "GB"]; let i = 0, v = n;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return v.toFixed(v >= 100 || i === 0 ? 0 : 1) + " " + u[i];
+  }
+
+  function renderSyncState(state, main) {
+    const DS = window.DropboxSource;
+    const uploadTracks = state.rows.filter((r) => r.kind === "local" && (r.cat === "new" || r.cat === "edited")).map((r) => r.track);
+    const remoteFiles = state.rows.filter((r) => r.kind === "remote").map((r) => r.file);
+    const nTrips = state.rows.length;
+
+    const rowsHtml = state.rows.map((r, i) => {
+      const meta = r.kind === "remote"
+        ? [String(r.file.modified || "").slice(0, 10), dbxFmtBytes(r.file.size || 0)].filter(Boolean).join(" · ")
+        : DBX_META[r.cat];
+      return `<li class="dbx-row cat-${r.cat}">` +
+        `<span class="dbx-row-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span>` +
+        `<span class="dbx-row-meta">${escapeHtml(meta || "")}</span>` +
+        `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>` +
+        (r.kind === "remote" ? `<button type="button" class="dbx-row-open" data-i="${i}">Load</button>` : "") +
+      `</li>`;
+    }).join("");
+
+    main.innerHTML =
+      `<details class="dbx-conn">` +
+        `<summary>` +
+          `<svg viewBox="0 0 16 16" width="10" height="10" class="dbx-conn-caret" aria-hidden="true"><path fill="currentColor" d="M5 3l5 5-5 5z"/></svg>` +
+          `<span class="dbx-conn-trips">${nTrips} ${nTrips === 1 ? "trip" : "trips"}</span>` +
+          `<span class="dbx-conn-account">Connected as ${escapeHtml(state.account || "Dropbox")}</span>` +
+        `</summary>` +
+        `<div class="dbx-conn-body">` +
+          `<div class="dbx-conn-row"><span class="dbx-conn-key">Folder</span><code>Apps/EUC Planet/trips/</code></div>` +
+          `<div class="dbx-conn-actions"><button type="button" class="src-link-btn dbx-signout">Sign out of Dropbox</button></div>` +
+        `</div>` +
+      `</details>` +
+      `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
+      `<div class="src-action"><div class="src-action-row">` +
+        (remoteFiles.length ? `<button type="button" class="src-secondary-btn" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
+        `<button type="button" class="src-primary-btn" id="dbx-do-sync"${uploadTracks.length ? "" : " disabled"}>${uploadTracks.length ? `Sync ${uploadTracks.length} to Dropbox` : "Nothing to sync"}</button>` +
+      `</div></div>` +
+      `<div class="dbx-status"></div>`;
+
+    const ui = { main, status: main.querySelector(".dbx-status") };
+    const signout = main.querySelector(".dbx-signout");
+    if (signout) signout.addEventListener("click", () => { DS.signOut(); openDropboxSyncDialog(); });
+    main.querySelectorAll(".dbx-row-open").forEach((btn) => {
+      const r = state.rows[parseInt(btn.dataset.i)];
+      if (r && r.file) btn.addEventListener("click", () => loadRemoteTrips([r.file], ui));
+    });
+    const loadBtn = main.querySelector("#dbx-load-remote");
+    if (loadBtn) loadBtn.addEventListener("click", () => loadRemoteTrips(remoteFiles, ui));
+    const syncBtn = main.querySelector("#dbx-do-sync");
+    if (syncBtn && uploadTracks.length) syncBtn.addEventListener("click", () => runSync(uploadTracks, ui));
+  }
+
+  async function runSync(uploadTracks, ui) {
+    const DS = window.DropboxSource;
+    const syncBtn = ui.main.querySelector("#dbx-do-sync");
+    if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = "Syncing…"; }
+    const total = uploadTracks.length;
+    let done = 0;
+    try {
+      for (const t of uploadTracks) {
+        const isNew = !t.dropboxPath;
+        const blob = new Blob([trackToCSV(t)], { type: "text/csv" });
+        let path, mode;
+        if (isNew) {
+          const base = sanitizeFileName(formatTripLabel(t)) || (t.name || "trip");
+          path = DS.TRIPS_PATH + "/" + base.replace(/\.(csv|gpx|xlsx|dbb)$/i, "") + ".csv";
+          mode = "add";
+        } else {
+          path = t.dropboxPath; // rewrite the existing file in place
+          mode = "overwrite";
+        }
+        ui.status.textContent = `Uploading ${++done} of ${total}…`;
+        const res = await DS.uploadFile(path, blob, mode);
+        if (isNew) t.dropboxPath = (res && (res.path_lower || res.path_display)) || path.toLowerCase();
+        t._dirty = false;
+      }
+      saveTracks(allTracks);
+      buildTripList();
+      const s = await gatherSyncState();
+      renderSyncState(s, ui.main);
+      const st = ui.main.querySelector(".dbx-status");
+      if (st) st.textContent = "Synced.";
+    } catch (e) {
+      const msg = String(e.message || e);
+      if (/missing_scope/.test(msg)) {
+        ui.status.classList.add("dbx-err");
+        ui.status.innerHTML = `Enable <code>files.content.write</code> in your Dropbox App Console, then reconnect.`;
+        if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Reconnect"; syncBtn.onclick = () => DS.startOAuth(); }
+      } else {
+        ui.status.textContent = "Sync failed: " + msg;
+        if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Retry"; }
+      }
+    }
+  }
+
+  async function loadRemoteTrips(files, ui) {
+    const DS = window.DropboxSource;
+    if (!files.length || typeof window.JSZip === "undefined") return;
+    try {
+      const zip = new window.JSZip();
+      const used = new Set();
+      const map = {};
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        ui.status.textContent = `Fetching ${i + 1} of ${files.length}: ${f.name}`;
+        const blob = await DS.downloadBlob(f.path);
+        let name = f.name;
+        if (used.has(name)) {
+          const d = name.lastIndexOf(".");
+          name = (d > 0 ? name.slice(0, d) : name) + "_" + (i + 1) + (d > 0 ? name.slice(d) : "");
+        }
+        used.add(name);
+        zip.file(name, blob);
+        map[name] = f.path;
+      }
+      const out = await zip.generateAsync({ type: "blob", compression: "STORE" });
+      closeSyncModal();
+      if (typeof window.eucViewerLoadFile === "function") {
+        window.eucViewerLoadFile(new File([out], "dropbox_new.zip", { type: "application/zip" }),
+          { append: true, dropboxMap: map, source: "dropbox" });
+      }
+    } catch (e) {
+      ui.status.textContent = "Couldn't load: " + (e.message || e);
+    }
   }
   function toggleToolsMenu(btn, i) {
     if (toolsOpenFor === i) { closeToolsMenu(); return; }
@@ -3218,6 +3489,16 @@ document.addEventListener("DOMContentLoaded", function () {
     renderExportButton(exportBtn);
     footer.appendChild(exportBtn);
 
+    // Save trips + edits (names, wheels, merged/split) back to Dropbox so they
+    // survive a re-import. Opens a dialog that handles connect / sync.
+    const dbxSaveBtn = document.createElement("button");
+    dbxSaveBtn.type = "button";
+    dbxSaveBtn.className = "dbx-save-btn";
+    dbxSaveBtn.innerHTML = `<span class="dbx-sync-label">Synchronize with</span><span class="dbx-sync-chip">Dropbox</span>`;
+    dbxSaveBtn.title = "Sync trips and your edits (names, wheels) with Dropbox, or load new ones";
+    dbxSaveBtn.addEventListener("click", () => openDropboxSyncDialog());
+    footer.appendChild(dbxSaveBtn);
+
     updateVisibilityUI();
   }
 
@@ -3318,9 +3599,19 @@ document.addEventListener("DOMContentLoaded", function () {
     return out;
   }
 
+  // Trip name + wheel identity as Extra-column pairs, so a user's custom name
+  // and wheel ride inside the CSV/XLSX itself and survive an export or Dropbox
+  // round-trip (the parser reads them back — no separate metadata file).
+  function extraMetaPairs(track) {
+    const clean = (v) => String(v).replace(/[,"\r\n]+/g, " ").trim();
+    const out = [];
+    if (track && track.customName) out.push("trip.name=" + clean(track.customName));
+    return out.concat(wheelExtraPairs(track));
+  }
+
   function trackToCSV(track) {
     const imp = UNITS.imperial;
-    const wheelPairs = wheelExtraPairs(track);
+    const wheelPairs = extraMetaPairs(track);
     const header = "Date,Speed,Voltage,PWM,Current,Power,Battery level,Total mileage,Temperature,Pitch,Roll,Latitude,Longitude,Altitude"
       + (imp ? "," + IMPERIAL_COLS.join(",") : "")
       + (wheelPairs.length ? ",Extra" : "") + "\n";
@@ -3394,7 +3685,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const headerRow = ["Date", "Speed", "Voltage", "PWM", "Current", "Power", "Battery level",
                        "Total mileage", "Temperature", "Latitude", "Longitude", "Altitude", "GPS speed"];
     if (imp) headerRow.push(...IMPERIAL_COLS);
-    const wheelPairs = wheelExtraPairs(track);
+    const wheelPairs = extraMetaPairs(track);
     if (wheelPairs.length) headerRow.push("Extra");
     const rows = [headerRow];
     const cum = imp ? exportCumKm(track) : null;

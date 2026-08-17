@@ -138,6 +138,11 @@
       method: "POST", headers, body: payload,
     });
     if (res.status === 401) {
+      const text = await res.text();
+      // A missing scope (e.g. files.content.write not granted yet) also comes
+      // back as 401 — don't sign the user out over it, just surface it so the
+      // caller can prompt a reconnect rather than a full re-auth from scratch.
+      if (/missing_scope/.test(text)) throw new Error("missing_scope: " + text);
       signOut();
       throw new Error("session expired, sign in again");
     }
@@ -192,6 +197,39 @@
     const res = await fetch(meta.link);
     if (!res.ok) throw new Error("download " + path + " " + res.status);
     return await res.blob();
+  }
+
+  // Upload a blob into the app folder. Same CORS reasoning as downloadBlob:
+  // get_temporary_upload_link (api.dropboxapi.com, CORS-clean) returns a
+  // presigned URL we POST the bytes straight to, so no Dropbox-API-Arg header
+  // on content.dropboxapi.com (which some browsers/extensions block).
+  // Needs the files.content.write scope — surfaces "missing_scope" if absent.
+  async function uploadFile(path, blob, mode) {
+    const m = mode || "add";
+    const commit_info = { path, mode: m, autorename: m !== "overwrite", mute: true };
+    const meta = await rpc("/2/files/get_temporary_upload_link", { commit_info });
+    if (!meta || !meta.link) throw new Error("no upload link for " + path);
+    const res = await fetch(meta.link, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: blob,
+    });
+    if (!res.ok) throw new Error("upload " + path + " " + res.status + ": " + (await res.text()));
+    return res.json().catch(() => ({}));
+  }
+
+  // Read + parse a small JSON file from the app folder. Returns null when the
+  // file doesn't exist yet (the common first-run case), so callers can treat
+  // "no sidecar" and "empty sidecar" the same.
+  async function readJson(path) {
+    try {
+      const blob = await downloadBlob(path);
+      return JSON.parse(await blob.text());
+    } catch (e) {
+      const msg = String(e.message || e);
+      if (/\b409\b/.test(msg) || /not_found|path\//i.test(msg)) return null;
+      throw e;
+    }
   }
 
   function signOut() {
@@ -339,6 +377,8 @@
     startOAuth,
     listTripFiles,
     downloadBlob,
+    uploadFile,
+    readJson,
     signOut,
     maybeHandleCallback,
     consumeJustConnected,

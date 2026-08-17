@@ -161,8 +161,27 @@ function parseCsvText(text, name) {
       if (w.all) { track.wheels = w.all; delete w.all; }
       track.wheel = w;
     }
+    const cn = customNameFromExtraColumn(rows);
+    if (cn) track.customName = cn;
   }
   return track;
+}
+
+// The viewer stores a user-set trip name in the same Extra column as the
+// wheel identity: a single `trip.name=<name>` event row. Reading it back here
+// means a renamed trip stays renamed through export / Dropbox round-trips with
+// no separate metadata file.
+function customNameFromExtraColumn(rows) {
+  if (!rows.length) return null;
+  const col = rows[0].Extra !== undefined ? "Extra" : (rows[0].extra !== undefined ? "extra" : null);
+  if (!col) return null;
+  for (const r of rows) {
+    const v = r[col];
+    if (!v) continue;
+    const m = /^\s*trip\.name\s*=\s*(.+)$/i.exec(String(v));
+    if (m) return m[1].trim().slice(0, 60);
+  }
+  return null;
 }
 
 // EUC Planet's recorder appends a trailing "Extra" event column: empty on
@@ -749,6 +768,8 @@ async function parseXlsxBuffer(buffer, name) {
       if (w.all) { track.wheels = w.all; delete w.all; }
       track.wheel = w;
     }
+    const cn = customNameFromExtraColumn(rows);
+    if (cn) track.customName = cn;
   }
   return track;
 }

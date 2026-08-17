@@ -1648,6 +1648,158 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 }
 .export-btn:hover { background: rgba(255, 160, 0, 0.06); }
 
+/* Sync with Dropbox — footer button mirroring the "Export all .zip" row:
+   a centered label plus a chip (here the Dropbox brand). */
+.dbx-save-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 8px 16px;
+    border: none;
+    border-top: 1px solid rgba(0, 229, 255, 0.1);
+    background: none;
+    color: #4aa3ff;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dbx-save-btn:hover { background: rgba(0, 97, 255, 0.06); }
+.dbx-save-btn .dbx-sync-label { margin-right: 8px; color: #6ea8ff; }
+.dbx-save-btn .dbx-sync-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    vertical-align: middle;
+    color: #bcd8ff;
+    background: rgba(0, 97, 255, 0.1);
+    border: 1px solid rgba(0, 97, 255, 0.35);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    transition: background 0.12s, color 0.12s;
+}
+.dbx-save-btn:hover .dbx-sync-chip { background: rgba(0, 97, 255, 0.2); color: #fff; }
+.dbx-save-btn .dbx-sync-chip svg { flex: none; }
+
+/* Sync-with-Dropbox modal — mirrors the load dialog (whose styles are scoped
+   to #source-instructions, inside the hidden upload overlay) so it reads as
+   the same dialog: same card, collapsible connection summary, row table and
+   Dropbox-blue buttons. */
+#dbx-sync-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(6, 9, 14, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+#dbx-sync-modal.hidden { display: none; }
+#dbx-sync-modal .src-card {
+    background: linear-gradient(180deg, #1c2330, #141a26);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 560px;
+    max-height: calc(100vh - 3rem);
+    overflow: auto;
+    color: rgba(224, 232, 240, 0.88);
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+#dbx-sync-modal .src-head {
+    display: flex; align-items: center; gap: 0.55rem;
+    padding: 1.1rem 1.3rem 0.4rem;
+}
+#dbx-sync-modal .dbx-brand { color: #0061ff; flex: none; }
+#dbx-sync-modal .src-head h3 { flex: 1; margin: 0; font-size: 1.05rem; color: #fff; font-weight: 600; }
+#dbx-sync-modal .src-close {
+    background: none; border: none; color: rgba(224, 232, 240, 0.6);
+    font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 0.3rem;
+}
+#dbx-sync-modal .src-close:hover { color: #fff; }
+#dbx-sync-modal .dbx-conn {
+    margin: 0.4rem 1.3rem 0; padding: 0.35rem 0.6rem;
+    background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 7px; font-size: 0.78rem;
+}
+#dbx-sync-modal .dbx-conn > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+    color: rgba(224, 232, 240, 0.72);
+}
+#dbx-sync-modal .dbx-conn > summary::-webkit-details-marker { display: none; }
+#dbx-sync-modal .dbx-conn-caret { transition: transform 0.15s; color: rgba(255, 255, 255, 0.4); flex-shrink: 0; }
+#dbx-sync-modal .dbx-conn[open] .dbx-conn-caret { transform: rotate(90deg); }
+#dbx-sync-modal .dbx-conn-trips { font-weight: 600; color: #fff; }
+#dbx-sync-modal .dbx-conn-account {
+    margin-left: auto; color: rgba(224, 232, 240, 0.5); font-style: italic;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%;
+}
+#dbx-sync-modal .dbx-conn-body {
+    margin-top: 0.55rem; padding-top: 0.55rem; border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex; flex-direction: column; gap: 0.4rem;
+}
+#dbx-sync-modal .dbx-conn-row { display: flex; align-items: center; gap: 0.7rem; }
+#dbx-sync-modal .dbx-conn-key { min-width: 56px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(224, 232, 240, 0.45); }
+#dbx-sync-modal .dbx-conn-row code { background: rgba(0, 0, 0, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.78rem; }
+#dbx-sync-modal .dbx-conn-actions { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
+#dbx-sync-modal .src-link-btn { background: none; border: none; color: rgba(224, 232, 240, 0.55); cursor: pointer; font: inherit; font-size: 0.8rem; padding: 0.3rem 0.4rem; border-radius: 4px; }
+#dbx-sync-modal .src-link-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+#dbx-sync-modal .dbx-signout:hover { background: rgba(255, 80, 80, 0.15); color: #ffb0b0; }
+#dbx-sync-modal .dbx-listing { margin: 0.4rem 1.4rem 0.4rem; padding: 0.7rem 0.9rem; background: rgba(0, 0, 0, 0.22); border-radius: 10px; }
+#dbx-sync-modal .dbx-rows {
+    list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+#dbx-sync-modal .dbx-rows::-webkit-scrollbar { width: 8px; }
+#dbx-sync-modal .dbx-rows::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
+#dbx-sync-modal .dbx-row {
+    display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 0.7rem;
+    padding: 0.45rem 0.2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 0.82rem;
+}
+#dbx-sync-modal .dbx-row:last-child { border-bottom: none; }
+#dbx-sync-modal .dbx-row-name { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#dbx-sync-modal .dbx-row-meta { color: rgba(224, 232, 240, 0.5); font-size: 0.74rem; white-space: nowrap; }
+#dbx-sync-modal .dbx-row-tag {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.45);
+}
+#dbx-sync-modal .dbx-row.cat-synced .dbx-row-tag { background: rgba(0, 200, 130, 0.18); color: #80e6b4; }
+#dbx-sync-modal .dbx-row.cat-new .dbx-row-tag { background: rgba(0, 97, 255, 0.2); color: #9fbaff; }
+#dbx-sync-modal .dbx-row.cat-edited .dbx-row-tag { background: rgba(255, 180, 60, 0.2); color: #ffcf87; }
+#dbx-sync-modal .dbx-row-open {
+    background: rgba(0, 97, 255, 0.15); color: #b0c4ff; border: 1px solid rgba(0, 97, 255, 0.35);
+    padding: 0.25rem 0.7rem; border-radius: 6px; font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer;
+}
+#dbx-sync-modal .dbx-row-open:hover { background: rgba(0, 97, 255, 0.32); color: #fff; }
+#dbx-sync-modal .src-action { margin: 0.2rem 1.3rem 1.1rem; padding-top: 0.9rem; }
+#dbx-sync-modal .src-action-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.7rem; }
+#dbx-sync-modal .src-primary-btn {
+    display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.1rem;
+    background: linear-gradient(180deg, #0061ff, #0049cc); color: #fff; border: none; border-radius: 8px;
+    font: inherit; font-weight: 600; cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0, 97, 255, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: transform 0.12s;
+}
+#dbx-sync-modal .src-primary-btn:hover { transform: translateY(-1px); }
+#dbx-sync-modal .src-primary-btn:disabled { cursor: not-allowed; background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.35); box-shadow: none; transform: none; }
+#dbx-sync-modal .src-secondary-btn {
+    display: inline-flex; align-items: center; padding: 0.55rem 1rem;
+    background: rgba(255, 255, 255, 0.06); color: rgba(224, 232, 240, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; font: inherit; font-weight: 500; cursor: pointer;
+}
+#dbx-sync-modal .src-secondary-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+#dbx-sync-modal .dbx-status { margin: 0 1.4rem 1.1rem; min-height: 1.1rem; font-size: 0.8rem; color: rgba(224, 232, 240, 0.6); }
+#dbx-sync-modal .dbx-status:empty { display: none; }
+#dbx-sync-modal .dbx-status code { background: rgba(0, 0, 0, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.78rem; }
+#dbx-sync-modal .dbx-err { color: #ffb0b0; }
+#dbx-sync-modal .dbx-empty, #dbx-sync-modal .dbx-loading { padding: 1rem 0.3rem; color: rgba(224, 232, 240, 0.6); }
+#dbx-sync-modal .dbx-listing code { background: rgba(0, 0, 0, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.78rem; }
+
 /* Single-trip export: inline format chips */
 .export-btn.single-mode {
     cursor: default;

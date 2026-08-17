@@ -263,18 +263,21 @@
   // Title is the trip's datetime; the raw filename (when there is one)
   // lives in the hover tooltip instead of the headline.
   const nameEl = document.getElementById("trip-name");
-  let tripTitle = track.date || track.name || "Trip";
+  let dateTitle = track.date || track.name || "Trip";
   if (track.dateStart) {
     const d = new Date(track.dateStart);
     if (!isNaN(d.getTime())) {
-      tripTitle = new Intl.DateTimeFormat(undefined, {
+      dateTitle = new Intl.DateTimeFormat(undefined, {
         year: "numeric", month: "numeric", day: "numeric",
         hour: "numeric", minute: "2-digit",
       }).format(d);
     }
   }
+  // A custom name (set in the viewer) wins; the date moves to the tooltip.
+  const tripTitle = track.customName || dateTitle;
   nameEl.textContent = tripTitle;
-  if (track.name && track.name !== tripTitle) nameEl.title = track.name;
+  if (track.customName && dateTitle !== tripTitle) nameEl.title = dateTitle;
+  else if (track.name && track.name !== tripTitle) nameEl.title = track.name;
 
   // Stats split over two lines: ride shape first, derived bits second.
   const line1 = [], line2 = [];

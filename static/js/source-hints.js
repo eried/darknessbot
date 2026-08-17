@@ -38,6 +38,9 @@
     // open in its connected state once the token exchange resolves.
     if (window.DropboxSource && DropboxSource.maybeHandleCallback) {
       DropboxSource.maybeHandleCallback().then((ok) => {
+        // If the connect came from the viewer's Sync dialog, app.js restores
+        // the trip view and reopens that dialog — don't also pop this modal.
+        if (window.__dbxSyncReturn) { DropboxSource.consumeJustConnected(); return; }
         if (ok || DropboxSource.consumeJustConnected()) {
           openModal(root, "dropbox");
         }

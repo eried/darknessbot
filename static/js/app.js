@@ -2276,6 +2276,40 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   function closeSyncModal() { if (dbxSyncRoot) dbxSyncRoot.classList.add("hidden"); }
 
+  // Connect from the sync dialog. Dropbox's OAuth redirect can't carry our
+  // #view hash, so stash the intent first; resumeSyncAfterOAuth() restores the
+  // view and reopens this dialog when we land back here.
+  function connectDropbox() {
+    const DS = window.DropboxSource;
+    if (!DS) return;
+    try { localStorage.setItem("eucviewer-post-oauth", JSON.stringify({ action: "sync" })); } catch (_) {}
+    DS.startOAuth();
+  }
+
+  // Called on boot: if we just came back from a sync-dialog connect, restore
+  // the trip view (cached locally) instead of the load screen and reopen the
+  // dialog once the token exchange settles. Returns true if it handled boot.
+  function resumeSyncAfterOAuth() {
+    let intent = null;
+    try { intent = JSON.parse(localStorage.getItem("eucviewer-post-oauth") || "null"); } catch (_) {}
+    if (!intent || intent.action !== "sync") return false;
+    try { localStorage.removeItem("eucviewer-post-oauth"); } catch (_) {}
+    window.__dbxSyncReturn = true; // source-hints checks this to skip its modal
+    navigate("#view", true);
+    const done = (window.DropboxSource && DropboxSource.maybeHandleCallback)
+      ? DropboxSource.maybeHandleCallback() : Promise.resolve();
+    Promise.resolve(done).then(() => {
+      let tries = 0;
+      const openWhenReady = () => {
+        if (allTracks && allTracks.length) { openDropboxSyncDialog(); return; }
+        if (tries++ < 20) { setTimeout(openWhenReady, 150); return; }
+        openDropboxSyncDialog();
+      };
+      setTimeout(openWhenReady, 200);
+    });
+    return true;
+  }
+
   function openDropboxSyncDialog() {
     const DS = window.DropboxSource;
     if (!DS) { appToast("Dropbox is not available."); return; }
@@ -2296,7 +2330,7 @@ document.addEventListener("DOMContentLoaded", function () {
       main.innerHTML =
         `<div class="dbx-listing"><div class="dbx-empty">Connect your Dropbox to sync trips with <code>Apps/EUC Planet/trips/</code>.</div></div>` +
         `<div class="src-action"><div class="src-action-row"><button type="button" class="src-primary-btn" id="dbx-sync-connect">Connect Dropbox</button></div></div>`;
-      main.querySelector("#dbx-sync-connect").addEventListener("click", () => DS.startOAuth());
+      main.querySelector("#dbx-sync-connect").addEventListener("click", () => connectDropbox());
       return;
     }
     gatherSyncState()
@@ -2427,7 +2461,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (/missing_scope/.test(msg)) {
         ui.status.classList.add("dbx-err");
         ui.status.innerHTML = `Enable <code>files.content.write</code> in your Dropbox App Console, then reconnect.`;
-        if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Reconnect"; syncBtn.onclick = () => DS.startOAuth(); }
+        if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Reconnect"; syncBtn.onclick = () => connectDropbox(); }
       } else {
         ui.status.textContent = "Sync failed: " + msg;
         if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Retry"; }
@@ -4590,6 +4624,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // still-present payload and start a second download + parse, whose
     // duplicate selectTrip(0) toggled the auto-selection back off.
     if (sharedFileUrl || shortLinkUrl) { /* handled by loadFromUrl above */ }
+    else if (resumeSyncAfterOAuth()) { /* restored the view + reopening sync */ }
     else if (!location.hash) navigate("#load", true);
     else applyRoute();
   }

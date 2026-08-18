@@ -187,7 +187,8 @@
   function renderDropboxIntro(root, dbx) {
     root.innerHTML = wrap(`
       <header class="src-head">
-        <h3>Dropbox</h3>
+        <svg class="dbx-brand" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M6 2 0 6l6 4 6-4-6-4zm12 0-6 4 6 4 6-4-6-4zM0 14l6 4 6-4-6-4-6 4zm18-4-6 4 6 4 6-4-6-4zM6 19l6 4 6-4-6-4-6 4z"/></svg>
+        <h3>Sync with Dropbox</h3>
         <button type="button" class="src-close" aria-label="Close">&times;</button>
       </header>
       <p class="src-body">Loads every CSV in <code>Apps/EUC Planet/trips/</code>. Read-only.</p>
@@ -207,7 +208,8 @@
     const acc = dbx.accountName();
     root.innerHTML = wrap(`
       <header class="src-head">
-        <h3>Dropbox</h3>
+        <svg class="dbx-brand" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M6 2 0 6l6 4 6-4-6-4zm12 0-6 4 6 4 6-4-6-4zM0 14l6 4 6-4-6-4-6 4zm18-4-6 4 6 4 6-4-6-4zM6 19l6 4 6-4-6-4-6 4z"/></svg>
+        <h3>Sync with Dropbox</h3>
         <button type="button" class="src-close" aria-label="Close">&times;</button>
       </header>
       <details class="dbx-conn">

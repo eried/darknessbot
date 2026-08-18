@@ -2383,6 +2383,9 @@ document.addEventListener("DOMContentLoaded", function () {
   async function gatherSyncState() {
     const DS = window.DropboxSource;
     const remote = await DS.listTripFiles().catch(() => []);
+    const totalBytes = remote.reduce((s, f) => s + (f.size || 0), 0);
+    let cacheStats = { count: 0, bytes: 0 };
+    try { if (DS.cache && DS.cache.stats) cacheStats = await DS.cache.stats(); } catch (_) {}
     const localPaths = new Set();
     const rows = [];
     for (const t of allTracks) {
@@ -2399,7 +2402,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     const order = { edited: 0, new: 1, remote: 2, synced: 3 };
     rows.sort((a, b) => (order[a.cat] - order[b.cat]) || String(a.label).localeCompare(String(b.label)));
-    return { rows, account: DS.accountName() };
+    return { rows, account: DS.accountName(), totalBytes, cacheStats };
   }
 
   // Round icon per row, matching the load dialog's cached/remote tags.
@@ -2450,16 +2453,22 @@ document.addEventListener("DOMContentLoaded", function () {
       `</li>`;
     }).join("");
 
+    const sizeBit = state.totalBytes ? ` · ${dbxFmtBytes(state.totalBytes)}` : "";
+    const cache = state.cacheStats || { count: 0, bytes: 0 };
     main.innerHTML =
       `<details class="dbx-conn">` +
         `<summary>` +
           `<svg viewBox="0 0 16 16" width="10" height="10" class="dbx-conn-caret" aria-hidden="true"><path fill="currentColor" d="M5 3l5 5-5 5z"/></svg>` +
-          `<span class="dbx-conn-trips">${nTrips} ${nTrips === 1 ? "trip" : "trips"}</span>` +
+          `<span class="dbx-conn-trips">${nTrips} ${nTrips === 1 ? "trip" : "trips"}${sizeBit}</span>` +
           `<span class="dbx-conn-account">Connected as ${escapeHtml(state.account || "Dropbox")}</span>` +
         `</summary>` +
         `<div class="dbx-conn-body">` +
           `<div class="dbx-conn-row"><span class="dbx-conn-key">Folder</span><code>Apps/EUC Planet/trips/</code></div>` +
-          `<div class="dbx-conn-actions"><button type="button" class="src-link-btn dbx-signout">Sign out of Dropbox</button></div>` +
+          `<div class="dbx-conn-row"><span class="dbx-conn-key">Cache</span><span>${cache.count} file${cache.count === 1 ? "" : "s"} · ${dbxFmtBytes(cache.bytes) || "0 KB"}</span></div>` +
+          `<div class="dbx-conn-actions">` +
+            (cache.count ? `<button type="button" class="src-link-btn" id="dbx-clear-cache">Clear cache</button>` : "") +
+            `<button type="button" class="src-link-btn dbx-signout">Sign out of Dropbox</button>` +
+          `</div>` +
         `</div>` +
       `</details>` +
       `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
@@ -2472,6 +2481,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const ui = { main, status: main.querySelector(".dbx-status") };
     const signout = main.querySelector(".dbx-signout");
     if (signout) signout.addEventListener("click", () => { DS.signOut(); openDropboxSyncDialog(); });
+    const clearCache = main.querySelector("#dbx-clear-cache");
+    if (clearCache) clearCache.addEventListener("click", async () => {
+      try { if (DS.cache && DS.cache.clear) await DS.cache.clear(); } catch (_) {}
+      const s2 = await gatherSyncState().catch(() => null);
+      if (s2) renderSyncState(s2, ui.main);
+    });
     main.querySelectorAll(".dbx-row-open").forEach((btn) => {
       const r = state.rows[parseInt(btn.dataset.i)];
       if (r && r.file) btn.addEventListener("click", () => loadRemoteTrips([r.file], ui));
@@ -2483,9 +2498,13 @@ document.addEventListener("DOMContentLoaded", function () {
     main.querySelectorAll(".dbx-row-revert").forEach((btn) => {
       const r = state.rows[parseInt(btn.dataset.i)];
       if (r && r.track) btn.addEventListener("click", async () => {
-        if (ui.status) ui.status.textContent = "Reverting to the Dropbox version…";
-        try { await revertTrip(r.track); } catch (e) { if (ui.status) ui.status.textContent = "Revert failed: " + (e.message || e); return; }
-        gatherSyncState().then((s) => renderSyncState(s, ui.main)).catch(() => {});
+        // Dim + lock the dialog during the 1-2s reload instead of adding a
+        // status line (which would resize the card). Re-render when done.
+        ui.main.classList.add("dbx-busy");
+        try { await revertTrip(r.track); } catch (e) { console.warn("Revert failed:", e); }
+        const s = await gatherSyncState().catch(() => null);
+        if (s) renderSyncState(s, ui.main);
+        ui.main.classList.remove("dbx-busy");
       });
     });
     const loadBtn = main.querySelector("#dbx-load-remote");

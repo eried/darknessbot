@@ -157,16 +157,18 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 #source-instructions .src-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.55rem;
     padding: 1.1rem 1.3rem 0.4rem;
 }
 #source-instructions .src-head h3 {
+    flex: 1;
     margin: 0;
     font-size: 1.05rem;
     font-weight: 600;
     color: #fff;
     letter-spacing: 0.01em;
 }
+#source-instructions .dbx-brand { color: #0061ff; flex: none; }
 #source-instructions .src-close {
     background: none;
     border: none;
@@ -415,6 +417,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     margin: 0 1.4rem 1.1rem;
     min-height: 1.1rem;
 }
+#source-instructions .dbx-status:empty { display: none; margin: 0; min-height: 0; }
 #source-instructions .dbx-conn {
     margin: 0.4rem 1.3rem 0;
     padding: 0.35rem 0.6rem;
@@ -497,8 +500,9 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
    Dropbox listing card; the row stands on its own there. */
 #source-instructions .dbx-bottom-row {
     justify-content: flex-end;
+    gap: 0.7rem;
     border-top: none;
-    padding-top: 0;
+    padding-top: 0.9rem;
 }
 #source-instructions .dbx-cached-count {
     color: rgba(128, 230, 180, 0.9);
@@ -569,6 +573,8 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     color: #80e6b4;
 }
 #source-instructions .dbx-row-open {
+    min-width: 64px;
+    text-align: center;
     background: rgba(0, 97, 255, 0.15);
     color: #b0c4ff;
     border: 1px solid rgba(0, 97, 255, 0.35);
@@ -1804,6 +1810,8 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; font: inherit; font-weight: 500; cursor: pointer;
 }
 #dbx-sync-modal .src-secondary-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+/* Busy state during a revert reload: dim + lock the body, no resizing text. */
+#dbx-sync-modal .dbx-sync-main.dbx-busy { pointer-events: none; opacity: 0.5; transition: opacity 0.12s; }
 #dbx-sync-modal .dbx-status { margin: 0 1.4rem 1.1rem; min-height: 1.1rem; font-size: 0.8rem; color: rgba(224, 232, 240, 0.6); }
 #dbx-sync-modal .dbx-status:empty { display: none; }
 #dbx-sync-modal .dbx-status code { background: rgba(0, 0, 0, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.78rem; }

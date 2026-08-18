@@ -1667,10 +1667,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 .dbx-save-btn:hover { background: rgba(0, 97, 255, 0.06); }
 .dbx-save-btn .dbx-sync-label { margin-right: 8px; color: #6ea8ff; }
 .dbx-save-btn .dbx-sync-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    vertical-align: middle;
+    display: inline-block;
     color: #bcd8ff;
     background: rgba(0, 97, 255, 0.1);
     border: 1px solid rgba(0, 97, 255, 0.35);
@@ -1680,7 +1677,6 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     transition: background 0.12s, color 0.12s;
 }
 .dbx-save-btn:hover .dbx-sync-chip { background: rgba(0, 97, 255, 0.2); color: #fff; }
-.dbx-save-btn .dbx-sync-chip svg { flex: none; }
 
 /* Sync-with-Dropbox modal — mirrors the load dialog (whose styles are scoped
    to #source-instructions, inside the hidden upload overlay) so it reads as
@@ -1771,6 +1767,9 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 #dbx-sync-modal .dbx-row.cat-synced .dbx-row-tag { background: rgba(0, 200, 130, 0.18); color: #80e6b4; }
 #dbx-sync-modal .dbx-row.cat-new .dbx-row-tag { background: rgba(0, 97, 255, 0.2); color: #9fbaff; }
 #dbx-sync-modal .dbx-row.cat-edited .dbx-row-tag { background: rgba(255, 180, 60, 0.2); color: #ffcf87; }
+/* The changed row's tag is a one-click undo (revert). */
+#dbx-sync-modal button.dbx-row-tag { border: none; padding: 0; font: inherit; cursor: pointer; }
+#dbx-sync-modal .dbx-row-revert:hover { background: rgba(255, 180, 60, 0.4); color: #fff; }
 /* Every row ends with a same-width action chip so the column lines up. */
 #dbx-sync-modal .dbx-row-open,
 #dbx-sync-modal .dbx-row-sync,

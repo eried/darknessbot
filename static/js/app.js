@@ -2201,13 +2201,30 @@ document.addEventListener("DOMContentLoaded", function () {
     wire("extend", openExtendDialog);
   }
   function applyWheelToTrip(i, wheel) {
-    if (wheel) allTracks[i].wheel = { ...wheel }; else delete allTracks[i].wheel;
-    delete allTracks[i].wheels;
-    allTracks[i]._dirty = true; // wheel now differs from the Dropbox copy
+    const t = allTracks[i];
+    if (!t._dirty) t._preEdit = { customName: t.customName, wheel: t.wheel, wheels: t.wheels };
+    if (wheel) t.wheel = { ...wheel }; else delete t.wheel;
+    delete t.wheels;
+    t._dirty = true; // wheel now differs from the Dropbox copy
     saveTracks(allTracks);
     buildTripList();
     updateGlow();
     updateVisibilityUI();
+  }
+  // Discard local name/wheel edits and restore the values the trip had when it
+  // last matched Dropbox (snapshotted on the first edit). Only name/wheel ever
+  // change, so no re-download is needed.
+  function revertTrip(t) {
+    if (!t || !t._preEdit) return;
+    const o = t._preEdit;
+    if (o.customName) t.customName = o.customName; else delete t.customName;
+    if (o.wheel) t.wheel = o.wheel; else delete t.wheel;
+    if (o.wheels) t.wheels = o.wheels; else delete t.wheels;
+    delete t._preEdit;
+    delete t._dirty;
+    saveTracks(allTracks);
+    buildTripList();
+    updateGlow();
   }
   // Custom trip name (stored on the track like the wheel). Blank clears it,
   // falling back to the date/time. Only the label changes — points/stats are
@@ -2216,8 +2233,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const t = allTracks[i];
     if (!t) return;
     const prev = t.customName || "";
+    if ((name || "") !== prev) {
+      if (!t._dirty) t._preEdit = { customName: t.customName, wheel: t.wheel, wheels: t.wheels };
+      t._dirty = true; // needs a re-sync to Dropbox
+    }
     if (name) t.customName = name; else delete t.customName;
-    if ((t.customName || "") !== prev) t._dirty = true; // needs a re-sync to Dropbox
     saveTracks(allTracks);
     buildTripList();
   }
@@ -2364,7 +2384,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const DBX_TAG_ICONS = {
     synced: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5l4 4 8-9"/></svg>',
     new: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5V2.5"/><path d="M4.5 6 8 2.5 11.5 6"/><path d="M2.5 13.5h11"/></svg>',
-    edited: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5l3 3M3 13l.6-2.6 7-7 2 2-7 7L3 13z"/></svg>',
+    edited: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
     remote: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5h6a3 3 0 0 0 .3-5.97A4.5 4.5 0 0 0 2.5 7.7a2.7 2.7 0 0 0 2 3.8z"/><path d="M8 8v4"/><path d="M6 10l2 2 2-2"/></svg>',
   };
   const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here" };
@@ -2388,17 +2408,22 @@ document.addEventListener("DOMContentLoaded", function () {
       const meta = r.kind === "remote"
         ? [String(r.file.modified || "").slice(0, 10), dbxFmtBytes(r.file.size || 0)].filter(Boolean).join(" · ")
         : DBX_META[r.cat];
-      // Remote rows load; new/changed local rows sync just themselves; in-sync
-      // rows need no action.
+      // Remote rows load into the viewer; new/changed local rows upload just
+      // themselves; in-sync rows need no action.
       const rowBtn = r.kind === "remote"
         ? `<button type="button" class="dbx-row-open" data-i="${i}">Load</button>`
         : (r.cat === "new" || r.cat === "edited")
-          ? `<button type="button" class="dbx-row-sync" data-i="${i}">Sync</button>`
+          ? `<button type="button" class="dbx-row-sync" data-i="${i}">Upload</button>`
           : `<button type="button" class="dbx-row-done" disabled>Synced</button>`;
+      // Changed rows: the amber icon is a one-click undo (revert to the
+      // Dropbox version). Other icons are just state.
+      const tag = r.cat === "edited"
+        ? `<button type="button" class="dbx-row-tag dbx-row-revert" data-i="${i}" title="Undo changes (revert to the Dropbox version)">${DBX_TAG_ICONS.edited}</button>`
+        : `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>`;
       return `<li class="dbx-row cat-${r.cat}">` +
         `<span class="dbx-row-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span>` +
         `<span class="dbx-row-meta">${escapeHtml(meta || "")}</span>` +
-        `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>` +
+        tag +
         rowBtn +
       `</li>`;
     }).join("");
@@ -2418,7 +2443,7 @@ document.addEventListener("DOMContentLoaded", function () {
       `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
       `<div class="src-action"><div class="src-action-row">` +
         (remoteFiles.length ? `<button type="button" class="src-secondary-btn" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
-        `<button type="button" class="src-primary-btn" id="dbx-do-sync"${uploadTracks.length ? "" : " disabled"}>${uploadTracks.length ? `Sync ${uploadTracks.length} to Dropbox` : "Nothing to sync"}</button>` +
+        `<button type="button" class="src-primary-btn" id="dbx-do-sync"${uploadTracks.length ? "" : " disabled"}>${uploadTracks.length ? `Upload ${uploadTracks.length} to Dropbox` : "Nothing to upload"}</button>` +
       `</div></div>` +
       `<div class="dbx-status"></div>`;
 
@@ -2432,6 +2457,13 @@ document.addEventListener("DOMContentLoaded", function () {
     main.querySelectorAll(".dbx-row-sync").forEach((btn) => {
       const r = state.rows[parseInt(btn.dataset.i)];
       if (r && r.track) btn.addEventListener("click", () => runSync([r.track], ui));
+    });
+    main.querySelectorAll(".dbx-row-revert").forEach((btn) => {
+      const r = state.rows[parseInt(btn.dataset.i)];
+      if (r && r.track) btn.addEventListener("click", () => {
+        revertTrip(r.track);
+        gatherSyncState().then((s) => renderSyncState(s, ui.main)).catch(() => {});
+      });
     });
     const loadBtn = main.querySelector("#dbx-load-remote");
     if (loadBtn) loadBtn.addEventListener("click", () => loadRemoteTrips(remoteFiles, ui));
@@ -2462,6 +2494,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const res = await DS.uploadFile(path, blob, mode);
         if (isNew) t.dropboxPath = (res && (res.path_lower || res.path_display)) || path.toLowerCase();
         t._dirty = false;
+        delete t._preEdit; // synced: current state is the new baseline
       }
       saveTracks(allTracks);
       buildTripList();

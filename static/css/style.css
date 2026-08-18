@@ -1771,11 +1771,23 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 #dbx-sync-modal .dbx-row.cat-synced .dbx-row-tag { background: rgba(0, 200, 130, 0.18); color: #80e6b4; }
 #dbx-sync-modal .dbx-row.cat-new .dbx-row-tag { background: rgba(0, 97, 255, 0.2); color: #9fbaff; }
 #dbx-sync-modal .dbx-row.cat-edited .dbx-row-tag { background: rgba(255, 180, 60, 0.2); color: #ffcf87; }
-#dbx-sync-modal .dbx-row-open {
-    background: rgba(0, 97, 255, 0.15); color: #b0c4ff; border: 1px solid rgba(0, 97, 255, 0.35);
-    padding: 0.25rem 0.7rem; border-radius: 6px; font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer;
+/* Every row ends with a same-width action chip so the column lines up. */
+#dbx-sync-modal .dbx-row-open,
+#dbx-sync-modal .dbx-row-sync,
+#dbx-sync-modal .dbx-row-done {
+    min-width: 64px; text-align: center;
+    padding: 0.25rem 0.7rem; border-radius: 6px; font: inherit; font-size: 0.74rem; font-weight: 600;
 }
-#dbx-sync-modal .dbx-row-open:hover { background: rgba(0, 97, 255, 0.32); color: #fff; }
+#dbx-sync-modal .dbx-row-open,
+#dbx-sync-modal .dbx-row-sync {
+    background: rgba(0, 97, 255, 0.15); color: #b0c4ff; border: 1px solid rgba(0, 97, 255, 0.35); cursor: pointer;
+}
+#dbx-sync-modal .dbx-row-open:hover,
+#dbx-sync-modal .dbx-row-sync:hover { background: rgba(0, 97, 255, 0.32); color: #fff; }
+#dbx-sync-modal .dbx-row-done {
+    background: rgba(255, 255, 255, 0.04); color: rgba(224, 232, 240, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1); cursor: default;
+}
 #dbx-sync-modal .src-action { margin: 0.2rem 1.3rem 1.1rem; padding-top: 0.9rem; }
 #dbx-sync-modal .src-action-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.7rem; }
 #dbx-sync-modal .src-primary-btn {

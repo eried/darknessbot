@@ -2368,7 +2368,9 @@ document.addEventListener("DOMContentLoaded", function () {
     remote: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5h6a3 3 0 0 0 .3-5.97A4.5 4.5 0 0 0 2.5 7.7a2.7 2.7 0 0 0 2 3.8z"/><path d="M8 8v4"/><path d="M6 10l2 2 2-2"/></svg>',
   };
   const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here" };
-  const DBX_META = { new: "New", edited: "Changed", synced: "In sync" };
+  // Local status shows in the meta text; the in-sync state is carried by its
+  // (disabled) button instead, so it isn't said twice.
+  const DBX_META = { new: "New", edited: "Changed" };
   function dbxFmtBytes(n) {
     if (!n) return "";
     const u = ["B", "KB", "MB", "GB"]; let i = 0, v = n;
@@ -2386,11 +2388,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const meta = r.kind === "remote"
         ? [String(r.file.modified || "").slice(0, 10), dbxFmtBytes(r.file.size || 0)].filter(Boolean).join(" · ")
         : DBX_META[r.cat];
+      // Remote rows load; new/changed local rows sync just themselves; in-sync
+      // rows need no action.
+      const rowBtn = r.kind === "remote"
+        ? `<button type="button" class="dbx-row-open" data-i="${i}">Load</button>`
+        : (r.cat === "new" || r.cat === "edited")
+          ? `<button type="button" class="dbx-row-sync" data-i="${i}">Sync</button>`
+          : `<button type="button" class="dbx-row-done" disabled>Synced</button>`;
       return `<li class="dbx-row cat-${r.cat}">` +
         `<span class="dbx-row-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span>` +
         `<span class="dbx-row-meta">${escapeHtml(meta || "")}</span>` +
         `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>` +
-        (r.kind === "remote" ? `<button type="button" class="dbx-row-open" data-i="${i}">Load</button>` : "") +
+        rowBtn +
       `</li>`;
     }).join("");
 
@@ -2419,6 +2428,10 @@ document.addEventListener("DOMContentLoaded", function () {
     main.querySelectorAll(".dbx-row-open").forEach((btn) => {
       const r = state.rows[parseInt(btn.dataset.i)];
       if (r && r.file) btn.addEventListener("click", () => loadRemoteTrips([r.file], ui));
+    });
+    main.querySelectorAll(".dbx-row-sync").forEach((btn) => {
+      const r = state.rows[parseInt(btn.dataset.i)];
+      if (r && r.track) btn.addEventListener("click", () => runSync([r.track], ui));
     });
     const loadBtn = main.querySelector("#dbx-load-remote");
     if (loadBtn) loadBtn.addEventListener("click", () => loadRemoteTrips(remoteFiles, ui));

@@ -1812,6 +1812,22 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 #dbx-sync-modal .src-secondary-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 /* Busy state during a revert reload: dim + lock the body, no resizing text. */
 #dbx-sync-modal .dbx-sync-main.dbx-busy { pointer-events: none; opacity: 0.5; transition: opacity 0.12s; }
+/* Fetching/uploading: lock interaction but keep the row spinners bright. */
+#dbx-sync-modal .dbx-sync-main.dbx-locked { pointer-events: none; }
+/* Loading spinner. The open state fades a centred one in only if the load is
+   slow (a fast one is replaced before the delay elapses, so nothing flashes). */
+@keyframes dbx-spin { to { transform: rotate(360deg); } }
+@keyframes dbx-fadein { to { opacity: 1; } }
+#dbx-sync-modal .dbx-spinner {
+    display: inline-block; box-sizing: border-box; width: 22px; height: 22px;
+    border: 2px solid rgba(255, 255, 255, 0.18); border-top-color: #4aa3ff;
+    border-radius: 50%; animation: dbx-spin 0.7s linear infinite; vertical-align: middle;
+}
+#dbx-sync-modal .dbx-spinner.sm { width: 13px; height: 13px; border-top-color: currentColor; }
+#dbx-sync-modal .dbx-sync-loading {
+    display: flex; justify-content: center; padding: 40px 0;
+    opacity: 0; animation: dbx-fadein 0.25s ease 0.25s forwards;
+}
 #dbx-sync-modal .dbx-status { margin: 0 1.4rem 1.1rem; min-height: 1.1rem; font-size: 0.8rem; color: rgba(224, 232, 240, 0.6); }
 #dbx-sync-modal .dbx-status:empty { display: none; }
 #dbx-sync-modal .dbx-status code { background: rgba(0, 0, 0, 0.3); padding: 1px 6px; border-radius: 4px; font-size: 0.78rem; }

@@ -2364,7 +2364,7 @@ document.addEventListener("DOMContentLoaded", function () {
           `<h3>Sync with Dropbox</h3>` +
           `<button type="button" class="src-close" aria-label="Close">&times;</button>` +
         `</header>` +
-        `<div class="dbx-sync-main"><div class="dbx-loading">Checking your library…</div></div>` +
+        `<div class="dbx-sync-main"><div class="dbx-sync-loading"><span class="dbx-spinner"></span></div></div>` +
       `</div>`;
     root.querySelector(".src-close").addEventListener("click", closeSyncModal);
     const main = root.querySelector(".dbx-sync-main");
@@ -2422,6 +2422,12 @@ document.addEventListener("DOMContentLoaded", function () {
     while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
     return v.toFixed(v >= 100 || i === 0 ? 0 : 1) + " " + u[i];
   }
+  // Stable per-row key so an upload can find + spinner the right local row
+  // (new trips have no dropboxPath yet, so fall back to identity fields).
+  function dbxTrackKey(t) {
+    if (t.dropboxPath) return String(t.dropboxPath).toLowerCase();
+    return "local:" + (t.dateStart || t.date || "") + "|" + (t.name || "") + "|" + (t.customName || "");
+  }
 
   function renderSyncState(state, main) {
     const DS = window.DropboxSource;
@@ -2445,7 +2451,8 @@ document.addEventListener("DOMContentLoaded", function () {
       const tag = r.cat === "edited"
         ? `<button type="button" class="dbx-row-tag dbx-row-revert" data-i="${i}" title="Undo changes (revert to the Dropbox version)">${DBX_TAG_ICONS.edited}</button>`
         : `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>`;
-      return `<li class="dbx-row cat-${r.cat}">` +
+      const dataPath = r.kind === "remote" ? ` data-path="${escapeHtml(r.file.path)}"` : ` data-key="${escapeHtml(dbxTrackKey(r.track))}"`;
+      return `<li class="dbx-row cat-${r.cat}"${dataPath}>` +
         `<span class="dbx-row-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span>` +
         `<span class="dbx-row-meta">${escapeHtml(meta || "")}</span>` +
         tag +
@@ -2515,10 +2522,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function runSync(uploadTracks, ui) {
     const DS = window.DropboxSource;
-    const syncBtn = ui.main.querySelector("#dbx-do-sync");
-    if (syncBtn) { syncBtn.disabled = true; syncBtn.textContent = "Syncing…"; }
-    const total = uploadTracks.length;
-    let done = 0;
+    const main = ui.main;
+    // Lock the dialog (no resizing status line) and spinner each row as it
+    // uploads, matching the fetch behaviour.
+    main.classList.add("dbx-locked");
+    const rowSyncBtn = (key) => {
+      const li = main.querySelector(`.dbx-row[data-key="${String(key).replace(/["\\]/g, "\\$&")}"]`);
+      return li ? li.querySelector(".dbx-row-sync") : null;
+    };
+    const keyOf = new Map();
+    uploadTracks.forEach((t) => {
+      const k = dbxTrackKey(t); keyOf.set(t, k);
+      const b = rowSyncBtn(k); if (b) { b.disabled = true; b.innerHTML = '<span class="dbx-spinner sm"></span>'; }
+    });
+    main.querySelectorAll(".src-action-row button").forEach((b) => { b.disabled = true; });
     try {
       for (const t of uploadTracks) {
         const isNew = !t.dropboxPath;
@@ -2532,27 +2549,32 @@ document.addEventListener("DOMContentLoaded", function () {
           path = t.dropboxPath; // rewrite the existing file in place
           mode = "overwrite";
         }
-        ui.status.textContent = `Uploading ${++done} of ${total}…`;
         const res = await DS.uploadFile(path, blob, mode);
         if (isNew) t.dropboxPath = (res && (res.path_lower || res.path_display)) || path.toLowerCase();
         t._dirty = false;
         delete t._preEdit; // synced: current state is the new baseline
+        const b = rowSyncBtn(keyOf.get(t)); if (b) b.innerHTML = "✓";
       }
       saveTracks(allTracks);
       buildTripList();
       const s = await gatherSyncState();
-      renderSyncState(s, ui.main);
-      const st = ui.main.querySelector(".dbx-status");
-      if (st) st.textContent = "Synced.";
+      main.classList.remove("dbx-locked");
+      renderSyncState(s, main);
     } catch (e) {
+      main.classList.remove("dbx-locked");
+      const s = await gatherSyncState().catch(() => null);
+      if (s) renderSyncState(s, main);
+      const st = main.querySelector(".dbx-status");
       const msg = String(e.message || e);
-      if (/missing_scope/.test(msg)) {
-        ui.status.classList.add("dbx-err");
-        ui.status.innerHTML = `Enable <code>files.content.write</code> in your Dropbox App Console, then reconnect.`;
-        if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Reconnect"; syncBtn.onclick = () => connectDropbox(); }
-      } else {
-        ui.status.textContent = "Sync failed: " + msg;
-        if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = "Retry"; }
+      if (st) {
+        if (/missing_scope/.test(msg)) {
+          st.classList.add("dbx-err");
+          st.innerHTML = `Enable <code>files.content.write</code> in your Dropbox App Console, then reconnect.`;
+          const sb = main.querySelector("#dbx-do-sync");
+          if (sb) { sb.disabled = false; sb.textContent = "Reconnect"; sb.onclick = () => connectDropbox(); }
+        } else {
+          st.textContent = "Upload failed: " + msg;
+        }
       }
     }
   }
@@ -2560,14 +2582,24 @@ document.addEventListener("DOMContentLoaded", function () {
   async function loadRemoteTrips(files, ui) {
     const DS = window.DropboxSource;
     if (!files.length || typeof window.JSZip === "undefined") return;
+    const main = ui.main;
+    // Lock the dialog (no resizing status line) and spinner each row as it's
+    // fetched, so the list itself shows progress. Then close + hand off.
+    main.classList.add("dbx-locked");
+    const rowBtn = (path) => {
+      const li = main.querySelector(`.dbx-row[data-path="${String(path || "").replace(/["\\]/g, "\\$&")}"]`);
+      return li ? li.querySelector(".dbx-row-open") : null;
+    };
+    files.forEach((f) => { const b = rowBtn(f.path); if (b) { b.disabled = true; b.innerHTML = '<span class="dbx-spinner sm"></span>'; } });
+    main.querySelectorAll(".src-action-row button").forEach((b) => { b.disabled = true; });
     try {
       const zip = new window.JSZip();
       const used = new Set();
       const map = {};
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        ui.status.textContent = `Fetching ${i + 1} of ${files.length}: ${f.name}`;
         const blob = await DS.downloadBlob(f.path);
+        const b = rowBtn(f.path); if (b) b.innerHTML = "✓"; // this one landed
         let name = f.name;
         if (used.has(name)) {
           const d = name.lastIndexOf(".");
@@ -2584,7 +2616,9 @@ document.addEventListener("DOMContentLoaded", function () {
           { append: true, dropboxMap: map, source: "dropbox" });
       }
     } catch (e) {
-      ui.status.textContent = "Couldn't load: " + (e.message || e);
+      main.classList.remove("dbx-locked");
+      const s = await gatherSyncState().catch(() => null);
+      if (s) renderSyncState(s, main);
     }
   }
   function toggleToolsMenu(btn, i) {

@@ -2211,17 +2211,39 @@ document.addEventListener("DOMContentLoaded", function () {
     updateGlow();
     updateVisibilityUI();
   }
-  // Discard local name/wheel edits and restore the values the trip had when it
-  // last matched Dropbox (snapshotted on the first edit). Only name/wheel ever
-  // change, so no re-download is needed.
-  function revertTrip(t) {
-    if (!t || !t._preEdit) return;
-    const o = t._preEdit;
-    if (o.customName) t.customName = o.customName; else delete t.customName;
-    if (o.wheel) t.wheel = o.wheel; else delete t.wheel;
-    if (o.wheels) t.wheels = o.wheels; else delete t.wheels;
-    delete t._preEdit;
-    delete t._dirty;
+  // Discard local name/wheel edits. Fast path: restore the values snapshotted
+  // on the first edit this session. Fallback (older edits with no snapshot):
+  // re-download the file from Dropbox and re-parse it in place, so the trip
+  // returns to exactly the server version.
+  async function revertTrip(t) {
+    if (!t) return;
+    if (t._preEdit) {
+      const o = t._preEdit;
+      if (o.customName) t.customName = o.customName; else delete t.customName;
+      if (o.wheel) t.wheel = o.wheel; else delete t.wheel;
+      if (o.wheels) t.wheels = o.wheels; else delete t.wheels;
+      delete t._preEdit;
+      delete t._dirty;
+      saveTracks(allTracks);
+      buildTripList();
+      updateGlow();
+      return;
+    }
+    const DS = window.DropboxSource;
+    if (!t.dropboxPath || !DS || !DS.isAuthenticated || !DS.isAuthenticated()) return;
+    const idx = allTracks.indexOf(t);
+    if (idx < 0) return;
+    const path = t.dropboxPath;
+    const blob = await DS.downloadBlob(path);
+    const fname = String(path).split("/").pop() || "trip.csv";
+    const file = new File([blob], fname, { type: blob.type || "text/csv" });
+    const parsed = await parseFileLocally(parserWorker, file, () => {});
+    if (!parsed || !parsed.length) return;
+    const fresh = parsed[0];
+    fresh.dropboxPath = path; // keep its origin; it's clean now (no _dirty)
+    const next = allTracks.slice();
+    next[idx] = fresh;
+    allTracks = next; // new reference so the geometry cache invalidates
     saveTracks(allTracks);
     buildTripList();
     updateGlow();
@@ -2414,7 +2436,7 @@ document.addEventListener("DOMContentLoaded", function () {
         ? `<button type="button" class="dbx-row-open" data-i="${i}">Load</button>`
         : (r.cat === "new" || r.cat === "edited")
           ? `<button type="button" class="dbx-row-sync" data-i="${i}">Upload</button>`
-          : `<button type="button" class="dbx-row-done" disabled>Synced</button>`;
+          : `<button type="button" class="dbx-row-done" disabled>Loaded</button>`;
       // Changed rows: the amber icon is a one-click undo (revert to the
       // Dropbox version). Other icons are just state.
       const tag = r.cat === "edited"
@@ -2460,8 +2482,9 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     main.querySelectorAll(".dbx-row-revert").forEach((btn) => {
       const r = state.rows[parseInt(btn.dataset.i)];
-      if (r && r.track) btn.addEventListener("click", () => {
-        revertTrip(r.track);
+      if (r && r.track) btn.addEventListener("click", async () => {
+        if (ui.status) ui.status.textContent = "Reverting to the Dropbox version…";
+        try { await revertTrip(r.track); } catch (e) { if (ui.status) ui.status.textContent = "Revert failed: " + (e.message || e); return; }
         gatherSyncState().then((s) => renderSyncState(s, ui.main)).catch(() => {});
       });
     });

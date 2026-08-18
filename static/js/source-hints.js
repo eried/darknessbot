@@ -315,14 +315,17 @@
 
     function updateCacheInfo() {
       if (!cacheInfo) return;
-      const cachedCount = cachedSet.size;
-      const total = files.length;
-      if (!total) {
-        cacheInfo.textContent = `${cachedCount} files cached`;
+      // Match the sync dialog exactly: total cache size (count · bytes),
+      // not "X of N cached".
+      const setText = (count, bytes) => {
+        cacheInfo.textContent = `${count} file${count === 1 ? "" : "s"} · ${formatBytes(bytes)}`;
+        if (clearBtn) clearBtn.style.display = count ? "" : "none";
+      };
+      if (dbx.cache && dbx.cache.stats) {
+        dbx.cache.stats().then((s) => setText(s.count || 0, s.bytes || 0)).catch(() => setText(cachedSet.size, 0));
       } else {
-        cacheInfo.textContent = `${cachedCount} of ${total} cached`;
+        setText(cachedSet.size, 0);
       }
-      if (clearBtn) clearBtn.style.display = cachedCount ? "" : "none";
     }
 
     async function clearCache() {

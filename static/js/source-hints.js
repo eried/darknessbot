@@ -15,10 +15,12 @@
         ev.preventDefault();
         const source = el.dataset.source;
         if (source === "dropbox") {
-          // Hand off to the shared Sync-with-Dropbox dialog (connect / list /
-          // load / upload all live there). The OAuth round-trip is resumed by
-          // app.js, which reopens this same dialog on return.
-          if (typeof window.eucViewerOpenDropbox === "function") window.eucViewerOpenDropbox();
+          // Hand off to the shared Sync-with-Dropbox dialog. The main button
+          // loads everything straight away; the segmented caret (data-dropbox-
+          // modal) opens the dialog to pick. OAuth is resumed by app.js.
+          if (typeof window.eucViewerOpenDropbox === "function") {
+            window.eucViewerOpenDropbox({ autoLoadAll: !el.dataset.dropboxModal });
+          }
           return;
         }
         openModal(root, source);

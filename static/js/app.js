@@ -2321,10 +2321,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // Connect from the sync dialog. Dropbox's OAuth redirect can't carry our
   // #view hash, so stash the intent first; resumeSyncAfterOAuth() restores the
   // view and reopens this dialog when we land back here.
-  function connectDropbox() {
+  function connectDropbox(autoLoadAll) {
     const DS = window.DropboxSource;
     if (!DS) return;
-    try { localStorage.setItem("eucviewer-post-oauth", JSON.stringify({ action: "sync", hadTrips: allTracks.length > 0 })); } catch (_) {}
+    try { localStorage.setItem("eucviewer-post-oauth", JSON.stringify({ action: "sync", hadTrips: allTracks.length > 0, autoLoadAll: !!autoLoadAll })); } catch (_) {}
     DS.startOAuth();
   }
 
@@ -2342,12 +2342,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const done = (window.DropboxSource && DropboxSource.maybeHandleCallback)
       ? DropboxSource.maybeHandleCallback() : Promise.resolve();
     Promise.resolve(done).then(() => {
-      if (!intent.hadTrips) { openDropboxSyncDialog(); return; }
+      const openIt = () => openDropboxSyncDialog({ autoLoadAll: intent.autoLoadAll });
+      if (!intent.hadTrips) { openIt(); return; }
       let tries = 0;
       const openWhenReady = () => {
-        if (allTracks && allTracks.length) { openDropboxSyncDialog(); return; }
+        if (allTracks && allTracks.length) { openIt(); return; }
         if (tries++ < 15) { setTimeout(openWhenReady, 150); return; }
-        openDropboxSyncDialog();
+        openIt();
       };
       setTimeout(openWhenReady, 150);
     });
@@ -2357,7 +2358,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // buttons (source-hints.js) call this too, so there's a single shared UI.
   window.eucViewerOpenDropbox = openDropboxSyncDialog;
 
-  function openDropboxSyncDialog() {
+  function openDropboxSyncDialog(opts) {
+    opts = opts || {};
     const DS = window.DropboxSource;
     if (!DS) { appToast("Dropbox is not available."); return; }
     const root = ensureSyncModal();
@@ -2377,11 +2379,18 @@ document.addEventListener("DOMContentLoaded", function () {
       main.innerHTML =
         `<div class="dbx-listing"><div class="dbx-empty">Connect your Dropbox to sync trips with <code>Apps/EUC Planet/trips/</code>.</div></div>` +
         `<div class="src-action"><div class="src-action-row"><button type="button" class="src-primary-btn" id="dbx-sync-connect">Connect Dropbox</button></div></div>`;
-      main.querySelector("#dbx-sync-connect").addEventListener("click", () => connectDropbox());
+      main.querySelector("#dbx-sync-connect").addEventListener("click", () => connectDropbox(opts.autoLoadAll));
       return;
     }
     gatherSyncState()
-      .then((state) => renderSyncState(state, main))
+      .then((state) => {
+        renderSyncState(state, main);
+        // Main Dropbox button: kick off "Load all" as soon as the list is up.
+        if (opts.autoLoadAll) {
+          const btn = main.querySelector("#dbx-load-remote");
+          if (btn) btn.click();
+        }
+      })
       .catch((e) => { main.innerHTML = `<div class="dbx-listing"><div class="dbx-err">Couldn't reach Dropbox: ${escapeHtml(e.message || String(e))}</div></div>`; });
   }
 
@@ -2438,7 +2447,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const DS = window.DropboxSource;
     const uploadTracks = state.rows.filter((r) => r.kind === "local" && (r.cat === "new" || r.cat === "edited")).map((r) => r.track);
     const remoteFiles = state.rows.filter((r) => r.kind === "remote").map((r) => r.file);
-    const hasLocal = state.rows.some((r) => r.kind === "local");
     const nTrips = state.rows.length;
 
     const rowsHtml = state.rows.map((r, i) => {
@@ -2486,10 +2494,10 @@ document.addEventListener("DOMContentLoaded", function () {
       `</details>` +
       `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
       `<div class="src-action"><div class="src-action-row">` +
-        // On the upload screen there are no local trips, so the Load button is
-        // the primary action and the Upload button is dropped entirely.
-        (remoteFiles.length ? `<button type="button" class="${hasLocal ? "src-secondary-btn" : "src-primary-btn"}" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
-        (hasLocal ? `<button type="button" class="src-primary-btn" id="dbx-do-sync"${uploadTracks.length ? "" : " disabled"}>${uploadTracks.length ? `Upload ${uploadTracks.length} to Dropbox` : "Nothing to upload"}</button>` : "") +
+        // Upload only when something actually needs it, and placed first so the
+        // Load button stays the rightmost action in every context.
+        (uploadTracks.length ? `<button type="button" class="src-primary-btn" id="dbx-do-sync">Upload ${uploadTracks.length} to Dropbox</button>` : "") +
+        (remoteFiles.length ? `<button type="button" class="${uploadTracks.length ? "src-secondary-btn" : "src-primary-btn"}" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
       `</div></div>` +
       `<div class="dbx-status"></div>`;
 
@@ -2594,11 +2602,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Lock the dialog (no resizing status line) and spinner each row as it's
     // fetched, so the list itself shows progress. Then close + hand off.
     main.classList.add("dbx-locked");
-    const rowBtn = (path) => {
-      const li = main.querySelector(`.dbx-row[data-path="${String(path || "").replace(/["\\]/g, "\\$&")}"]`);
-      return li ? li.querySelector(".dbx-row-open") : null;
-    };
-    files.forEach((f) => { const b = rowBtn(f.path); if (b) { b.disabled = true; b.innerHTML = '<span class="dbx-spinner sm"></span>'; } });
+    const rowEl = (path) => main.querySelector(`.dbx-row[data-path="${String(path || "").replace(/["\\]/g, "\\$&")}"]`);
+    files.forEach((f) => { const li = rowEl(f.path); const b = li && li.querySelector(".dbx-row-open"); if (b) { b.disabled = true; b.innerHTML = '<span class="dbx-spinner sm"></span>'; } });
     main.querySelectorAll(".src-action-row button").forEach((b) => { b.disabled = true; });
     try {
       const zip = new window.JSZip();
@@ -2606,8 +2611,14 @@ document.addEventListener("DOMContentLoaded", function () {
       const map = {};
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
+        const li = rowEl(f.path);
+        // Follow the loading down the list so the pending rows scroll into
+        // view page by page, even though the form is locked. Instant, not
+        // smooth: rapid successive smooth scrolls cancel each other and never
+        // advance.
+        if (li) li.scrollIntoView({ block: "nearest" });
         const blob = await DS.downloadBlob(f.path);
-        const b = rowBtn(f.path); if (b) b.innerHTML = "✓"; // this one landed
+        const b = li && li.querySelector(".dbx-row-open"); if (b) b.innerHTML = "✓"; // this one landed
         let name = f.name;
         if (used.has(name)) {
           const d = name.lastIndexOf(".");

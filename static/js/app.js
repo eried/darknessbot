@@ -2324,7 +2324,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function connectDropbox() {
     const DS = window.DropboxSource;
     if (!DS) return;
-    try { localStorage.setItem("eucviewer-post-oauth", JSON.stringify({ action: "sync" })); } catch (_) {}
+    try { localStorage.setItem("eucviewer-post-oauth", JSON.stringify({ action: "sync", hadTrips: allTracks.length > 0 })); } catch (_) {}
     DS.startOAuth();
   }
 
@@ -2336,21 +2336,26 @@ document.addEventListener("DOMContentLoaded", function () {
     try { intent = JSON.parse(localStorage.getItem("eucviewer-post-oauth") || "null"); } catch (_) {}
     if (!intent || intent.action !== "sync") return false;
     try { localStorage.removeItem("eucviewer-post-oauth"); } catch (_) {}
-    window.__dbxSyncReturn = true; // source-hints checks this to skip its modal
-    navigate("#view", true);
+    // Restore the trip view only if we had trips before connecting; a first
+    // connect from the upload screen has none, so stay there and open straight.
+    navigate(intent.hadTrips ? "#view" : "#load", true);
     const done = (window.DropboxSource && DropboxSource.maybeHandleCallback)
       ? DropboxSource.maybeHandleCallback() : Promise.resolve();
     Promise.resolve(done).then(() => {
+      if (!intent.hadTrips) { openDropboxSyncDialog(); return; }
       let tries = 0;
       const openWhenReady = () => {
         if (allTracks && allTracks.length) { openDropboxSyncDialog(); return; }
-        if (tries++ < 20) { setTimeout(openWhenReady, 150); return; }
+        if (tries++ < 15) { setTimeout(openWhenReady, 150); return; }
         openDropboxSyncDialog();
       };
-      setTimeout(openWhenReady, 200);
+      setTimeout(openWhenReady, 150);
     });
     return true;
   }
+  // The one Dropbox dialog for the whole app — the upload screen's Dropbox
+  // buttons (source-hints.js) call this too, so there's a single shared UI.
+  window.eucViewerOpenDropbox = openDropboxSyncDialog;
 
   function openDropboxSyncDialog() {
     const DS = window.DropboxSource;
@@ -2433,6 +2438,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const DS = window.DropboxSource;
     const uploadTracks = state.rows.filter((r) => r.kind === "local" && (r.cat === "new" || r.cat === "edited")).map((r) => r.track);
     const remoteFiles = state.rows.filter((r) => r.kind === "remote").map((r) => r.file);
+    const hasLocal = state.rows.some((r) => r.kind === "local");
     const nTrips = state.rows.length;
 
     const rowsHtml = state.rows.map((r, i) => {
@@ -2480,8 +2486,10 @@ document.addEventListener("DOMContentLoaded", function () {
       `</details>` +
       `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
       `<div class="src-action"><div class="src-action-row">` +
-        (remoteFiles.length ? `<button type="button" class="src-secondary-btn" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
-        `<button type="button" class="src-primary-btn" id="dbx-do-sync"${uploadTracks.length ? "" : " disabled"}>${uploadTracks.length ? `Upload ${uploadTracks.length} to Dropbox` : "Nothing to upload"}</button>` +
+        // On the upload screen there are no local trips, so the Load button is
+        // the primary action and the Upload button is dropped entirely.
+        (remoteFiles.length ? `<button type="button" class="${hasLocal ? "src-secondary-btn" : "src-primary-btn"}" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
+        (hasLocal ? `<button type="button" class="src-primary-btn" id="dbx-do-sync"${uploadTracks.length ? "" : " disabled"}>${uploadTracks.length ? `Upload ${uploadTracks.length} to Dropbox` : "Nothing to upload"}</button>` : "") +
       `</div></div>` +
       `<div class="dbx-status"></div>`;
 

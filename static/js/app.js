@@ -112,34 +112,49 @@ document.addEventListener("DOMContentLoaded", function () {
   })();
 
   // --- Map setup with multiple tile layers ---
-  const standardLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
+  // The seven free (no-key) basemaps EUC Planet ships, so the two apps offer
+  // the same map choices. `light` marks pale basemaps so the trace glow can
+  // pick a colour that reads on them.
+  const standardLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "© OpenStreetMap contributors",
   });
-  const darkLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
+  const cyclosmLayer = L.tileLayer("https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png", {
+    subdomains: "abc", maxZoom: 20, attribution: "© OpenStreetMap contributors, tiles CyclOSM / OSM France",
+  });
+  const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+    subdomains: "abc", maxZoom: 17, attribution: "© OpenStreetMap, SRTM; style © OpenTopoMap (CC-BY-SA)",
+  });
+  const hotLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+    subdomains: "ab", maxZoom: 20, attribution: "© OpenStreetMap contributors, tiles HOT / OSM France",
+  });
+  const voyagerLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", {
+    subdomains: "abcd", maxZoom: 20, attribution: "© OpenStreetMap © CARTO",
+  });
+  const cartoDarkLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
+    subdomains: "abcd", maxZoom: 20, attribution: "© OpenStreetMap © CARTO",
   });
   const satelliteLayer = L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     // Esri's hi-res coverage ends early outside metros and serves "Map Data
     // Not Available" placeholder tiles (HTTP 200) beyond it. Capping the
     // native level makes Leaflet upscale the last real imagery instead.
-    { maxZoom: 19, maxNativeZoom: 18 }
+    { maxZoom: 19, maxNativeZoom: 18, attribution: "Esri, Maxar, Earthstar Geographics" }
   );
-  const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-    maxZoom: 17,
-  });
   // Map style is chosen in the #map-controls panel and persisted to localStorage.
-  // Each style records whether the dark-tiles invert filter applies.
   const MAP_LAYER_KEY = "dbb_map_layer";
   const BASE_STYLES = {
-    standard:  { layer: standardLayer,  dark: false },
-    dark:      { layer: darkLayer,      dark: true  },
-    satellite: { layer: satelliteLayer, dark: false },
-    topo:      { layer: topoLayer,      dark: false },
+    standard:  { layer: standardLayer,  light: true,  label: "Standard" },
+    cyclosm:   { layer: cyclosmLayer,   light: true,  label: "CyclOSM" },
+    topo:      { layer: topoLayer,      light: true,  label: "OpenTopoMap" },
+    hot:       { layer: hotLayer,       light: true,  label: "Humanitarian" },
+    voyager:   { layer: voyagerLayer,   light: true,  label: "Carto Voyager" },
+    cartodark: { layer: cartoDarkLayer, light: false, label: "Carto Dark" },
+    satellite: { layer: satelliteLayer, light: false, label: "Satellite" },
   };
   let selectedStyle = "satellite"; // default for new users
   try {
-    const saved = (localStorage.getItem(MAP_LAYER_KEY) || "").toLowerCase();
+    let saved = (localStorage.getItem(MAP_LAYER_KEY) || "").toLowerCase();
+    if (saved === "dark") saved = "cartodark"; // migrate the old CSS-inverted dark
     if (BASE_STYLES[saved]) selectedStyle = saved;
   } catch (_) {}
   let glowLayer;
@@ -157,9 +172,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (savedTs === "normal" || savedTs === "neon" || savedTs === "dark") traceStyleUser = savedTs;
   } catch (_) {}
   function defaultTraceStyle(styleName) {
-    if (styleName === "dark") return "neon";
     if (styleName === "satellite") return "normal";
-    return "dark"; // standard / topo: light tiles need the dark casing
+    if (styleName === "cartodark") return "neon"; // dark basemap
+    return "dark"; // light basemaps need the dark casing
   }
   function effectiveTraceStyle() { return traceStyleUser || defaultTraceStyle(selectedStyle); }
 
@@ -176,7 +191,6 @@ document.addEventListener("DOMContentLoaded", function () {
     wheelPxPerZoomLevel: 120,
     layers: [BASE_STYLES[selectedStyle].layer],
   });
-  map.getContainer().classList.toggle("dark-tiles", BASE_STYLES[selectedStyle].dark);
 
   // Base layer is driven by the #map-controls panel (see setBaseStyle below);
   // the bottom-left control is just zoom now.
@@ -445,7 +459,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // is flat solid lines, "dark" draws a near-black casing under a
       // saturated core so colors read on whitish tiles.
       const styleMode = effectiveTraceStyle();
-      const isLightMap = map.hasLayer(standardLayer) || map.hasLayer(topoLayer);
+      const isLightMap = !!(BASE_STYLES[selectedStyle] && BASE_STYLES[selectedStyle].light);
       const dimBase = sel >= 0 ? 0.35 : 1;
       let basePasses, selectedPasses, heatPasses, heatCasing = null;
       if (styleMode === "neon") {
@@ -907,8 +921,6 @@ document.addEventListener("DOMContentLoaded", function () {
       map.addLayer(style.layer);
     }
     selectedStyle = name;
-    // Dark gets the invert filter; the others show their true colours.
-    map.getContainer().classList.toggle("dark-tiles", style.dark);
     try { localStorage.setItem(MAP_LAYER_KEY, name); } catch (_) {}
     // Changing basemap returns the trace style to that map's automatic
     // pairing (a manual pick applies until the next basemap switch).

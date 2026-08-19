@@ -6,7 +6,7 @@
     <title>EUC Planet Trip Viewer</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/style.css?v=88" />
+    <link rel="stylesheet" href="static/css/style.css?v=89" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -33,10 +33,13 @@
             <label>
                 <span>Map style</span>
                 <select id="map-style-select">
-                    <option value="standard">Standard</option>
-                    <option value="dark">Dark</option>
+                    <option value="standard">Standard (OSM)</option>
+                    <option value="cyclosm">CyclOSM</option>
+                    <option value="topo">OpenTopoMap</option>
+                    <option value="hot">Humanitarian</option>
+                    <option value="voyager">Carto Voyager</option>
+                    <option value="cartodark">Carto Dark</option>
                     <option value="satellite" selected>Satellite</option>
-                    <option value="topo">Topo</option>
                 </select>
             </label>
             <label>
@@ -184,7 +187,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="static/js/app.js?v=156"></script>
+    <script src="static/js/app.js?v=157"></script>
     <script src="static/js/dropbox-source.js?v=6"></script>
     <script src="static/js/source-hints.js?v=40"></script>
 </body>

@@ -23,8 +23,6 @@ body, html {
     background: #0a0a0a;
 }
 
-/* Dark map tiles — only when .dark-tiles is on the map container */
-.dark-tiles .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.6) contrast(1.2); }
 .leaflet-control-attribution { display: none; }
 
 /* Dark layer control */

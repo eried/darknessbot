@@ -324,9 +324,78 @@
   }
   const hasGps = routePoints.length > 1;
 
-  // Basemap themes — each builds a {source, layer} pair inserted below the track.
+  // Basemap themes: the same seven free (no-key) basemaps the main viewer
+  // offers, keyed identically so the choice carries across via dbb_map_layer.
+  // MapLibre raster sources take no {s} placeholder, so subdomains are
+  // spelled out as separate host entries.
   const MAP_THEMES = {
-    dark: {
+    standard: {
+      source: {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: "© OpenStreetMap contributors"
+      },
+      paint: {}
+    },
+    cyclosm: {
+      source: {
+        type: "raster",
+        tiles: [
+          "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+          "https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+          "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        maxzoom: 20,
+        attribution: "© OpenStreetMap contributors, tiles CyclOSM / OSM France"
+      },
+      paint: {}
+    },
+    topo: {
+      source: {
+        type: "raster",
+        tiles: [
+          "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+          "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+          "https://c.tile.opentopomap.org/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        maxzoom: 17,
+        attribution: "© OpenStreetMap, SRTM; style © OpenTopoMap (CC-BY-SA)"
+      },
+      paint: {}
+    },
+    hot: {
+      source: {
+        type: "raster",
+        tiles: [
+          "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+          "https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        maxzoom: 20,
+        attribution: "© OpenStreetMap contributors, tiles HOT / OSM France"
+      },
+      paint: {}
+    },
+    voyager: {
+      source: {
+        type: "raster",
+        tiles: [
+          "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+          "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+          "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+          "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        maxzoom: 20,
+        attribution: "© OpenStreetMap © CARTO"
+      },
+      paint: {}
+    },
+    cartodark: {
       source: {
         type: "raster",
         tiles: [
@@ -336,20 +405,8 @@
           "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
         ],
         tileSize: 256,
-        attribution: "\u00a9 OpenStreetMap contributors \u00a9 CARTO"
-      },
-      paint: {}
-    },
-    light: {
-      source: {
-        type: "raster",
-        tiles: [
-          "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        ],
-        tileSize: 256,
-        attribution: "\u00a9 OpenStreetMap contributors"
+        maxzoom: 20,
+        attribution: "© OpenStreetMap contributors © CARTO"
       },
       paint: {}
     },
@@ -362,7 +419,7 @@
         // Data Not Available" placeholder tiles (HTTP 200) beyond it. Cap
         // the source so MapLibre overzooms the last real level instead.
         maxzoom: 18,
-        attribution: "Tiles \u00a9 Esri"
+        attribution: "Tiles © Esri"
       },
       paint: {}
     }
@@ -466,7 +523,15 @@
     if (cam.center || cam.bearing !== undefined || cam.zoom !== undefined) map.jumpTo(cam);
   }
   let coords = [];
+  // Shares the main viewer's saved basemap choice so it carries into the
+  // inspector (and back). Old "dark" was a CSS-inverted OSM, now Carto Dark.
+  const MAP_LAYER_KEY = "dbb_map_layer";
   let currentTheme = "satellite";
+  try {
+    let savedTheme = (localStorage.getItem(MAP_LAYER_KEY) || "").toLowerCase();
+    if (savedTheme === "dark") savedTheme = "cartodark";
+    if (MAP_THEMES[savedTheme]) currentTheme = savedTheme;
+  } catch (_) {}
   let currentColorMode = "speed"; // falls back to solid when the trip lacks it
   let currentTraceMode = "trail-fixed"; // trail-fixed | trail-dynamic | whole
   let currentRouteIdx = 0;
@@ -517,9 +582,9 @@
     if (savedTs === "normal" || savedTs === "neon" || savedTs === "dark") traceStyleUser = savedTs;
   } catch (_) {}
   function defaultTraceStyle(themeName) {
-    if (themeName === "dark") return "neon";
-    if (themeName === "light") return "dark";
-    return "normal"; // satellite
+    if (themeName === "satellite") return "normal";
+    if (themeName === "cartodark") return "neon"; // dark basemap
+    return "dark"; // light basemaps need the dark casing
   }
   function effectiveTraceStyle() { return traceStyleUser || defaultTraceStyle(currentTheme); }
   function syncTraceStyleSelect() {
@@ -575,6 +640,7 @@
                  : (map.getLayer("track-line") ? "track-line" : undefined);
     map.addLayer({ id: "basemap", type: "raster", source: "basemap", paint: theme.paint }, before);
     currentTheme = name;
+    try { localStorage.setItem(MAP_LAYER_KEY, name); } catch (_) {} // share with the main viewer
     // Theme change returns the trace style to the automatic pairing.
     traceStyleUser = null;
     try { localStorage.removeItem(TRACE_STYLE_KEY_3D); } catch (_) {}
@@ -857,7 +923,7 @@
     const lons = routePoints.map(p => p[P_LON]);
     const center = [(Math.min(...lons) + Math.max(...lons)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
 
-    const initialTheme = MAP_THEMES[currentTheme] || MAP_THEMES.dark;
+    const initialTheme = MAP_THEMES[currentTheme] || MAP_THEMES.satellite;
     map = new maplibregl.Map({
       container: "map",
       style: {
@@ -997,7 +1063,9 @@
       // Show controls now that the style + track are ready.
       const controls = document.getElementById("map-controls");
       controls.classList.remove("hidden");
-      document.getElementById("theme-select").addEventListener("change", (e) => applyTheme(e.target.value));
+      const themeSelect = document.getElementById("theme-select");
+      themeSelect.value = currentTheme; // reflect the saved / carried-in basemap
+      themeSelect.addEventListener("change", (e) => applyTheme(e.target.value));
       document.getElementById("color-select").addEventListener("change", (e) => {
         currentColorMode = e.target.value;
         syncTraceModeOptions();

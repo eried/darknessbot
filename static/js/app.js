@@ -301,14 +301,51 @@ document.addEventListener("DOMContentLoaded", function () {
     return `${r},${g},${b}`;
   }
 
-  function distanceColor(t) {
+  // Per-metric colour ramps (low → high), interpolated across evenly-spaced
+  // rgb stops. Each metric reads sensibly instead of one shared rainbow:
+  // speed green→red through orange, battery/power/current blue→red through
+  // purple, temp cold→hot, altitude valley→peak, distance a vivid violet→green.
+  // Kept identical in inspector.js for trace-colour parity.
+  const RAMP_STOPS = {
+    speed:    [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
+    gpsspeed: [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
+    pwm:      [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
+    power:    [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    current:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    battery:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    voltage:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    temp:     [[51, 181, 255], [255, 138, 31], [255, 43, 43]],
+    altitude: [[23, 192, 180], [216, 178, 74], [242, 242, 242]],
+    distance: [[176, 32, 255], [255, 45, 214], [0, 230, 118]],
+  };
+  function rampColor(stops, t) {
     t = Math.max(0, Math.min(1, t));
-    // Violet (route start) → green (route end).
-    const r = Math.round(165 + (60 - 165) * t);
-    const g = Math.round(75 + (220 - 75) * t);
-    const b = Math.round(235 + (120 - 235) * t);
-    return `${r},${g},${b}`;
+    const n = stops.length - 1;
+    let seg = Math.floor(t * n); if (seg >= n) seg = n - 1;
+    const f = t * n - seg, a = stops[seg], b = stops[seg + 1];
+    return `${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)}`;
   }
+  function metricColorFn(key) {
+    const stops = RAMP_STOPS[key] || RAMP_STOPS.speed;
+    return (t) => rampColor(stops, t);
+  }
+  function distanceColor(t) { return rampColor(RAMP_STOPS.distance, t); }
+
+  // Movement / stillness modes: a drastic red ramp over the "on" band,
+  // transparent (undrawn) outside it. Wheel speed (km/h) drives the mask;
+  // the mask returns null for segments that should not be painted.
+  const RED_RAMP = [[255, 45, 45], [90, 0, 0]]; // bright → dark red
+  const MOVE_TH = 5;   // km/h — moving / still boundary
+  const MOVE_MAX = 50; // km/h — top of the moving ramp
+  function movingMask(kmh) {
+    if (!(kmh >= MOVE_TH)) return null;                          // still / no data
+    return Math.min(1, (kmh - MOVE_TH) / (MOVE_MAX - MOVE_TH));  // bright at TH → dark toward MAX
+  }
+  function stillMask(kmh) {
+    if (!(kmh < MOVE_TH)) return null;                           // moving
+    return Math.min(1, (MOVE_TH - kmh) / MOVE_TH);               // bright near TH → dark toward 0
+  }
+  const redRampFn = (t) => rampColor(RED_RAMP, t);
 
   const PAINT_METRICS = {
     distance: { pointIdx: -1 },
@@ -557,7 +594,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const pd = this._paintData;
         const BUCKETS = 32;
         const buckets = new Array(BUCKETS).fill(null);
-        const casingPath = heatCasing ? new Path2D() : null;
+        // Threshold modes (moving / still) leave gaps where the mask is null,
+        // so a whole-path casing under them would fill those gaps — skip it.
+        const casingPath = (heatCasing && !pd.mask) ? new Path2D() : null;
         const flatTracks = [];
         for (let t = 0; t < this._latLngs.length; t++) {
           if (vis && !vis.has(t)) continue;
@@ -586,6 +625,9 @@ document.addEventListener("DOMContentLoaded", function () {
             let t01;
             if (pd.mode === "progress") {
               t01 = i / (n - 1);
+            } else if (pd.mask) {
+              t01 = pd.mask(pts[i][pd.pointIdx]);
+              if (t01 === null) { lx = xs[i]; ly = ys[i]; continue; } // transparent: advance, don't draw
             } else {
               const v = pts[i][pd.pointIdx];
               t01 = typeof v === "number" ? (v - pd.min) / pd.span : 0;
@@ -656,8 +698,9 @@ document.addEventListener("DOMContentLoaded", function () {
           if (this._paintData && this._paintData.trackIdx === sel) {
             const pd = this._paintData;
             const { xs, ys, n } = tr;
-            if (heatCasing) {
-              // Whole path once in the dark casing, colors on top.
+            if (heatCasing && !pd.mask) {
+              // Whole path once in the dark casing, colors on top. Threshold
+              // modes skip it so their transparent gaps stay open.
               ctx.strokeStyle = `rgba(${heatCasing.color},${heatCasing.alpha})`;
               ctx.lineWidth = heatCasing.width;
               ctx.lineJoin = "round";
@@ -677,8 +720,16 @@ document.addEventListener("DOMContentLoaded", function () {
               for (let i = 1; i < n; i++) {
                 const dx = xs[i] - lx, dy = ys[i] - ly;
                 if (i < n - 1 && dx < MIN_PX && dx > -MIN_PX && dy < MIN_PX && dy > -MIN_PX) continue;
-                const t = pd.span ? (pd.values[i] - pd.min) / pd.span : 0.5;
-                ctx.strokeStyle = `rgba(${(pd.colorFn || heatColor)(t)},${pass.alpha})`;
+                let color;
+                if (pd.mask) {
+                  const t01 = pd.mask(pd.values[i]);
+                  if (t01 === null) { lx = xs[i]; ly = ys[i]; continue; } // transparent
+                  color = pd.colorFn(t01);
+                } else {
+                  const t = pd.span ? (pd.values[i] - pd.min) / pd.span : 0.5;
+                  color = (pd.colorFn || heatColor)(t);
+                }
+                ctx.strokeStyle = `rgba(${color},${pass.alpha})`;
                 ctx.beginPath();
                 ctx.moveTo(lx - ox, ly - oy);
                 ctx.lineTo(xs[i] - ox, ys[i] - oy);
@@ -750,6 +801,8 @@ document.addEventListener("DOMContentLoaded", function () {
       let hasData = false;
       if (key === "distance") {
         hasData = (track ? [track] : allTracks).some((tr) => tr && tr.points && tr.points.length);
+      } else if (key === "moving" || key === "still") {
+        hasData = hasMetric(2); // both keyed off wheel speed
       } else {
         const m = PAINT_METRICS[key];
         if (m) hasData = hasMetric(m.pointIdx);
@@ -795,6 +848,21 @@ document.addEventListener("DOMContentLoaded", function () {
       glowLayer._perf("push+draw", __t1);
       glowLayer._perf("updateGlow total", __t0);
     };
+
+    // Movement / stillness: a masked drastic-red ramp, transparent outside the
+    // band. Paints the selected track, or every track with none selected.
+    if (traceColor === "moving" || traceColor === "still") {
+      const mask = traceColor === "moving" ? movingMask : stillMask;
+      const selTrack = selectedIdx >= 0 ? allTracks[selectedIdx] : null;
+      if (selTrack && selTrack.points.length >= 2) {
+        push({ trackIdx: selectedIdx, values: selTrack.points.map((p) => p[2]), mask, colorFn: redRampFn });
+      } else if (allTracks.length) {
+        push({ all: true, tracks: allTracks, pointIdx: 2, mask, colorFn: redRampFn });
+      } else { push(null); }
+      updateTraceLegend(traceColor, 0, 1,
+        traceColor === "moving" ? { min: "Slow", max: "Fast" } : { min: "Slow", max: "Still" });
+      return;
+    }
 
     // Trace color paints the selected track — or, with nothing selected,
     // every visible track on a shared global scale so trips compare.
@@ -871,7 +939,7 @@ document.addEventListener("DOMContentLoaded", function () {
         updateTraceLegend(null);
         return;
       }
-      push({ all: true, tracks: allTracks, pointIdx: metric.pointIdx, absent: sc.absent, min: sc.min, max: sc.max, span: sc.max - sc.min, colorFn: heatColor });
+      push({ all: true, tracks: allTracks, pointIdx: metric.pointIdx, absent: sc.absent, min: sc.min, max: sc.max, span: sc.max - sc.min, colorFn: metricColorFn(traceColor) });
       updateTraceLegend(traceColor, sc.min, sc.max);
       return;
     }
@@ -893,7 +961,7 @@ document.addEventListener("DOMContentLoaded", function () {
           if (v < min) min = v;
           if (v > max) max = v;
         }
-        colorFn = heatColor;
+        colorFn = metricColorFn(traceColor);
         legMin = min; legMax = max;
       }
       if (!isFinite(min) || !isFinite(max) || min === max) {
@@ -938,10 +1006,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const TRACE_STATIC_UNIT = { pwm: "%", power: "W", current: "A", battery: "%", voltage: "V" };
   const legendEl = document.getElementById("color-legend");
   function legendGradientCss(key) {
-    // distance → distanceColor ramp; metrics → heatColor ramp.
-    return key === "distance"
-      ? "linear-gradient(90deg, rgb(165,75,235), rgb(60,220,120))"
-      : "linear-gradient(90deg, rgb(0,0,255), rgb(0,255,255), rgb(0,255,0), rgb(255,255,0), rgb(255,0,0))";
+    // Movement modes ramp bright → dark red; every metric uses its own palette.
+    const stops = (key === "moving" || key === "still") ? RED_RAMP : RAMP_STOPS[key];
+    if (!stops) return "linear-gradient(90deg, rgb(0,229,255), rgb(255,43,43))";
+    const parts = stops.map((s, i) => `rgb(${s[0]},${s[1]},${s[2]}) ${Math.round((i / (stops.length - 1)) * 100)}%`);
+    return "linear-gradient(90deg, " + parts.join(", ") + ")";
   }
   // labels (optional) overrides the numeric min/max readout with plain text,
   // for ramps where a number is meaningless (distance across many trips is
@@ -2168,6 +2237,10 @@ document.addEventListener("DOMContentLoaded", function () {
     split: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><line x1="5.6" y1="5.4" x2="14" y2="11.5"/><line x1="5.6" y1="10.6" x2="14" y2="4.5"/></svg>`,
     extend: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5h6M2 11h6"/><path d="M8 5v6"/><polyline points="10.5 6 13.5 8 10.5 10"/><line x1="8" y1="8" x2="13.5" y2="8"/></svg>`,
     rename: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5l3 3M3 13l.6-2.6 7-7 2 2-7 7L3 13z"/></svg>`,
+    share: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4.5"/><line x1="5.7" y1="9" x2="10.3" y2="11.5"/></svg>`,
+    file: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1.8H4.5a1 1 0 0 0-1 1v10.4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5.3z"/><path d="M9 1.8V5.3h3.5"/></svg>`,
+    archive: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4.5" width="12" height="9" rx="1"/><path d="M1.5 4.5 3 2h10l1.5 2.5"/><path d="M6.3 8h3.4"/></svg>`,
+    remove: `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1l.5-9"/></svg>`,
   };
   let toolsMenu = null, toolsOpenFor = -1, toolsBtnEl = null;
   function ensureToolsMenu() {
@@ -2202,6 +2275,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   function toolsMenuMain(i) {
     const m = toolsMenu;
+    const t = allTracks[i] || {};
+    // Sharing needs a Dropbox origin; the archive toggle also shows for a trip
+    // already marked (so it can be unmarked) even if it has no Dropbox path.
+    const canShare = !!t.dropboxPath;
+    const canArchive = !!(t.dropboxPath || t._archive);
     m.innerHTML =
       `<a class="ttm-item" href="video.html?i=${i}" target="_blank" rel="noopener">${ICON.video}Make video</a>` +
       `<a class="ttm-item" href="inspector.html?i=${i}" target="_blank" rel="noopener">${ICON.inspect}Inspector</a>` +
@@ -2209,15 +2287,80 @@ document.addEventListener("DOMContentLoaded", function () {
       `<button type="button" class="ttm-item" data-act="rename">${ICON.rename}Rename trip…</button>` +
       `<button type="button" class="ttm-item" data-act="wheel">${ICON.wheel}Change wheel…</button>` +
       `<button type="button" class="ttm-item" data-act="split">${ICON.split}Split trip…</button>` +
-      `<button type="button" class="ttm-item" data-act="extend">${ICON.extend}Extend trip…</button>`;
+      `<button type="button" class="ttm-item" data-act="extend">${ICON.extend}Extend trip…</button>` +
+      ((canShare || canArchive) ? `<div class="ttm-sep"></div>` : "") +
+      (canShare ? `<button type="button" class="ttm-item" data-act="sharelink">${ICON.share}Share with viewer</button>` : "") +
+      (canShare ? `<button type="button" class="ttm-item" data-act="sharefile">${ICON.file}Share file</button>` : "") +
+      (canArchive ? `<button type="button" class="ttm-item" data-act="archive">${ICON.archive}${t._archive ? "Unmark archive" : "Mark for archive"}</button>` : "") +
+      `<div class="ttm-sep"></div>` +
+      `<button type="button" class="ttm-item ttm-danger" data-act="remove">${ICON.remove}Remove</button>`;
     m.querySelectorAll("a.ttm-item").forEach((a) => a.addEventListener("click", () => closeToolsMenu()));
-    const wire = (act, fn) => m.querySelector(`[data-act="${act}"]`).addEventListener("click", (e) => {
-      e.stopPropagation(); closeToolsMenu(); fn(i);
-    });
+    // Null-safe: the Dropbox-only items aren't always present.
+    const wire = (act, fn) => { const el = m.querySelector(`[data-act="${act}"]`); if (el) el.addEventListener("click", (e) => { e.stopPropagation(); closeToolsMenu(); fn(i); }); };
     wire("rename", openRenameDialog);
     wire("wheel", openChangeWheelDialog);
     wire("split", openSplitDialog);
     wire("extend", openExtendDialog);
+    wire("sharelink", (idx) => shareTripLink(idx, "viewer"));
+    wire("sharefile", (idx) => shareTripLink(idx, "file"));
+    wire("archive", toggleArchiveMark);
+    wire("remove", removeTrip);
+  }
+  // Share a Dropbox trip: "viewer" copies a link that opens it in this viewer
+  // (short #d-… token when the Dropbox link is standard-shaped), "file" copies
+  // the raw Dropbox file link. Feedback is a toast, not an inline flash.
+  async function shareTripLink(i, mode) {
+    const t = allTracks[i];
+    if (!t || !t.dropboxPath) return;
+    const DS = window.DropboxSource;
+    if (!DS || !DS.isAuthenticated || !DS.isAuthenticated()) { appToast("Sign in to Dropbox first."); return; }
+    try {
+      const direct = await DS.getOrCreateShareLink(t.dropboxPath);
+      let url, label;
+      if (mode === "file") { url = direct; label = "File link copied"; }
+      else {
+        const short = encodeShortLink(direct);
+        url = location.origin + location.pathname + (short ? "#" + short : "?file=" + encodeURIComponent(direct));
+        label = "Viewer link copied";
+      }
+      await navigator.clipboard.writeText(url);
+      appToast(label);
+    } catch (err) {
+      const msg = String(err && err.message || err);
+      if (/session expired|not signed in/i.test(msg)) {
+        appToast("Dropbox session expired.");
+        setTimeout(() => {
+          const ok = window.confirm("Your Dropbox session has expired.\n\nReconnect now to share this trip? You'll come back to the viewer after sign-in.");
+          if (ok && DS.startOAuth) DS.startOAuth();
+        }, 250);
+      } else {
+        appToast(/sharing\.write/i.test(msg) ? "Enable sharing.write in Dropbox App Console"
+          : /sharing\.read/i.test(msg) ? "Enable sharing.read in Dropbox App Console"
+          : "Share failed");
+      }
+      console.warn("Share link error:", err);
+    }
+  }
+  // Flag / unflag a trip for archive (the Sync dialog then moves it into
+  // /trips/archive and drops it locally). The list strikes marked trips out.
+  function toggleArchiveMark(i) {
+    const t = allTracks[i];
+    if (!t) return;
+    if (t._archive) delete t._archive; else t._archive = true;
+    saveTracks(allTracks);
+    buildTripList();
+    appToast(t._archive ? "Marked for archive." : "Archive mark removed.");
+  }
+  // Remove a trip from the loaded library (local only — the source file, and
+  // any Dropbox copy, are untouched). Mirrors the batch editor's Remove.
+  function removeTrip(i) {
+    const t = allTracks[i];
+    if (!t) return;
+    if (!window.confirm("Remove this trip from the loaded library? The original file is not touched.")) return;
+    const remaining = allTracks.filter((_, idx) => idx !== i);
+    loadTracks(remaining, true);
+    saveTracks(allTracks);
+    if (!allTracks.length) navigate("#load", true);
   }
   function applyWheelToTrip(i, wheel) {
     const t = allTracks[i];
@@ -2473,6 +2616,16 @@ document.addEventListener("DOMContentLoaded", function () {
     const archiveTracks = state.rows.filter((r) => r.kind === "local" && r.cat === "archive").map((r) => r.track);
     const remoteFiles = state.rows.filter((r) => r.kind === "remote").map((r) => r.file);
     const nTrips = state.rows.length;
+    // Upstream (send to Dropbox) is one control: a Synchronize button that does
+    // upload + archive together, with a caret for the individual actions when
+    // both apply. Downstream (Load) stays its own button.
+    const up = uploadTracks.length, arch = archiveTracks.length, upstream = up + arch;
+    const bothUpstream = up > 0 && arch > 0;
+    const subParts = [];
+    if (up) subParts.push(`${up} to upload`);
+    if (arch) subParts.push(`${arch} to archive`);
+    const syncMainLabel = `<span class="dbx-sync-title">Synchronize</span>` +
+      (subParts.length ? `<span class="dbx-sync-sub">${subParts.join(" · ")}</span>` : "");
 
     const rowsHtml = state.rows.map((r, i) => {
       const meta = r.kind === "remote"
@@ -2523,12 +2676,19 @@ document.addEventListener("DOMContentLoaded", function () {
       `</details>` +
       `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
       `<div class="src-action"><div class="src-action-row">` +
-        // Upload only when something actually needs it, and placed first so the
-        // Load button stays the rightmost action in every context. Archive sits
-        // between them as a secondary (distinct, slightly destructive) action.
-        (uploadTracks.length ? `<button type="button" class="src-primary-btn" id="dbx-do-sync">Upload ${uploadTracks.length} to Dropbox</button>` : "") +
-        (archiveTracks.length ? `<button type="button" class="src-secondary-btn dbx-archive-btn" id="dbx-do-archive">Archive ${archiveTracks.length}</button>` : "") +
-        (remoteFiles.length ? `<button type="button" class="${uploadTracks.length ? "src-secondary-btn" : "src-primary-btn"}" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
+        // Upstream: one Synchronize button (upload + archive). When both apply,
+        // a caret splits it into the individual Upload / Archive actions.
+        (upstream ? (bothUpstream
+          ? `<div class="dbx-sync-split">` +
+              `<button type="button" class="src-primary-btn dbx-sync-main" id="dbx-do-all" title="Upload ${up} and archive ${arch}">${syncMainLabel}</button>` +
+              `<button type="button" class="src-primary-btn dbx-sync-caret" id="dbx-sync-menu-btn" aria-label="Individual sync actions"><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path fill="currentColor" d="M3 5l5 6 5-6z"/></svg></button>` +
+              `<div class="dbx-sync-menu hidden" id="dbx-sync-menu">` +
+                `<button type="button" class="dbx-sync-menu-item" id="dbx-do-sync">Upload ${up}</button>` +
+                `<button type="button" class="dbx-sync-menu-item" id="dbx-do-archive">Archive ${arch}</button>` +
+              `</div>` +
+            `</div>`
+          : `<button type="button" class="src-primary-btn dbx-sync-main" id="dbx-do-all">${syncMainLabel}</button>`) : "") +
+        (remoteFiles.length ? `<button type="button" class="${upstream ? "src-secondary-btn" : "src-primary-btn"}" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
       `</div></div>` +
       `<div class="dbx-status"></div>`;
 
@@ -2576,10 +2736,37 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     const loadBtn = main.querySelector("#dbx-load-remote");
     if (loadBtn) loadBtn.addEventListener("click", () => loadRemoteTrips(remoteFiles, ui));
+    // Synchronize = upload then archive in one pass.
+    const allBtn = main.querySelector("#dbx-do-all");
+    if (allBtn && upstream) allBtn.addEventListener("click", () => runSyncAndArchive(uploadTracks, archiveTracks, ui));
+    // Caret splits it into the individual actions.
+    const menu = main.querySelector("#dbx-sync-menu");
+    const menuBtn = main.querySelector("#dbx-sync-menu-btn");
+    if (menuBtn && menu) {
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menu.classList.toggle("hidden");
+        if (!menu.classList.contains("hidden")) {
+          const close = (ev) => {
+            if (ev.target.closest("#dbx-sync-menu") || ev.target.closest("#dbx-sync-menu-btn")) return;
+            menu.classList.add("hidden");
+            document.removeEventListener("mousedown", close, true);
+          };
+          document.addEventListener("mousedown", close, true);
+        }
+      });
+    }
     const syncBtn = main.querySelector("#dbx-do-sync");
     if (syncBtn && uploadTracks.length) syncBtn.addEventListener("click", () => runSync(uploadTracks, ui));
     const archiveBtn = main.querySelector("#dbx-do-archive");
     if (archiveBtn && archiveTracks.length) archiveBtn.addEventListener("click", () => runArchive(archiveTracks, ui));
+  }
+
+  // One-pass upstream sync: upload first (so a combined trip is safely on
+  // Dropbox before its sources leave), then archive the superseded ones.
+  async function runSyncAndArchive(uploadTracks, archiveTracks, ui) {
+    if (uploadTracks && uploadTracks.length) await runSync(uploadTracks, ui);
+    if (archiveTracks && archiveTracks.length) await runArchive(archiveTracks, ui);
   }
 
   async function runSync(uploadTracks, ui) {
@@ -3008,6 +3195,26 @@ document.addEventListener("DOMContentLoaded", function () {
     if (toastMsg) appToast(toastMsg);
   }
 
+  // Highlight a freshly created trip (extend / split). buildTripList renders
+  // cards in async idle chunks, so the row may not exist yet — poll a few
+  // frames for it, then optionally select it (zooms the map, opens its group,
+  // scrolls it in) and run the one-shot .trip-flash fade.
+  function highlightNewTrip(track, doSelect) {
+    let tries = 0;
+    const step = () => {
+      const idx = allTracks.indexOf(track);
+      if (idx < 0) return;
+      const li = document.querySelector(`.trip-item[data-idx="${idx}"]`);
+      if (!li) { if (tries++ < 30) requestAnimationFrame(step); return; }
+      if (doSelect) selectTrip(idx);
+      li.classList.remove("trip-flash");
+      void li.offsetWidth; // reflow so the animation restarts on re-flash
+      li.classList.add("trip-flash");
+      if (!doSelect) li.scrollIntoView({ block: "nearest" });
+    };
+    requestAnimationFrame(step);
+  }
+
   // --- small time formatters for the dialogs ---
   function fmtClock(sec) {
     sec = Math.max(0, Math.round(sec));
@@ -3110,12 +3317,14 @@ document.addEventListener("DOMContentLoaded", function () {
         if (seg) segs.push(seg);
       }
       if (segs.length < 2) { appToast("Couldn't split (segments too short)."); return; }
-      // The original is now redundant (its data lives in the parts): flag it so
-      // the Dropbox Sync dialog offers to archive it out of /trips.
-      t._archive = true;
+      // Split leaves the original untouched. Flag it for archive only when it's
+      // Dropbox-backed, so the Sync dialog can move it out of /trips; otherwise
+      // it just stays (remove it by hand if you want).
+      if (t.dropboxPath) t._archive = true;
       allTracks.push(...segs);
       ttmodClose();
       commitEditedTracks(`Split into ${segs.length} trips.`);
+      segs.forEach((s) => highlightNewTrip(s, false)); // highlight the fresh parts
     });
   }
 
@@ -3128,23 +3337,42 @@ document.addEventListener("DOMContentLoaded", function () {
     // in both. Any span that includes this trip is valid — older→this,
     // this→newer, or older→newer.
     //
-    // Hard guard against re-merging already-merged data: hide any trip whose
-    // time overlaps this one — the pieces already inside an extended trip, or
-    // the extended trip itself when the anchor is a piece. Merging those would
-    // duplicate rows and double-count distance. Real rides never overlap in
-    // time, so this only ever removes combine/split leftovers.
-    const aS = Date.parse(t.dateStart || "");
-    const aE = Date.parse(t.dateEnd || t.dateStart || "");
+    // Hard guard against re-merging already-merged data. Two rules, both
+    // filtering the picker's candidates (so no range can sweep them up either):
+    //   1. Overlap: hide trips whose time overlaps THIS trip — the pieces
+    //      already inside an extended trip, or the extended trip when the
+    //      anchor is a piece.
+    //   2. Containment: hide trips strictly inside ANY other trip — a piece is
+    //      redundant while its combined parent exists, so a range dragged
+    //      across an unrelated third trip still can't re-swallow it.
+    // Real rides never overlap in time, so this only removes combine/split
+    // leftovers. Strict containment keeps duplicate-span imports from both
+    // vanishing. The anchor is always kept (it shows as "This trip").
+    const spanOf = (idx) => {
+      const o = allTracks[idx];
+      return [Date.parse(o.dateStart || ""), Date.parse(o.dateEnd || o.dateStart || "")];
+    };
+    const [aS, aE] = spanOf(i);
     const overlapsAnchor = (idx) => {
       if (idx === i) return false;
-      const o = allTracks[idx];
-      const s = Date.parse(o.dateStart || "");
-      const e = Date.parse(o.dateEnd || o.dateStart || "");
+      const [s, e] = spanOf(idx);
       if (![s, e, aS, aE].every(isFinite)) return false;
       return s < aE && e > aS;
     };
+    const containedInAnother = (idx) => {
+      if (idx === i) return false;
+      const [s, e] = spanOf(idx);
+      if (!isFinite(s) || !isFinite(e)) return false;
+      for (let j = 0; j < allTracks.length; j++) {
+        if (j === idx) continue;
+        const [us, ue] = spanOf(j);
+        if (!isFinite(us) || !isFinite(ue)) continue;
+        if (us <= s && ue >= e && (us < s || ue > e)) return true; // strictly larger
+      }
+      return false;
+    };
     const order = allTracks.map((_, idx) => idx)
-      .filter((idx) => !overlapsAnchor(idx))
+      .filter((idx) => !overlapsAnchor(idx) && !containedInAnother(idx))
       .sort((a, b) => (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
     const pos = order.indexOf(i); // this trip's chronological position
     const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
@@ -3198,12 +3426,15 @@ document.addEventListener("DOMContentLoaded", function () {
       const sources = idxs.map((idx) => allTracks[idx]);
       const merged = mergeTracksInTime(sources, "Combined ride");
       if (!merged) { appToast("Couldn't combine those trips."); return; }
-      // The pieces are now redundant (their data lives in `merged`): flag them
-      // so the Dropbox Sync dialog offers to archive them out of /trips.
-      sources.forEach((t) => { t._archive = true; });
+      // The pieces are now redundant (their data lives in `merged`). Flag the
+      // Dropbox-backed ones so the Sync dialog offers to archive them out of
+      // /trips (a piece with no Dropbox origin has nothing to move).
+      sources.forEach((t) => { if (t.dropboxPath) t._archive = true; });
       allTracks.push(merged);
       ttmodClose();
       commitEditedTracks(`Combined ${idxs.length} trips.`);
+      // Select the new trip (zooms the map to it) and flash its row.
+      highlightNewTrip(merged, true);
     });
   }
 
@@ -3409,7 +3640,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function buildTripItem(t, i) {
       const li = document.createElement("div");
-      li.className = "trip-item";
+      li.className = "trip-item" + (t._archive ? " trip-archived" : "");
       li.dataset.idx = i;
       const s = t.stats;
 
@@ -3428,11 +3659,7 @@ document.addEventListener("DOMContentLoaded", function () {
           <div class="trip-info">
             <div class="trip-title-row">
               <div class="trip-date">${formatTripLabel(t)}</div>
-              ${t.dropboxPath ? `
-              <button type="button" class="share-btn" data-idx="${i}" title="Copy a shareable viewer link">
-                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4.5"/><line x1="5.7" y1="9" x2="10.3" y2="11.5"/></svg>
-              </button>` : ""}
-              <button type="button" class="tools-btn" data-idx="${i}" aria-label="Trip tools" title="Trip tools: make a video, inspect, change wheel, split or extend">
+              <button type="button" class="tools-btn" data-idx="${i}" aria-label="Trip tools" title="Trip tools: share, inspect, change wheel, split, extend, remove">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
                 <svg class="tools-caret" viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>
               </button>
@@ -3484,81 +3711,15 @@ document.addEventListener("DOMContentLoaded", function () {
         });
       }
 
-      const shareBtn = li.querySelector(".share-btn");
-      if (shareBtn) {
-        shareBtn.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          if (!window.DropboxSource || !window.DropboxSource.isAuthenticated()) {
-            flashShareStatus(shareBtn, "Sign in to Dropbox first", true);
-            return;
-          }
-          const original = shareBtn.innerHTML;
-          shareBtn.classList.add("is-busy");
-          shareBtn.innerHTML = "…";
-          try {
-            const direct = await window.DropboxSource.getOrCreateShareLink(t.dropboxPath);
-            // Standard-shaped Dropbox links compress to the short #d-…
-            // token; anything else keeps the verbose ?file= form.
-            const short = encodeShortLink(direct);
-            const viewerUrl = location.origin + location.pathname +
-              (short ? "#" + short : "?file=" + encodeURIComponent(direct));
-            await navigator.clipboard.writeText(viewerUrl);
-            flashShareStatus(shareBtn, "Link copied", false);
-          } catch (err) {
-            const msg = String(err && err.message || err);
-            if (/session expired|not signed in/i.test(msg)) {
-              // The tokens have already been wiped by rpc(). Trips stay
-              // loaded — they're cached locally and don't need Dropbox
-              // to view. We just need to re-auth before this trip can
-              // generate a share link again. Ask before redirecting so
-              // the user doesn't lose any current state by accident.
-              flashShareStatus(shareBtn, "Dropbox session expired", true);
-              setTimeout(() => {
-                const ok = window.confirm(
-                  "Your Dropbox session has expired.\n\n" +
-                  "Reconnect now to share this trip? You'll come back to the viewer after sign-in."
-                );
-                if (ok && window.DropboxSource && window.DropboxSource.startOAuth) {
-                  window.DropboxSource.startOAuth();
-                }
-              }, 250);
-            } else {
-              const friendly = /sharing\.write/i.test(msg)
-                ? "Enable sharing.write in Dropbox App Console"
-                : /sharing\.read/i.test(msg)
-                  ? "Enable sharing.read in Dropbox App Console"
-                  : "Share failed";
-              flashShareStatus(shareBtn, friendly, true);
-            }
-            console.warn("Share link error:", err);
-          } finally {
-            shareBtn.classList.remove("is-busy");
-            shareBtn.innerHTML = original;
-          }
-        });
-      }
-
       li.addEventListener("click", (e) => {
         if (e.target.closest(".trip-check")) return;
         if (e.target.closest(".inspect-btn")) { e.stopPropagation(); return; }
-        if (e.target.closest(".share-btn")) { e.stopPropagation(); return; }
         if (e.target.closest(".tools-btn")) { e.stopPropagation(); return; }
         if (e.target.closest(".chart-wrap")) return;
         if (e.target.closest('.detail-row[data-toggle="1"]')) return;
         selectTrip(i);
       });
       return li;
-    }
-
-    function flashShareStatus(btn, msg, isError) {
-      const old = btn.title;
-      btn.title = msg;
-      btn.classList.toggle("share-error", !!isError);
-      btn.classList.add("share-flash");
-      setTimeout(() => {
-        btn.classList.remove("share-flash", "share-error");
-        btn.title = old;
-      }, 1800);
     }
 
     function updateGroupCheckbox(groupEl) {
@@ -3732,9 +3893,15 @@ document.addEventListener("DOMContentLoaded", function () {
       const CHUNK = 20;
       let i = 0;
       const step = () => {
+        // A later buildTripList() clears the list (detaching this body) and may
+        // shrink allTracks (archive/remove). Bail so stale chunks don't build
+        // against indices that no longer exist.
+        if (!body.isConnected) return;
         const end = Math.min(i + CHUNK, indices.length);
         for (let j = i; j < end; j += 1) {
-          body.appendChild(buildTripItem(allTracks[indices[j]], indices[j]));
+          const tk = allTracks[indices[j]];
+          if (!tk) continue;
+          body.appendChild(buildTripItem(tk, indices[j]));
         }
         i = end;
         if (i < indices.length) {

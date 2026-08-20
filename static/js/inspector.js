@@ -437,8 +437,39 @@
     temp:     { pointIdx: P_TEMP,    unit: "\u00b0C", invert: false, unitKind: "temp" },
     altitude: { pointIdx: P_ALT,     unit: "m",    invert: false, unitKind: "alt" }
   };
-  // Palette low → high; inverted modes reverse stops.
-  const PALETTE = ["#2962ff", "#00e5ff", "#69f0ae", "#ffeb3b", "#ff5252"];
+  // Per-metric colour ramps (low → high), evenly-spaced rgb stops. Kept
+  // identical to app.js RAMP_STOPS so the trace colours match between pages.
+  const RAMP_STOPS = {
+    speed:    [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
+    gpsspeed: [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
+    pwm:      [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
+    power:    [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    current:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    battery:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    voltage:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    temp:     [[51, 181, 255], [255, 138, 31], [255, 43, 43]],
+    altitude: [[23, 192, 180], [216, 178, 74], [242, 242, 242]],
+    distance: [[176, 32, 255], [255, 45, 214], [0, 230, 118]],
+  };
+  // Movement / stillness: a drastic red ramp over the "on" band, transparent
+  // outside it. Wheel speed drives the mask (null = don't paint that vertex).
+  const RED_RAMP = [[255, 45, 45], [90, 0, 0]];
+  const MOVE_TH = 5, MOVE_MAX = 50;
+  function movingMask(kmh) { return (kmh >= MOVE_TH) ? Math.min(1, (kmh - MOVE_TH) / (MOVE_MAX - MOVE_TH)) : null; }
+  function stillMask(kmh) { return (kmh < MOVE_TH) ? Math.min(1, (MOVE_TH - kmh) / MOVE_TH) : null; }
+  const THRESHOLD_MODES = { moving: movingMask, still: stillMask };
+  function rampRgb(stops, t) {
+    t = Math.max(0, Math.min(1, t));
+    const n = stops.length - 1;
+    let seg = Math.floor(t * n); if (seg >= n) seg = n - 1;
+    const f = t * n - seg, a = stops[seg], b = stops[seg + 1];
+    return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * f) + "," + Math.round(a[1] + (b[1] - a[1]) * f) + "," + Math.round(a[2] + (b[2] - a[2]) * f) + ")";
+  }
+  function gradientCssFor(mode) {
+    const stops = THRESHOLD_MODES[mode] ? RED_RAMP : RAMP_STOPS[mode];
+    if (!stops) return "linear-gradient(90deg, #00e5ff, #ff2b2b)";
+    return "linear-gradient(90deg, " + stops.map((s, i) => "rgb(" + s.join(",") + ") " + Math.round((i / (stops.length - 1)) * 100) + "%").join(", ") + ")";
+  }
 
   let map = null, riderMarker = null;
   let followPan = true, followRotate = true, followZoom = true;
@@ -597,6 +628,13 @@
   // slim dark casing for dark.
   function applyTraceStyle() {
     if (!map || !map.getLayer("track-glow") || !map.getLayer("traveled-glow")) return;
+    // Movement modes rely on transparent gaps; a glow under the whole path
+    // would fill them, so drop the glow entirely for moving / still.
+    if (THRESHOLD_MODES[currentColorMode]) {
+      map.setLayoutProperty("track-glow", "visibility", "none");
+      map.setLayoutProperty("traveled-glow", "visibility", "none");
+      return;
+    }
     const mode = effectiveTraceStyle();
     if (mode === "normal") {
       map.setLayoutProperty("track-glow", "visibility", "none");
@@ -708,19 +746,15 @@
     for (let k = 0; k < 6; k++) next();
   }
 
-  function metricColor(value, minV, maxV, invert) {
-    const stops = invert ? PALETTE.slice().reverse() : PALETTE;
-    const t = Math.max(0, Math.min(1, (value - minV) / (maxV - minV)));
-    const pos = t * (stops.length - 1);
-    const i = Math.floor(pos);
-    const f = pos - i;
-    if (i >= stops.length - 1) return stops[stops.length - 1];
-    return lerpColor(stops[i], stops[i + 1], f);
+  function metricColor(value, minV, maxV, mode) {
+    const stops = RAMP_STOPS[mode] || RAMP_STOPS.speed;
+    return rampRgb(stops, (value - minV) / (maxV - minV));
   }
 
   // Value range for a metric. With `endIdx` the scan is limited to the
   // traveled portion [0..endIdx] (live scale); without it, the whole trip.
   function getModeStats(mode, endIdx) {
+    if (THRESHOLD_MODES[mode]) return { threshold: mode }; // fixed-threshold, no scan
     const cfg = COLOR_MODES[mode];
     if (!cfg || !routePoints.length) return null;
     const end = endIdx == null
@@ -741,8 +775,9 @@
   // colour is pinned to its true distance fraction along the line, so the
   // palette stays locked to the ground as the trail grows — no crawling.
   function buildTraceGradient(mode, endIdx, stats) {
+    const mask = THRESHOLD_MODES[mode];
     const cfg = COLOR_MODES[mode];
-    if (!cfg || !stats) return null;
+    if (!mask && (!cfg || !stats)) return null;
     const end = Math.max(0, Math.min(endIdx, coords.length - 1, routePoints.length - 1));
     if (end < 1) return null;
     let tot = 0;
@@ -752,6 +787,15 @@
       cum[i] = tot;
     }
     if (tot <= 0) return null;
+    // Movement modes paint a masked red ramp, transparent (undrawn) outside the
+    // band; metrics paint their own palette across min..max.
+    const colorAt = (i) => {
+      if (mask) {
+        const t01 = mask(routePoints[i][P_SPD]);
+        return t01 === null ? "rgba(10,10,18,0)" : rampRgb(RED_RAMP, t01);
+      }
+      return metricColor(routePoints[i][cfg.pointIdx], stats.min, stats.max, mode);
+    };
     const expr = ["interpolate", ["linear"], ["line-progress"]];
     // Downsample against the FULL route length, not the growing traveled
     // length — a constant step keeps the same vertices carrying colour stops
@@ -761,12 +805,10 @@
     for (let i = 0; i <= end; i += step) {
       const p = cum[i] / tot;
       if (p <= lastP) continue;
-      expr.push(p, metricColor(routePoints[i][cfg.pointIdx], stats.min, stats.max, stats.invert));
+      expr.push(p, colorAt(i));
       lastP = p;
     }
-    if (lastP < 1) {
-      expr.push(1, metricColor(routePoints[end][cfg.pointIdx], stats.min, stats.max, stats.invert));
-    }
+    if (lastP < 1) expr.push(1, colorAt(end));
     return expr;
   }
 
@@ -781,10 +823,18 @@
     return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   }
 
-  function updateLegend(stats) {
+  function updateLegend(stats, mode) {
     const legend = document.getElementById("color-legend");
     if (!stats) { legend.classList.add("hidden"); return; }
-    legend.querySelector(".legend-bar").classList.toggle("inverted", !!stats.invert);
+    const bar = legend.querySelector(".legend-bar");
+    bar.classList.remove("inverted");
+    bar.style.backgroundImage = gradientCssFor(mode); // per-metric ramp
+    if (stats.threshold) {
+      legend.querySelector("[data-legend-min]").textContent = "Slow";
+      legend.querySelector("[data-legend-max]").textContent = stats.threshold === "moving" ? "Fast" : "Still";
+      legend.classList.remove("hidden");
+      return;
+    }
     // Speed / temp / altitude metrics get the locale-appropriate label and
     // converted bounds; other metrics (V, A, W, %) keep their static units.
     const kind = stats.unitKind;
@@ -816,7 +866,7 @@
       map.setPaintProperty("traveled-line", "line-gradient", expr);
       map.setPaintProperty("traveled-line", "line-color", "#ffffff");
     }
-    updateLegend(stats);
+    updateLegend(stats, currentColorMode);
   }
 
   // Applies the current Trace color + Trace mode pair to the two line layers.
@@ -861,7 +911,7 @@
         map.setPaintProperty("track-line", "line-gradient", expr);
         map.setPaintProperty("track-line", "line-color", "#ffffff");
       }
-      updateLegend(stats);
+      updateLegend(stats, mode);
       applyTraceStyle();
       return;
     }
@@ -899,6 +949,8 @@
     for (const opt of sel.options) {
       const key = opt.value;
       if (key === "solid") { opt.disabled = false; continue; }
+      // Movement modes ride on wheel speed, which always drives playback.
+      if (key === "moving" || key === "still") { opt.disabled = false; continue; }
       // GPS speed has no chart block — it lives on the speed chart. Toggle it
       // by whether the trip carries the column.
       if (key === "gpsspeed") { opt.disabled = !hasGpsSpeed; continue; }

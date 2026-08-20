@@ -1092,6 +1092,17 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     font-weight: 600;
 }
 
+/* Trips marked for archive read as struck through in the list. */
+.trip-item.trip-archived .trip-date { text-decoration: line-through; text-decoration-thickness: 1px; opacity: 0.55; }
+
+/* One-shot highlight after a trip is created (extend / split). An inset
+   overlay rides on top of any hover/active background, then fades out. */
+@keyframes trip-flash-kf {
+    0%   { box-shadow: inset 0 0 0 2000px rgba(0, 229, 255, 0.30); }
+    100% { box-shadow: inset 0 0 0 2000px rgba(0, 229, 255, 0); }
+}
+.trip-item.trip-flash { animation: trip-flash-kf 1.7s ease-out; }
+
 .trip-meta {
     color: #777;
     font-size: 0.78rem;
@@ -1166,6 +1177,10 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 #trip-tools-menu .ttm-back { color: #9ab; font-weight: 600; }
 #trip-tools-menu .ttm-sep { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.08); }
 #trip-tools-menu .ttm-note { padding: 6px 10px; font-size: 11.5px; color: #789; }
+#trip-tools-menu .ttm-item.ttm-danger { color: #ff9b9b; }
+#trip-tools-menu .ttm-item.ttm-danger svg { color: #ff9b9b; }
+#trip-tools-menu .ttm-item.ttm-danger:hover { background: rgba(255, 90, 90, 0.14); color: #ffb3b3; }
+#trip-tools-menu .ttm-item.ttm-danger:hover svg { color: #ffb3b3; }
 
 .inspect-btn {
     flex-shrink: 0;
@@ -1187,36 +1202,6 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     background: rgba(0, 229, 255, 0.1);
     color: #00e5ff;
 }
-
-.share-btn {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    margin-right: 2px;
-    padding: 0;
-    border-radius: 4px;
-    background: none;
-    border: none;
-    color: #00e5ff;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-}
-.share-btn:hover {
-    background: rgba(0, 97, 255, 0.14);
-    color: #4a8bff;
-}
-.share-btn.share-flash {
-    background: rgba(0, 200, 130, 0.18);
-    color: #80e6b4;
-}
-.share-btn.share-flash.share-error {
-    background: rgba(255, 90, 90, 0.18);
-    color: #ffb0b0;
-}
-.share-btn.is-busy { opacity: 0.6; cursor: progress; }
 
 /* Hover tooltip */
 #track-tooltip {
@@ -1516,6 +1501,34 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; font: inherit; font-weight: 500; cursor: pointer;
 }
 #dbx-sync-modal .src-secondary-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+
+/* Synchronize split button: main does upload + archive, the caret reveals the
+   individual actions. */
+#dbx-sync-modal .dbx-sync-split { position: relative; display: inline-flex; }
+#dbx-sync-modal .dbx-sync-main {
+    flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.15; text-align: left;
+    border-top-right-radius: 0; border-bottom-right-radius: 0;
+}
+#dbx-sync-modal .dbx-sync-title { font-weight: 600; }
+#dbx-sync-modal .dbx-sync-sub { font-size: 0.68rem; font-weight: 400; opacity: 0.85; }
+#dbx-sync-modal .dbx-sync-caret {
+    padding: 0.6rem 0.55rem; border-top-left-radius: 0; border-bottom-left-radius: 0;
+    box-shadow: 0 6px 16px rgba(0, 97, 255, 0.32), inset 1px 0 0 rgba(255, 255, 255, 0.25);
+}
+#dbx-sync-modal .dbx-sync-menu {
+    position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 6;
+    display: flex; flex-direction: column; gap: 4px; min-width: 150px;
+    padding: 6px; border-radius: 8px;
+    background: #16202b; border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+#dbx-sync-modal .dbx-sync-menu.hidden { display: none; }
+#dbx-sync-modal .dbx-sync-menu-item {
+    text-align: left; padding: 0.45rem 0.6rem; border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04); color: #cdd;
+    border: 1px solid rgba(255, 255, 255, 0.12); font: inherit; font-size: 0.78rem; cursor: pointer;
+}
+#dbx-sync-modal .dbx-sync-menu-item:hover { background: rgba(0, 229, 255, 0.14); color: #fff; }
 /* Busy state during a revert reload: dim + lock the body, no resizing text. */
 #dbx-sync-modal .dbx-sync-main.dbx-busy { pointer-events: none; opacity: 0.5; transition: opacity 0.12s; }
 /* Fetching/uploading: lock interaction but keep the row spinners bright. */

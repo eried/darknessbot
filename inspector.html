@@ -106,15 +106,21 @@
                             <span>Trace color</span>
                             <select id="color-select">
                                 <option value="solid">Solid</option>
-                                <option value="speed" selected>Speed</option>
-                                <option value="gpsspeed">GPS speed</option>
-                                <option value="pwm">PWM</option>
-                                <option value="power">Power</option>
-                                <option value="current">Current</option>
-                                <option value="battery">Battery</option>
-                                <option value="voltage">Voltage</option>
-                                <option value="temp">Temp</option>
-                                <option value="altitude">Altitude</option>
+                                <optgroup label="Metric">
+                                    <option value="speed" selected>Speed</option>
+                                    <option value="gpsspeed">GPS speed</option>
+                                    <option value="pwm">PWM</option>
+                                    <option value="power">Power</option>
+                                    <option value="current">Current</option>
+                                    <option value="battery">Battery</option>
+                                    <option value="voltage">Voltage</option>
+                                    <option value="temp">Temp</option>
+                                    <option value="altitude">Altitude</option>
+                                </optgroup>
+                                <optgroup label="Movement">
+                                    <option value="moving">Moving</option>
+                                    <option value="still">Stopped</option>
+                                </optgroup>
                             </select>
                         </label>
                         <label>
@@ -271,6 +277,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=79"></script>
+    <script src="static/js/inspector.js?v=80"></script>
 </body>
 </html>

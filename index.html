@@ -6,7 +6,7 @@
     <title>EUC Planet Trip Viewer</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/style.css?v=91" />
+    <link rel="stylesheet" href="static/css/style.css?v=92" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -46,16 +46,22 @@
                 <span>Trace color</span>
                 <select id="trace-color-select">
                     <option value="solid">Solid</option>
-                    <option value="speed" selected>Speed</option>
-                    <option value="gpsspeed">GPS speed</option>
-                    <option value="pwm">PWM</option>
-                    <option value="power">Power</option>
-                    <option value="current">Current</option>
-                    <option value="battery">Battery</option>
-                    <option value="voltage">Voltage</option>
-                    <option value="temp">Temp</option>
-                    <option value="altitude">Altitude</option>
-                    <option value="distance">Distance</option>
+                    <optgroup label="Metric">
+                        <option value="speed" selected>Speed</option>
+                        <option value="gpsspeed">GPS speed</option>
+                        <option value="pwm">PWM</option>
+                        <option value="power">Power</option>
+                        <option value="current">Current</option>
+                        <option value="battery">Battery</option>
+                        <option value="voltage">Voltage</option>
+                        <option value="temp">Temp</option>
+                        <option value="altitude">Altitude</option>
+                        <option value="distance">Distance</option>
+                    </optgroup>
+                    <optgroup label="Movement">
+                        <option value="moving">Moving</option>
+                        <option value="still">Stopped</option>
+                    </optgroup>
                 </select>
             </label>
             <label>
@@ -74,7 +80,6 @@
                     <option value="8000">Max</option>
                 </select>
             </label>
-            <div class="setting-hint">Applies to trips you load next. Switching clears the loaded trips.</div>
             <div id="color-legend" class="hidden">
                 <div class="legend-bar"></div>
                 <div class="legend-scale">
@@ -187,7 +192,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="static/js/app.js?v=159"></script>
+    <script src="static/js/app.js?v=162"></script>
     <script src="static/js/dropbox-source.js?v=7"></script>
     <script src="static/js/source-hints.js?v=40"></script>
 </body>

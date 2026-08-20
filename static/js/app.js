@@ -347,6 +347,24 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   const redRampFn = (t) => rampColor(RED_RAMP, t);
 
+  // Mix mode: a trip-structure view. Stops (<4 km/h) draw solid, thick, red;
+  // walk speed (4–8 km/h) is amber dashes that fade out by 8 km/h — the
+  // mount/dismount "exit" points; riding (>8) is a faint dashed ghost of the
+  // route. Returns a per-segment style {color, alpha, width, dash} or null.
+  const MIX_STOP = 4, MIX_WALK = 8;
+  function mixSegStyle(kmh) {
+    if (typeof kmh !== "number" || !(kmh >= 0)) return null;
+    if (kmh < MIX_STOP) {
+      const t = Math.min(1, (MIX_STOP - kmh) / MIX_STOP); // brighter near 4, darkest at a dead stop
+      return { color: rampColor(RED_RAMP, t), alpha: 1, width: 6, dash: null };
+    }
+    if (kmh < MIX_WALK) {
+      const a = 0.65 * (MIX_WALK - kmh) / (MIX_WALK - MIX_STOP); // fades to 0 at 8 km/h
+      return { color: "255,170,45", alpha: a, width: 3, dash: [5, 4] };
+    }
+    return { color: "190,215,235", alpha: 0.13, width: 2.5, dash: [2, 6] }; // riding ghost
+  }
+
   const PAINT_METRICS = {
     distance: { pointIdx: -1 },
     speed:    { pointIdx: 2 },
@@ -592,6 +610,38 @@ document.addEventListener("DOMContentLoaded", function () {
       // instead of one per segment (~140k for a 300-trip library).
       if (this._paintData && this._paintData.all) {
         const pd = this._paintData;
+        if (pd.segStyle) {
+          // Per-segment styled draw (Mix) across every visible track. No
+          // bucket batching — each segment sets its own colour/width/dash.
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          ctx.globalCompositeOperation = "source-over";
+          for (let t = 0; t < this._latLngs.length; t++) {
+            if (vis && !vis.has(t)) continue;
+            const tr = proj[t];
+            if (!tr || tr.n < 2 || offscreen(tr)) continue;
+            const pts = pd.tracks[t].points;
+            const { xs, ys, n } = tr;
+            let lx = xs[0], ly = ys[0];
+            for (let i = 1; i < n; i++) {
+              const dx = xs[i] - lx, dy = ys[i] - ly;
+              if (i < n - 1 && dx < MIN_PX && dx > -MIN_PX && dy < MIN_PX && dy > -MIN_PX) continue;
+              const st = pd.segStyle(pts[i][pd.pointIdx]);
+              if (!st) { lx = xs[i]; ly = ys[i]; continue; }
+              ctx.setLineDash(st.dash || []);
+              ctx.lineWidth = st.width;
+              ctx.strokeStyle = `rgba(${st.color},${st.alpha})`;
+              ctx.beginPath();
+              ctx.moveTo(lx - ox, ly - oy);
+              ctx.lineTo(xs[i] - ox, ys[i] - oy);
+              ctx.stroke();
+              lx = xs[i]; ly = ys[i];
+            }
+          }
+          ctx.setLineDash([]);
+          this._perf("draw(all-seg)", __t0);
+          return;
+        }
         const BUCKETS = 32;
         const buckets = new Array(BUCKETS).fill(null);
         // Threshold modes (moving / still) leave gaps where the mask is null,
@@ -658,7 +708,7 @@ document.addEventListener("DOMContentLoaded", function () {
             : [{ width: 2, alpha: 0.95, comp: "source-over" }];
         const colorFn = pd.colorFn || heatColor;
         for (const pass of allPasses) {
-          ctx.lineWidth = pass.width;
+          ctx.lineWidth = pass.width + (pd.widthBoost || 0);
           ctx.globalCompositeOperation = pass.comp;
           for (let b = 0; b < BUCKETS; b++) {
             if (!buckets[b]) continue;
@@ -698,6 +748,29 @@ document.addEventListener("DOMContentLoaded", function () {
           if (this._paintData && this._paintData.trackIdx === sel) {
             const pd = this._paintData;
             const { xs, ys, n } = tr;
+            if (pd.segStyle) {
+              // Per-segment styled draw (Mix): colour, alpha, width and dash
+              // vary by speed band; null segments are skipped (transparent).
+              ctx.lineJoin = "round";
+              ctx.lineCap = "round";
+              ctx.globalCompositeOperation = "source-over";
+              let lx = xs[0], ly = ys[0];
+              for (let i = 1; i < n; i++) {
+                const dx = xs[i] - lx, dy = ys[i] - ly;
+                if (i < n - 1 && dx < MIN_PX && dx > -MIN_PX && dy < MIN_PX && dy > -MIN_PX) continue;
+                const st = pd.segStyle(pd.values[i]);
+                if (!st) { lx = xs[i]; ly = ys[i]; continue; }
+                ctx.setLineDash(st.dash || []);
+                ctx.lineWidth = st.width;
+                ctx.strokeStyle = `rgba(${st.color},${st.alpha})`;
+                ctx.beginPath();
+                ctx.moveTo(lx - ox, ly - oy);
+                ctx.lineTo(xs[i] - ox, ys[i] - oy);
+                ctx.stroke();
+                lx = xs[i]; ly = ys[i];
+              }
+              ctx.setLineDash([]);
+            } else {
             if (heatCasing && !pd.mask) {
               // Whole path once in the dark casing, colors on top. Threshold
               // modes skip it so their transparent gaps stay open.
@@ -712,7 +785,7 @@ document.addEventListener("DOMContentLoaded", function () {
               ctx.stroke();
             }
             for (const pass of heatPasses) {
-              ctx.lineWidth = pass.width;
+              ctx.lineWidth = pass.width + (pd.widthBoost || 0);
               ctx.lineJoin = "round";
               ctx.lineCap = "round";
               ctx.globalCompositeOperation = pass.comp;
@@ -736,6 +809,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 ctx.stroke();
                 lx = xs[i]; ly = ys[i];
               }
+            }
             }
           } else {
             for (const pass of selectedPasses) {
@@ -801,8 +875,8 @@ document.addEventListener("DOMContentLoaded", function () {
       let hasData = false;
       if (key === "distance") {
         hasData = (track ? [track] : allTracks).some((tr) => tr && tr.points && tr.points.length);
-      } else if (key === "moving" || key === "still") {
-        hasData = hasMetric(2); // both keyed off wheel speed
+      } else if (key === "moving" || key === "still" || key === "mix") {
+        hasData = hasMetric(2); // all keyed off wheel speed
       } else {
         const m = PAINT_METRICS[key];
         if (m) hasData = hasMetric(m.pointIdx);
@@ -849,16 +923,24 @@ document.addEventListener("DOMContentLoaded", function () {
       glowLayer._perf("updateGlow total", __t0);
     };
 
-    // Movement / stillness: a masked drastic-red ramp, transparent outside the
-    // band. Paints the selected track, or every track with none selected.
-    if (traceColor === "moving" || traceColor === "still") {
-      const mask = traceColor === "moving" ? movingMask : stillMask;
+    // Movement modes (speed-driven). Moving / Still mask a red ramp; Mix draws
+    // a per-segment styled trip-structure view. All paint the selected track,
+    // or every track when none is selected.
+    if (traceColor === "moving" || traceColor === "still" || traceColor === "mix") {
       const selTrack = selectedIdx >= 0 ? allTracks[selectedIdx] : null;
-      if (selTrack && selTrack.points.length >= 2) {
-        push({ trackIdx: selectedIdx, values: selTrack.points.map((p) => p[2]), mask, colorFn: redRampFn });
-      } else if (allTracks.length) {
-        push({ all: true, tracks: allTracks, pointIdx: 2, mask, colorFn: redRampFn });
-      } else { push(null); }
+      const values = (selTrack && selTrack.points.length >= 2) ? selTrack.points.map((p) => p[2]) : null;
+      if (traceColor === "mix") {
+        if (values) push({ trackIdx: selectedIdx, values, segStyle: mixSegStyle });
+        else if (allTracks.length) push({ all: true, tracks: allTracks, pointIdx: 2, segStyle: mixSegStyle });
+        else push(null);
+        updateTraceLegend("mix", 0, 1, { min: "Stops", max: "Riding" });
+        return;
+      }
+      const mask = traceColor === "moving" ? movingMask : stillMask;
+      const widthBoost = traceColor === "still" ? 2.5 : 0; // stopped lines read thicker
+      if (values) push({ trackIdx: selectedIdx, values, mask, colorFn: redRampFn, widthBoost });
+      else if (allTracks.length) push({ all: true, tracks: allTracks, pointIdx: 2, mask, colorFn: redRampFn, widthBoost });
+      else { push(null); }
       updateTraceLegend(traceColor, 0, 1,
         traceColor === "moving" ? { min: "Slow", max: "Fast" } : { min: "Slow", max: "Still" });
       return;
@@ -1006,6 +1088,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const TRACE_STATIC_UNIT = { pwm: "%", power: "W", current: "A", battery: "%", voltage: "V" };
   const legendEl = document.getElementById("color-legend");
   function legendGradientCss(key) {
+    // Mix reads stops (red) → walk (amber) → riding (faint) left to right.
+    if (key === "mix") return "linear-gradient(90deg, rgb(255,45,45) 0%, rgb(255,170,45) 45%, rgba(190,215,235,0.4) 100%)";
     // Movement modes ramp bright → dark red; every metric uses its own palette.
     const stops = (key === "moving" || key === "still") ? RED_RAMP : RAMP_STOPS[key];
     if (!stops) return "linear-gradient(90deg, rgb(0,229,255), rgb(255,43,43))";
@@ -3659,6 +3743,10 @@ document.addEventListener("DOMContentLoaded", function () {
           <div class="trip-info">
             <div class="trip-title-row">
               <div class="trip-date">${formatTripLabel(t)}</div>
+              ${t.dropboxPath ? `
+              <button type="button" class="share-btn" data-idx="${i}" title="Copy a shareable viewer link">
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><line x1="5.7" y1="7" x2="10.3" y2="4.5"/><line x1="5.7" y1="9" x2="10.3" y2="11.5"/></svg>
+              </button>` : ""}
               <button type="button" class="tools-btn" data-idx="${i}" aria-label="Trip tools" title="Trip tools: share, inspect, change wheel, split, extend, remove">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
                 <svg class="tools-caret" viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 6 8 10 12 6"/></svg>
@@ -3711,9 +3799,17 @@ document.addEventListener("DOMContentLoaded", function () {
         });
       }
 
+      // Quick share icon (Dropbox trips) — copies the viewer link; the tools
+      // menu's "Share with viewer" is the same action, kept as an extra.
+      const shareBtn = li.querySelector(".share-btn");
+      if (shareBtn) {
+        shareBtn.addEventListener("click", (e) => { e.stopPropagation(); shareTripLink(i, "viewer"); });
+      }
+
       li.addEventListener("click", (e) => {
         if (e.target.closest(".trip-check")) return;
         if (e.target.closest(".inspect-btn")) { e.stopPropagation(); return; }
+        if (e.target.closest(".share-btn")) { e.stopPropagation(); return; }
         if (e.target.closest(".tools-btn")) { e.stopPropagation(); return; }
         if (e.target.closest(".chart-wrap")) return;
         if (e.target.closest('.detail-row[data-toggle="1"]')) return;

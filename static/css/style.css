@@ -1203,6 +1203,28 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     color: #00e5ff;
 }
 
+/* Quick share icon in the trip row (Dropbox trips). */
+.share-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-right: 2px;
+    padding: 0;
+    border-radius: 4px;
+    background: none;
+    border: none;
+    color: #00e5ff;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.share-btn:hover {
+    background: rgba(0, 97, 255, 0.14);
+    color: #4a8bff;
+}
+
 /* Hover tooltip */
 #track-tooltip {
     position: fixed;

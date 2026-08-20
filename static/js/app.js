@@ -3440,9 +3440,12 @@ document.addEventListener("DOMContentLoaded", function () {
     //   1. Overlap: hide trips whose time overlaps THIS trip — the pieces
     //      already inside an extended trip, or the extended trip when the
     //      anchor is a piece.
-    //   2. Containment: hide trips strictly inside ANY other trip — a piece is
-    //      redundant while its combined parent exists, so a range dragged
-    //      across an unrelated third trip still can't re-swallow it.
+    //   2. Containment: hide trips strictly inside a container that is ITSELF
+    //      still selectable (doesn't overlap the anchor) — that's the combined
+    //      parent of an unrelated third trip's range. When you split a trip the
+    //      original overlaps every piece, so it's excluded by rule 1 and its
+    //      pieces stay selectable — you can still recombine them even though the
+    //      original is loaded.
     // Real rides never overlap in time, so this only removes combine/split
     // leftovers. Strict containment keeps duplicate-span imports from both
     // vanishing. The anchor is always kept (it shows as "This trip").
@@ -3462,7 +3465,8 @@ document.addEventListener("DOMContentLoaded", function () {
       const [s, e] = spanOf(idx);
       if (!isFinite(s) || !isFinite(e)) return false;
       for (let j = 0; j < allTracks.length; j++) {
-        if (j === idx) continue;
+        if (j === idx || j === i) continue;
+        if (overlapsAnchor(j)) continue; // container already excluded → its pieces are safe to show
         const [us, ue] = spanOf(j);
         if (!isFinite(us) || !isFinite(ue)) continue;
         if (us <= s && ue >= e && (us < s || ue > e)) return true; // strictly larger
@@ -3479,7 +3483,7 @@ document.addEventListener("DOMContentLoaded", function () {
       `<div class="tt-facts">${fmtDurH(tripDurH(t))} · ${UNITS.dist(t.stats.distanceKm).toFixed(1)} ${UNITS.distUnit}</div>`;
     if (order.length < 2) {
       ttmodShow("EXTEND", "Extend trip", sub,
-        `<div class="tt-empty">No other trips to absorb.</div>`, [cancel]);
+        `<div class="tt-empty">No other trips to combine with.</div>`, [cancel]);
       return;
     }
     const hasOlder = pos > 0, hasNewer = pos < order.length - 1;
@@ -3541,9 +3545,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const header = document.getElementById("panel-header");
     header.innerHTML = "";
 
-    // Summary
-    let totalKm = 0, totalSec = 0, topSpeed = 0;
+    // Summary. Trips marked for archive are superseded (a combined trip's
+    // pieces, or a split original) so they'd double-count — leave them out of
+    // every total, including the count.
+    let totalKm = 0, totalSec = 0, topSpeed = 0, activeTrips = 0;
     for (const t of allTracks) {
+      if (t._archive) continue;
+      activeTrips++;
       totalKm += t.stats.distanceKm;
       if (t.stats.maxSpeed > topSpeed) topSpeed = t.stats.maxSpeed;
       if (t.dateStart && t.dateEnd) {
@@ -3558,7 +3566,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const summary = document.createElement("div");
     summary.className = "trip-summary";
     summary.innerHTML = `
-      <div class="summary-row"><span>${allTracks.length}</span> trips</div>
+      <div class="summary-row"><span>${activeTrips}</span> trips</div>
       <div class="summary-row"><span>${UNITS.dist(totalKm).toFixed(1)}</span> ${UNITS.distUnit}</div>
       <div class="summary-row"><span>${hrs}h ${mins}m</span> riding</div>
       <div class="summary-row"><span>${UNITS.speed(topSpeed).toFixed(0)}</span> ${UNITS.speedUnit} top</div>
@@ -3895,8 +3903,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // If multiple years, render a year header
       if (!singleYear) {
-        const yearKm = yg.monthOrder.reduce((s, mg) => s + mg.indices.reduce((s2, i) => s2 + allTracks[i].stats.distanceKm, 0), 0);
-        const yearTrips = yg.monthOrder.reduce((s, mg) => s + mg.indices.length, 0);
+        // Archived (superseded) trips don't count toward the group totals.
+        const activeOf = (idxs) => idxs.filter((i) => !allTracks[i]._archive);
+        const yearKm = yg.monthOrder.reduce((s, mg) => s + activeOf(mg.indices).reduce((s2, i) => s2 + allTracks[i].stats.distanceKm, 0), 0);
+        const yearTrips = yg.monthOrder.reduce((s, mg) => s + activeOf(mg.indices).length, 0);
 
         const yHeader = document.createElement("div");
         yHeader.className = "year-header";
@@ -3946,15 +3956,17 @@ document.addEventListener("DOMContentLoaded", function () {
     function buildMonthGroup(mg, expandByDefault) {
       const groupEl = document.createElement("div");
       groupEl.className = "month-group";
-      const groupKm = mg.indices.reduce((sum, i) => sum + allTracks[i].stats.distanceKm, 0);
-      const groupDur = fmtDurH(mg.indices.reduce((sum, i) => sum + tripDurH(allTracks[i]), 0));
+      // Archived (superseded) trips don't count toward the group totals.
+      const activeMonthIdx = mg.indices.filter((i) => !allTracks[i]._archive);
+      const groupKm = activeMonthIdx.reduce((sum, i) => sum + allTracks[i].stats.distanceKm, 0);
+      const groupDur = fmtDurH(activeMonthIdx.reduce((sum, i) => sum + tripDurH(allTracks[i]), 0));
 
       const header = document.createElement("div");
       header.className = "month-header";
       header.innerHTML = `
         <input type="checkbox" class="month-check" checked>
         <span class="month-label">${mg.month}</span>
-        <span class="month-meta">${mg.indices.length} trips &middot; ${UNITS.dist(groupKm).toFixed(1)} ${UNITS.distUnit}${groupDur ? ` &middot; ${groupDur}` : ""}</span>
+        <span class="month-meta">${activeMonthIdx.length} trips &middot; ${UNITS.dist(groupKm).toFixed(1)} ${UNITS.distUnit}${groupDur ? ` &middot; ${groupDur}` : ""}</span>
         <span class="month-chevron">&#9662;</span>
       `;
 

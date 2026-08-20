@@ -945,7 +945,10 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateTraceLegend(key, min, max) {
     if (!legendEl) return;
     if (!key || key === "solid") { legendEl.classList.add("hidden"); return; }
-    legendEl.querySelector(".legend-bar").style.background = legendGradientCss(key);
+    // Set backgroundImage, not the `background` shorthand — the shorthand
+    // resets background-repeat to `repeat`, which re-introduces the red fleck
+    // the .legend-bar CSS (background-repeat: no-repeat) exists to prevent.
+    legendEl.querySelector(".legend-bar").style.backgroundImage = legendGradientCss(key);
     const kind = TRACE_UNIT_KIND[key];
     const unit = kind ? unitForKind(kind) : (TRACE_STATIC_UNIT[key] || "");
     const conv = (v) => kind ? convertByKind(kind, v) : v;

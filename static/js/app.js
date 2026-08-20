@@ -803,9 +803,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (metric && !track && allTracks.length) {
       if (metric.pointIdx === -1) {
         // Distance with no selection: colour each trip by its own progress
-        // (start → end). A km legend is meaningless across trips — hide it.
+        // (start → end). A shared km number is meaningless across trips, so
+        // the legend shows the ramp direction (Start → End) instead.
         push({ all: true, mode: "progress", colorFn: distanceColor });
-        updateTraceLegend(null);
+        updateTraceLegend("distance", 0, 1, { min: "Start", max: "End" });
         return;
       }
       // The draw reads values straight from track points (pd.tracks +
@@ -942,7 +943,10 @@ document.addEventListener("DOMContentLoaded", function () {
       ? "linear-gradient(90deg, rgb(165,75,235), rgb(60,220,120))"
       : "linear-gradient(90deg, rgb(0,0,255), rgb(0,255,255), rgb(0,255,0), rgb(255,255,0), rgb(255,0,0))";
   }
-  function updateTraceLegend(key, min, max) {
+  // labels (optional) overrides the numeric min/max readout with plain text,
+  // for ramps where a number is meaningless (distance across many trips is
+  // per-trip progress, so it shows "Start" → "End").
+  function updateTraceLegend(key, min, max, labels) {
     if (!legendEl) return;
     if (!key || key === "solid") { legendEl.classList.add("hidden"); return; }
     // Set backgroundImage, not the `background` shorthand — the shorthand
@@ -956,8 +960,8 @@ document.addEventListener("DOMContentLoaded", function () {
       const c = conv(v);
       return (Math.abs(c) >= 100 ? c.toFixed(0) : c.toFixed(1)) + " " + unit;
     };
-    legendEl.querySelector("[data-legend-min]").textContent = fmt(min);
-    legendEl.querySelector("[data-legend-max]").textContent = fmt(max);
+    legendEl.querySelector("[data-legend-min]").textContent = labels ? labels.min : fmt(min);
+    legendEl.querySelector("[data-legend-max]").textContent = labels ? labels.max : fmt(max);
     legendEl.classList.remove("hidden");
   }
 
@@ -2420,8 +2424,12 @@ document.addEventListener("DOMContentLoaded", function () {
     for (const t of allTracks) {
       const path = t.dropboxPath ? String(t.dropboxPath).toLowerCase() : null;
       if (path) localPaths.add(path);
+      // Archive wins over every other state: a superseded source (an extended
+      // piece or a split original) is on its way out, so even a local rename
+      // ("changed") shouldn't tempt an upload — it gets moved out instead.
       let cat = "synced";
-      if (!path) cat = "new";
+      if (t._archive) cat = "archive";
+      else if (!path) cat = "new";
       else if (t._dirty) cat = "edited";
       rows.push({ kind: "local", cat, track: t, label: formatTripLabel(t) });
     }
@@ -2429,7 +2437,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (localPaths.has(String(f.path).toLowerCase())) continue;
       rows.push({ kind: "remote", cat: "remote", file: f, label: f.name });
     }
-    const order = { edited: 0, new: 1, remote: 2, synced: 3 };
+    const order = { archive: 0, edited: 1, new: 2, remote: 3, synced: 4 };
     rows.sort((a, b) => (order[a.cat] - order[b.cat]) || String(a.label).localeCompare(String(b.label)));
     return { rows, account: DS.accountName(), totalBytes, cacheStats };
   }
@@ -2440,11 +2448,12 @@ document.addEventListener("DOMContentLoaded", function () {
     new: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10.5V2.5"/><path d="M4.5 6 8 2.5 11.5 6"/><path d="M2.5 13.5h11"/></svg>',
     edited: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
     remote: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5h6a3 3 0 0 0 .3-5.97A4.5 4.5 0 0 0 2.5 7.7a2.7 2.7 0 0 0 2 3.8z"/><path d="M8 8v4"/><path d="M6 10l2 2 2-2"/></svg>',
+    archive: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4.5" width="12" height="9" rx="1"/><path d="M1.5 4.5 3 2h10l1.5 2.5"/><path d="M6.3 8h3.4"/></svg>',
   };
-  const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here" };
+  const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here", archive: "Superseded — moves to /trips/archive and leaves here" };
   // Local status shows in the meta text; the in-sync state is carried by its
   // (disabled) button instead, so it isn't said twice.
-  const DBX_META = { new: "New", edited: "Changed" };
+  const DBX_META = { new: "New", edited: "Changed", archive: "Archive" };
   function dbxFmtBytes(n) {
     if (!n) return "";
     const u = ["B", "KB", "MB", "GB"]; let i = 0, v = n;
@@ -2461,6 +2470,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function renderSyncState(state, main) {
     const DS = window.DropboxSource;
     const uploadTracks = state.rows.filter((r) => r.kind === "local" && (r.cat === "new" || r.cat === "edited")).map((r) => r.track);
+    const archiveTracks = state.rows.filter((r) => r.kind === "local" && r.cat === "archive").map((r) => r.track);
     const remoteFiles = state.rows.filter((r) => r.kind === "remote").map((r) => r.file);
     const nTrips = state.rows.length;
 
@@ -2472,14 +2482,18 @@ document.addEventListener("DOMContentLoaded", function () {
       // themselves; in-sync rows need no action.
       const rowBtn = r.kind === "remote"
         ? `<button type="button" class="dbx-row-open" data-i="${i}">Load</button>`
-        : (r.cat === "new" || r.cat === "edited")
-          ? `<button type="button" class="dbx-row-sync" data-i="${i}">Upload</button>`
-          : `<button type="button" class="dbx-row-done" disabled>Loaded</button>`;
-      // Changed rows: the amber icon is a one-click undo (revert to the
-      // Dropbox version). Other icons are just state.
+        : r.cat === "archive"
+          ? `<button type="button" class="dbx-row-arch" data-i="${i}">Archive</button>`
+          : (r.cat === "new" || r.cat === "edited")
+            ? `<button type="button" class="dbx-row-sync" data-i="${i}">Upload</button>`
+            : `<button type="button" class="dbx-row-done" disabled>Loaded</button>`;
+      // Changed rows: the amber icon is a one-click undo (revert). Archive
+      // rows: the icon cancels the archive (keep the trip). Others are static.
       const tag = r.cat === "edited"
         ? `<button type="button" class="dbx-row-tag dbx-row-revert" data-i="${i}" title="Undo changes (revert to the Dropbox version)">${DBX_TAG_ICONS.edited}</button>`
-        : `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>`;
+        : r.cat === "archive"
+          ? `<button type="button" class="dbx-row-tag dbx-row-unarchive" data-i="${i}" title="Keep this trip (cancel archive)">${DBX_TAG_ICONS.archive}</button>`
+          : `<span class="dbx-row-tag" title="${DBX_TAG_TIP[r.cat]}">${DBX_TAG_ICONS[r.cat]}</span>`;
       const dataPath = r.kind === "remote" ? ` data-path="${escapeHtml(r.file.path)}"` : ` data-key="${escapeHtml(dbxTrackKey(r.track))}"`;
       return `<li class="dbx-row cat-${r.cat}"${dataPath}>` +
         `<span class="dbx-row-name" title="${escapeHtml(r.label)}">${escapeHtml(r.label)}</span>` +
@@ -2510,8 +2524,10 @@ document.addEventListener("DOMContentLoaded", function () {
       `<div class="dbx-listing"><ul class="dbx-rows">${rowsHtml || '<li class="dbx-empty">No trips.</li>'}</ul></div>` +
       `<div class="src-action"><div class="src-action-row">` +
         // Upload only when something actually needs it, and placed first so the
-        // Load button stays the rightmost action in every context.
+        // Load button stays the rightmost action in every context. Archive sits
+        // between them as a secondary (distinct, slightly destructive) action.
         (uploadTracks.length ? `<button type="button" class="src-primary-btn" id="dbx-do-sync">Upload ${uploadTracks.length} to Dropbox</button>` : "") +
+        (archiveTracks.length ? `<button type="button" class="src-secondary-btn dbx-archive-btn" id="dbx-do-archive">Archive ${archiveTracks.length}</button>` : "") +
         (remoteFiles.length ? `<button type="button" class="${uploadTracks.length ? "src-secondary-btn" : "src-primary-btn"}" id="dbx-load-remote">Load ${remoteFiles.length} from Dropbox</button>` : "") +
       `</div></div>` +
       `<div class="dbx-status"></div>`;
@@ -2545,10 +2561,25 @@ document.addEventListener("DOMContentLoaded", function () {
         ui.main.classList.remove("dbx-busy");
       });
     });
+    main.querySelectorAll(".dbx-row-arch").forEach((btn) => {
+      const r = state.rows[parseInt(btn.dataset.i)];
+      if (r && r.track) btn.addEventListener("click", () => runArchive([r.track], ui));
+    });
+    main.querySelectorAll(".dbx-row-unarchive").forEach((btn) => {
+      const r = state.rows[parseInt(btn.dataset.i)];
+      if (r && r.track) btn.addEventListener("click", async () => {
+        delete r.track._archive; // keep it: back to its normal state
+        saveTracks(allTracks);
+        const s = await gatherSyncState().catch(() => null);
+        if (s) renderSyncState(s, ui.main);
+      });
+    });
     const loadBtn = main.querySelector("#dbx-load-remote");
     if (loadBtn) loadBtn.addEventListener("click", () => loadRemoteTrips(remoteFiles, ui));
     const syncBtn = main.querySelector("#dbx-do-sync");
     if (syncBtn && uploadTracks.length) syncBtn.addEventListener("click", () => runSync(uploadTracks, ui));
+    const archiveBtn = main.querySelector("#dbx-do-archive");
+    if (archiveBtn && archiveTracks.length) archiveBtn.addEventListener("click", () => runArchive(archiveTracks, ui));
   }
 
   async function runSync(uploadTracks, ui) {
@@ -2606,6 +2637,63 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
           st.textContent = "Upload failed: " + msg;
         }
+      }
+    }
+  }
+
+  // Archive superseded source trips: move each Dropbox file into /trips/archive
+  // (out of EUC Planet's /trips listing) and drop it from the local library.
+  // Trips with no Dropbox origin just leave locally — there's nothing to move.
+  async function runArchive(archiveTracks, ui) {
+    const DS = window.DropboxSource;
+    const main = ui.main;
+    main.classList.add("dbx-locked");
+    const rowArchBtn = (key) => {
+      const li = main.querySelector(`.dbx-row[data-key="${String(key).replace(/["\\]/g, "\\$&")}"]`);
+      return li ? li.querySelector(".dbx-row-arch") : null;
+    };
+    const keyOf = new Map();
+    archiveTracks.forEach((t) => {
+      const k = dbxTrackKey(t); keyOf.set(t, k);
+      const b = rowArchBtn(k); if (b) { b.disabled = true; b.innerHTML = '<span class="dbx-spinner sm"></span>'; }
+    });
+    main.querySelectorAll(".src-action-row button").forEach((b) => { b.disabled = true; });
+    const removed = new Set();
+    let err = null;
+    try {
+      for (const t of archiveTracks) {
+        const li = main.querySelector(`.dbx-row[data-key="${String(keyOf.get(t)).replace(/["\\]/g, "\\$&")}"]`);
+        if (li) li.scrollIntoView({ block: "nearest" });
+        if (t.dropboxPath) {
+          const base = String(t.dropboxPath).split("/").pop() || "trip.csv";
+          await DS.moveFile(t.dropboxPath, DS.TRIPS_PATH + "/archive/" + base);
+        }
+        removed.add(t);
+        const b = rowArchBtn(keyOf.get(t)); if (b) b.innerHTML = "✓";
+      }
+    } catch (e) { err = e; }
+    // Apply whatever succeeded (partial failure keeps the un-moved ones).
+    if (removed.size) {
+      // New array so the reference-keyed geometry/scale caches recompute.
+      allTracks = allTracks.filter((t) => !removed.has(t));
+      trackVisible = new Set(allTracks.map((_, i) => i));
+      selectedIdx = -1;
+      saveTracks(allTracks);
+      buildTripList();
+      updateGlow();
+      updateVisibilityUI();
+    }
+    main.classList.remove("dbx-locked");
+    const s = await gatherSyncState().catch(() => null);
+    if (s) renderSyncState(s, main);
+    if (err) {
+      const st = main.querySelector(".dbx-status");
+      const msg = String(err.message || err);
+      if (st) {
+        st.classList.add("dbx-err");
+        st.innerHTML = /missing_scope/.test(msg)
+          ? `Enable <code>files.content.write</code> in your Dropbox App Console, then reconnect.`
+          : "Archive failed: " + escapeHtml(msg);
       }
     }
   }
@@ -3022,6 +3110,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (seg) segs.push(seg);
       }
       if (segs.length < 2) { appToast("Couldn't split (segments too short)."); return; }
+      // The original is now redundant (its data lives in the parts): flag it so
+      // the Dropbox Sync dialog offers to archive it out of /trips.
+      t._archive = true;
       allTracks.push(...segs);
       ttmodClose();
       commitEditedTracks(`Split into ${segs.length} trips.`);
@@ -3036,8 +3127,25 @@ document.addEventListener("DOMContentLoaded", function () {
     // combo reaches FORWARD into newer ones, and "this trip" is the anchor
     // in both. Any span that includes this trip is valid — older→this,
     // this→newer, or older→newer.
-    const order = allTracks.map((_, idx) => idx).sort((a, b) =>
-      (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
+    //
+    // Hard guard against re-merging already-merged data: hide any trip whose
+    // time overlaps this one — the pieces already inside an extended trip, or
+    // the extended trip itself when the anchor is a piece. Merging those would
+    // duplicate rows and double-count distance. Real rides never overlap in
+    // time, so this only ever removes combine/split leftovers.
+    const aS = Date.parse(t.dateStart || "");
+    const aE = Date.parse(t.dateEnd || t.dateStart || "");
+    const overlapsAnchor = (idx) => {
+      if (idx === i) return false;
+      const o = allTracks[idx];
+      const s = Date.parse(o.dateStart || "");
+      const e = Date.parse(o.dateEnd || o.dateStart || "");
+      if (![s, e, aS, aE].every(isFinite)) return false;
+      return s < aE && e > aS;
+    };
+    const order = allTracks.map((_, idx) => idx)
+      .filter((idx) => !overlapsAnchor(idx))
+      .sort((a, b) => (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
     const pos = order.indexOf(i); // this trip's chronological position
     const cancel = ttBtn("Cancel", "tt-ghost"); cancel.addEventListener("click", ttmodClose);
     const sub =
@@ -3058,8 +3166,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const body =
       `<div class="tt-hint">Combine this trip with older or newer rides into one. Everything between comes along. Originals stay.</div>` +
       `<div class="tt-range">` +
-        `<label>From (older)<select id="ex-from"${hasOlder ? "" : " disabled"}>${fromPos.map(optOf).join("")}</select></label>` +
         `<label>To (newer)<select id="ex-to"${hasNewer ? "" : " disabled"}>${toPos.map(optOf).join("")}</select></label>` +
+        `<label>From (older)<select id="ex-from"${hasOlder ? "" : " disabled"}>${fromPos.map(optOf).join("")}</select></label>` +
       `</div><div class="tt-preview" id="ex-preview"></div>`;
     const go = ttBtn("Combine", "tt-primary");
     ttmodShow("EXTEND", "Extend trip", sub, body, [cancel, go]);
@@ -3087,8 +3195,12 @@ document.addEventListener("DOMContentLoaded", function () {
       const idxs = (go._idxs || []).slice();
       if (idxs.length < 2) return;
       idxs.sort((a, b) => (Date.parse(allTracks[a].dateStart || "") || 0) - (Date.parse(allTracks[b].dateStart || "") || 0));
-      const merged = mergeTracksInTime(idxs.map((idx) => allTracks[idx]), "Combined ride");
+      const sources = idxs.map((idx) => allTracks[idx]);
+      const merged = mergeTracksInTime(sources, "Combined ride");
       if (!merged) { appToast("Couldn't combine those trips."); return; }
+      // The pieces are now redundant (their data lives in `merged`): flag them
+      // so the Dropbox Sync dialog offers to archive them out of /trips.
+      sources.forEach((t) => { t._archive = true; });
       allTracks.push(merged);
       ttmodClose();
       commitEditedTracks(`Combined ${idxs.length} trips.`);

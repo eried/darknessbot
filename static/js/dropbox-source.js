@@ -218,6 +218,18 @@
     return res.json().catch(() => ({}));
   }
 
+  // Move a file within the app folder (used to archive superseded trips into
+  // /trips/archive so EUC Planet's /trips listing no longer sees them). move_v2
+  // won't create the destination folder, so ensure the parent first (an
+  // existing folder answers 409, which we ignore). autorename guards against
+  // ever overwriting an already-archived file that shares the name.
+  // Needs the files.content.write scope — same as uploadFile.
+  async function moveFile(fromPath, toPath) {
+    const parent = toPath.replace(/\/[^/]*$/, "");
+    if (parent) { try { await rpc("/2/files/create_folder_v2", { path: parent }); } catch (_) {} }
+    return rpc("/2/files/move_v2", { from_path: fromPath, to_path: toPath, autorename: true });
+  }
+
   // Read + parse a small JSON file from the app folder. Returns null when the
   // file doesn't exist yet (the common first-run case), so callers can treat
   // "no sidecar" and "empty sidecar" the same.
@@ -378,6 +390,7 @@
     listTripFiles,
     downloadBlob,
     uploadFile,
+    moveFile,
     readJson,
     signOut,
     maybeHandleCallback,

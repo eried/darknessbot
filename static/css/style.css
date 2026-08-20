@@ -1471,12 +1471,16 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 #dbx-sync-modal .dbx-row.cat-synced .dbx-row-tag { background: rgba(0, 200, 130, 0.18); color: #80e6b4; }
 #dbx-sync-modal .dbx-row.cat-new .dbx-row-tag { background: rgba(0, 97, 255, 0.2); color: #9fbaff; }
 #dbx-sync-modal .dbx-row.cat-edited .dbx-row-tag { background: rgba(255, 180, 60, 0.2); color: #ffcf87; }
-/* The changed row's tag is a one-click undo (revert). */
+#dbx-sync-modal .dbx-row.cat-archive .dbx-row-tag { background: rgba(180, 120, 235, 0.22); color: #d3b3f5; }
+/* The changed row's tag is a one-click undo (revert); the archive row's tag
+   cancels the archive (keeps the trip). */
 #dbx-sync-modal button.dbx-row-tag { border: none; padding: 0; font: inherit; cursor: pointer; }
 #dbx-sync-modal .dbx-row-revert:hover { background: rgba(255, 180, 60, 0.4); color: #fff; }
+#dbx-sync-modal .dbx-row-unarchive:hover { background: rgba(180, 120, 235, 0.42); color: #fff; }
 /* Every row ends with a same-width action chip so the column lines up. */
 #dbx-sync-modal .dbx-row-open,
 #dbx-sync-modal .dbx-row-sync,
+#dbx-sync-modal .dbx-row-arch,
 #dbx-sync-modal .dbx-row-done {
     min-width: 64px; text-align: center;
     padding: 0.25rem 0.7rem; border-radius: 6px; font: inherit; font-size: 0.74rem; font-weight: 600;
@@ -1487,6 +1491,10 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 }
 #dbx-sync-modal .dbx-row-open:hover,
 #dbx-sync-modal .dbx-row-sync:hover { background: rgba(0, 97, 255, 0.32); color: #fff; }
+#dbx-sync-modal .dbx-row-arch {
+    background: rgba(180, 120, 235, 0.15); color: #d3b3f5; border: 1px solid rgba(180, 120, 235, 0.35); cursor: pointer;
+}
+#dbx-sync-modal .dbx-row-arch:hover { background: rgba(180, 120, 235, 0.32); color: #fff; }
 #dbx-sync-modal .dbx-row-done {
     background: rgba(255, 255, 255, 0.04); color: rgba(224, 232, 240, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.1); cursor: default;

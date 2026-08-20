@@ -465,7 +465,36 @@
     const f = t * n - seg, a = stops[seg], b = stops[seg + 1];
     return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * f) + "," + Math.round(a[1] + (b[1] - a[1]) * f) + "," + Math.round(a[2] + (b[2] - a[2]) * f) + ")";
   }
+  // Mix: same trip-structure idea as the viewer. MapLibre can't dash / widen
+  // per segment on one line, so the route is split into three band layers
+  // (stops / walk / riding) each with its own dash + width; per-segment colour
+  // (incl. the walk fade) rides as a feature property.
+  const MIX_STOP = 4, MIX_WALK = 8;
+  function mixSeg(kmh) {
+    if (typeof kmh !== "number" || !(kmh >= 0)) return null;
+    if (kmh < MIX_STOP) {
+      const t = Math.min(1, (MIX_STOP - kmh) / MIX_STOP);
+      return { band: "stop", color: rampRgb(RED_RAMP, t) };
+    }
+    if (kmh < MIX_WALK) {
+      const a = 0.65 * (MIX_WALK - kmh) / (MIX_WALK - MIX_STOP); // fades to 0 by 8 km/h
+      return { band: "walk", color: "rgba(255,170,45," + a.toFixed(3) + ")" };
+    }
+    return { band: "ride", color: "rgba(190,215,235,0.13)" };
+  }
+  function mixFeatures() {
+    const feats = [];
+    for (let i = 1; i < coords.length; i++) {
+      const v = routePoints[i] ? routePoints[i][P_SPD] : 0;
+      const st = mixSeg(v);
+      if (!st) continue;
+      feats.push({ type: "Feature", properties: { band: st.band, color: st.color },
+        geometry: { type: "LineString", coordinates: [coords[i - 1], coords[i]] } });
+    }
+    return { type: "FeatureCollection", features: feats };
+  }
   function gradientCssFor(mode) {
+    if (mode === "mix") return "linear-gradient(90deg, rgb(255,45,45) 0%, rgb(255,170,45) 45%, rgba(190,215,235,0.4) 100%)";
     const stops = THRESHOLD_MODES[mode] ? RED_RAMP : RAMP_STOPS[mode];
     if (!stops) return "linear-gradient(90deg, #00e5ff, #ff2b2b)";
     return "linear-gradient(90deg, " + stops.map((s, i) => "rgb(" + s.join(",") + ") " + Math.round((i / (stops.length - 1)) * 100) + "%").join(", ") + ")";
@@ -830,8 +859,9 @@
     bar.classList.remove("inverted");
     bar.style.backgroundImage = gradientCssFor(mode); // per-metric ramp
     if (stats.threshold) {
-      legend.querySelector("[data-legend-min]").textContent = "Slow";
-      legend.querySelector("[data-legend-max]").textContent = stats.threshold === "moving" ? "Fast" : "Still";
+      legend.querySelector("[data-legend-min]").textContent = stats.threshold === "mix" ? "Stops" : "Slow";
+      legend.querySelector("[data-legend-max]").textContent =
+        stats.threshold === "moving" ? "Fast" : stats.threshold === "mix" ? "Riding" : "Still";
       legend.classList.remove("hidden");
       return;
     }
@@ -879,6 +909,30 @@
     if (!map || !map.getLayer("track-line") || !map.getLayer("traveled-line")) return;
     const mode = currentColorMode;
     const whole = currentTraceMode === "whole";
+
+    // Mix owns three per-band layers; show them only in Mix and hide the normal
+    // trace + glow. Everything else keeps them hidden and the base line visible.
+    const mixOn = mode === "mix";
+    ["mix-stops", "mix-walk", "mix-ride"].forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", mixOn ? "visible" : "none");
+    });
+    if (mixOn) {
+      const src = map.getSource("mix");
+      if (src) src.setData(mixFeatures());
+      map.setLayoutProperty("track-line", "visibility", "none");
+      map.setLayoutProperty("traveled-line", "visibility", "none");
+      map.setLayoutProperty("track-glow", "visibility", "none");
+      map.setLayoutProperty("traveled-glow", "visibility", "none");
+      updateLegend({ threshold: "mix" }, "mix");
+      return;
+    }
+    map.setLayoutProperty("track-line", "visibility", "visible");
+    // Stopped reads thicker — but only the coloured line (track-line when the
+    // whole route is shown, traveled-line for the reveal trail), never the
+    // faint full-route ghost.
+    const thick = mode === "still";
+    map.setPaintProperty("track-line", "line-width", (thick && whole) ? 7 : 4);
+    map.setPaintProperty("traveled-line", "line-width", (thick && !whole) ? 8 : 5);
 
     // Reset both layers to a known baseline.
     map.setPaintProperty("track-line", "line-gradient", undefined);
@@ -950,7 +1004,7 @@
       const key = opt.value;
       if (key === "solid") { opt.disabled = false; continue; }
       // Movement modes ride on wheel speed, which always drives playback.
-      if (key === "moving" || key === "still") { opt.disabled = false; continue; }
+      if (key === "moving" || key === "still" || key === "mix") { opt.disabled = false; continue; }
       // GPS speed has no chart block — it lives on the speed chart. Toggle it
       // by whether the trip carries the column.
       if (key === "gpsspeed") { opt.disabled = !hasGpsSpeed; continue; }
@@ -1084,6 +1138,20 @@
           "line-opacity": 1.0
         }
       });
+
+      // Mix mode: the whole route split by speed band. Three layers so each
+      // band gets its own dash + width (a single gradient line can't). Colour
+      // (with the walk fade baked in) is per-segment via the feature property.
+      map.addSource("mix", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "mix-ride", type: "line", source: "mix", filter: ["==", ["get", "band"], "ride"],
+        layout: { visibility: "none", "line-cap": "butt", "line-join": "round" },
+        paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-dasharray": [1, 2.6] } });
+      map.addLayer({ id: "mix-walk", type: "line", source: "mix", filter: ["==", ["get", "band"], "walk"],
+        layout: { visibility: "none", "line-cap": "butt", "line-join": "round" },
+        paint: { "line-color": ["get", "color"], "line-width": 3, "line-dasharray": [2, 1.6] } });
+      map.addLayer({ id: "mix-stops", type: "line", source: "mix", filter: ["==", ["get", "band"], "stop"],
+        layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": ["get", "color"], "line-width": 6 } });
 
       const b = new maplibregl.LngLatBounds();
       coords.forEach(c => b.extend(c));

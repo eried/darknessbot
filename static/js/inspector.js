@@ -2608,6 +2608,10 @@
     const newBtn = document.getElementById("cd-new");
     const nameInput = document.getElementById("cd-edit-name");
     let editingId = null;
+    // A brand-new graph (via "+ New graph") is created up-front so the live
+    // preview works while picking metrics. Cancel must therefore discard it;
+    // an existing graph opened for edit is left untouched on cancel.
+    let editingIsNew = false;
 
     function buildList() {
       listEl.innerHTML = "";
@@ -2632,8 +2636,12 @@
         if (isCombined(k)) name.append(makeEl("span", "cd-tag", "combined"));
         row.append(grip, sw, name);
         if (isCombined(k)) {
-          const edit = makeEl("button", "cd-rowbtn", "Edit"); edit.type = "button";
-          edit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(k); });
+          // Per-row "Edit" is hidden for now — the graphs are simple enough
+          // that delete + recreate covers it. The editor stays fully wired
+          // (reached via "+ New graph"), so restoring is just uncommenting
+          // these two lines and re-adding `edit` to row.append below.
+          // const edit = makeEl("button", "cd-rowbtn", "Edit"); edit.type = "button";
+          // edit.addEventListener("click", (e) => { e.stopPropagation(); openEditor(k); });
           const del = makeEl("button", "cd-rowdel"); del.type = "button"; del.title = "Delete graph";
           del.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M6.5 4V2.5h3V4M5 4l.5 9a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1l.5-9"/></svg>';
           del.addEventListener("click", (e) => {
@@ -2644,7 +2652,7 @@
             layout.hidden = layout.hidden.filter((x) => x !== k);
             save(); apply(); buildList();
           });
-          row.append(edit, del);
+          row.append(del);
         }
         if (!shown) row.classList.add("is-hidden");
         attachRowDrag(row, grip);
@@ -2702,8 +2710,9 @@
         metricsEl.appendChild(chip);
       });
     }
-    function openEditor(id) {
+    function openEditor(id, isNew) {
       editingId = id;
+      editingIsNew = !!isNew;
       const def = combDef(id);
       nameInput.value = def ? def.name : "Combined";
       buildMetrics();
@@ -2714,10 +2723,23 @@
     }
     function backToList() {
       editingId = null;
+      editingIsNew = false;
       editorView.classList.add("hidden");
       mainView.classList.remove("hidden");
       dialog.classList.remove("cd-editing");
       buildList();
+    }
+    // Cancel: a brand-new graph is removed entirely (nothing added); editing
+    // an existing one just returns to the list (its live edits are kept).
+    function cancelEditor() {
+      if (editingIsNew && editingId) {
+        const id = editingId;
+        layout.combined = layout.combined.filter((d) => d.id !== id);
+        layout.order = layout.order.filter((x) => x !== id);
+        layout.hidden = layout.hidden.filter((x) => x !== id);
+        save(); apply();
+      }
+      backToList();
     }
     nameInput.addEventListener("input", () => {
       const def = combDef(editingId);
@@ -2728,7 +2750,9 @@
       if (cg) cg.setName(def.name);
       revealMetricsPanel();
     });
-    document.getElementById("cd-edit-back").addEventListener("click", backToList);
+    // Create keeps the graph (already live/saved); Cancel discards a new one.
+    document.getElementById("cd-edit-create").addEventListener("click", backToList);
+    document.getElementById("cd-edit-cancel").addEventListener("click", cancelEditor);
     newBtn.addEventListener("click", () => {
       if (layout.combined.length >= MAX_COMBINED) return;
       let n = 1; while (layout.combined.some((d) => d.id === "combined-" + n)) n++;
@@ -2736,12 +2760,17 @@
       layout.combined.push({ id, name: "Combined " + n, metrics: [] });
       layout.order.push(id);
       save(); apply();
-      openEditor(id);
+      openEditor(id, true);
     });
 
-    const closeDialog = () => dialog.classList.add("hidden");
+    const closeDialog = () => {
+      // Dismissing (× / backdrop) while the editor is open acts like Cancel,
+      // so a brand-new graph never lingers when the user just backs out.
+      if (!editorView.classList.contains("hidden")) cancelEditor();
+      dialog.classList.add("hidden");
+    };
     dialog.querySelectorAll("[data-cd-close]").forEach((el) => el.addEventListener("click", closeDialog));
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !dialog.classList.contains("hidden")) { if (!editorView.classList.contains("hidden")) backToList(); else closeDialog(); } });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !dialog.classList.contains("hidden")) { if (!editorView.classList.contains("hidden")) cancelEditor(); else closeDialog(); } });
     document.getElementById("charts-customize").addEventListener("click", () => {
       backToList();
       dialog.classList.remove("hidden");

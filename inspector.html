@@ -6,7 +6,7 @@
     <title>Trip Inspector &mdash; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-    <link rel="stylesheet" href="static/css/inspector.css?v=38" />
+    <link rel="stylesheet" href="static/css/inspector.css?v=39" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -252,7 +252,6 @@
                 </div>
                 <div id="cd-editor" class="hidden">
                     <div class="cd-edit-head">
-                        <button type="button" class="cd-back" id="cd-edit-back">&lsaquo; Back</button>
                         <input type="text" id="cd-edit-name" class="cd-edit-name" placeholder="Graph name" maxlength="40" />
                     </div>
                     <div class="cd-sub">Metrics to combine</div>
@@ -264,12 +263,14 @@
                 <button type="button" class="cd-new" id="cd-new">+ New graph</button>
                 <span class="cd-spacer"></span>
                 <button type="button" class="cd-reset" id="cd-reset">Reset</button>
-                <button type="button" class="cd-done" data-cd-close>Done</button>
+                <button type="button" class="cd-done" id="cd-close-btn" data-cd-close>Close</button>
+                <button type="button" class="cd-cancel" id="cd-edit-cancel">Cancel</button>
+                <button type="button" class="cd-create" id="cd-edit-create">Create</button>
             </footer>
         </div>
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=78"></script>
+    <script src="static/js/inspector.js?v=79"></script>
 </body>
 </html>

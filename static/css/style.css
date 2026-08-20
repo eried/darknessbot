@@ -1761,6 +1761,10 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     height: 8px;
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.15);
+    /* Without this the gradient tiles (default repeat) and the rounded corner
+       anti-aliases into the neighbouring tile — whose edge is the red 100%
+       stop — leaving a red fleck at the blue (left) end. */
+    background-repeat: no-repeat;
 }
 .legend-scale {
     display: flex;

@@ -1752,7 +1752,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const displayName = isMultiDropbox ? "all_trips" : stripExt(item.fileName);
         row.innerHTML = `
           <button type="button" class="recent-file-load">
-            <span class="recent-file-name">${escapeHtml(displayName)}${sourceGlyph}</span>
+            <span class="recent-file-name"><span class="recent-file-nametext">${escapeHtml(displayName)}</span>${sourceGlyph}</span>
             <span class="recent-file-meta">${item.tripCount} trips &middot; ${item.totalKm.toFixed(1)} km &middot; ${escapeHtml(formatRecentTime(item.loadedAt))}</span>
           </button>
         `;
@@ -2374,7 +2374,7 @@ document.addEventListener("DOMContentLoaded", function () {
       `<button type="button" class="ttm-item" data-act="extend">${ICON.extend}Extend trip…</button>` +
       ((canShare || canArchive) ? `<div class="ttm-sep"></div>` : "") +
       (canShare ? `<button type="button" class="ttm-item" data-act="sharelink">${ICON.share}Share with viewer</button>` : "") +
-      (canShare ? `<button type="button" class="ttm-item" data-act="sharefile">${ICON.file}Share file</button>` : "") +
+      (canShare ? `<button type="button" class="ttm-item" data-act="sharefile">${ICON.share}Share file</button>` : "") +
       (canArchive ? `<button type="button" class="ttm-item" data-act="archive">${ICON.archive}${t._archive ? "Unmark archive" : "Mark for archive"}</button>` : "") +
       `<div class="ttm-sep"></div>` +
       `<button type="button" class="ttm-item ttm-danger" data-act="remove">${ICON.remove}Remove</button>`;
@@ -2397,7 +2397,19 @@ document.addEventListener("DOMContentLoaded", function () {
     const t = allTracks[i];
     if (!t || !t.dropboxPath) return;
     const DS = window.DropboxSource;
+    // Spinner on the row's share icon while the link is minted — this is the
+    // feedback for both the icon itself and the tools-menu share items (which
+    // close the menu, then trigger this).
+    const btn = document.querySelector(`.trip-item[data-idx="${i}"] .share-btn`);
+    const restore = btn ? btn.innerHTML : null;
+    const setBusy = (on) => {
+      if (!btn) return;
+      btn.classList.toggle("is-busy", on);
+      if (on) btn.innerHTML = '<span class="share-spinner"></span>';
+      else if (restore != null) btn.innerHTML = restore;
+    };
     if (!DS || !DS.isAuthenticated || !DS.isAuthenticated()) { appToast("Sign in to Dropbox first."); return; }
+    setBusy(true);
     try {
       const direct = await DS.getOrCreateShareLink(t.dropboxPath);
       let url, label;
@@ -2423,6 +2435,8 @@ document.addEventListener("DOMContentLoaded", function () {
           : "Share failed");
       }
       console.warn("Share link error:", err);
+    } finally {
+      setBusy(false);
     }
   }
   // Flag / unflag a trip for archive (the Sync dialog then moves it into

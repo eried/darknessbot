@@ -506,9 +506,18 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     font-size: 0.88rem;
     font-weight: 600;
     color: #f3fbfd;
-    display: inline-flex;
+    /* Block-level flex so it takes the button width and the name can shrink;
+       the inner text ellipsizes (a flex container can't ellipsize itself). */
+    display: flex;
     align-items: center;
     gap: 0.4rem;
+    min-width: 0;
+}
+.recent-file-nametext {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .recent-file-source {
     flex-shrink: 0;
@@ -1224,6 +1233,17 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     background: rgba(0, 97, 255, 0.14);
     color: #4a8bff;
 }
+.share-btn.is-busy { cursor: progress; }
+.share-spinner {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(0, 229, 255, 0.25);
+    border-top-color: #00e5ff;
+    border-radius: 50%;
+    animation: share-spin 0.6s linear infinite;
+}
+@keyframes share-spin { to { transform: rotate(360deg); } }
 
 /* Hover tooltip */
 #track-tooltip {

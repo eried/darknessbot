@@ -325,11 +325,34 @@ document.addEventListener("DOMContentLoaded", function () {
     const f = t * n - seg, a = stops[seg], b = stops[seg + 1];
     return `${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)}`;
   }
+  // Palette selector: a global override of how the per-metric ramps are
+  // coloured, saved per browser and shared with the inspector. "default" keeps
+  // each metric's own ramp; "reverse" flips it; the rest replace every metric
+  // with one shared ramp (legacy = the original blue→green→red rainbow, etc.).
+  const PALETTE_SINGLE = {
+    legacy:  [[0, 0, 255], [0, 255, 255], [0, 255, 0], [255, 255, 0], [255, 0, 0]],
+    rainbow: [[132, 0, 255], [0, 96, 255], [0, 210, 210], [0, 210, 60], [240, 220, 0], [255, 130, 0], [255, 0, 0]],
+    viridis: [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]],
+  };
+  const PALETTE_KEY = "dbb_trace_palette";
+  let paletteMode = "default";
+  try { const s = (localStorage.getItem(PALETTE_KEY) || "").toLowerCase(); if (s) paletteMode = s; } catch (_) {}
+  function stopsFor(key) {
+    const base = RAMP_STOPS[key] || RAMP_STOPS.speed;
+    switch (paletteMode) {
+      case "reverse": return base.slice().reverse();
+      case "legacy": return PALETTE_SINGLE.legacy;
+      case "rainbow": return PALETTE_SINGLE.rainbow;
+      case "reverse-rainbow": return PALETTE_SINGLE.rainbow.slice().reverse();
+      case "viridis": return PALETTE_SINGLE.viridis;
+      default: return base;
+    }
+  }
   function metricColorFn(key) {
-    const stops = RAMP_STOPS[key] || RAMP_STOPS.speed;
+    const stops = stopsFor(key);
     return (t) => rampColor(stops, t);
   }
-  function distanceColor(t) { return rampColor(RAMP_STOPS.distance, t); }
+  function distanceColor(t) { return rampColor(stopsFor("distance"), t); }
 
   // Movement / stillness modes: a drastic red ramp over the "on" band,
   // transparent (undrawn) outside it. Wheel speed (km/h) drives the mask;
@@ -1090,8 +1113,8 @@ document.addEventListener("DOMContentLoaded", function () {
   function legendGradientCss(key) {
     // Mix reads stops (red) → walk (amber) → riding (faint) left to right.
     if (key === "mix") return "linear-gradient(90deg, rgb(255,45,45) 0%, rgb(255,170,45) 45%, rgba(190,215,235,0.4) 100%)";
-    // Movement modes ramp bright → dark red; every metric uses its own palette.
-    const stops = (key === "moving" || key === "still") ? RED_RAMP : RAMP_STOPS[key];
+    // Movement modes ramp bright → dark red; metrics follow the chosen palette.
+    const stops = (key === "moving" || key === "still") ? RED_RAMP : (RAMP_STOPS[key] ? stopsFor(key) : null);
     if (!stops) return "linear-gradient(90deg, rgb(0,229,255), rgb(255,43,43))";
     const parts = stops.map((s, i) => `rgb(${s[0]},${s[1]},${s[2]}) ${Math.round((i / (stops.length - 1)) * 100)}%`);
     return "linear-gradient(90deg, " + parts.join(", ") + ")";
@@ -1132,6 +1155,15 @@ document.addEventListener("DOMContentLoaded", function () {
   if (colorSelEl) {
     colorSelEl.value = traceColor;
     colorSelEl.addEventListener("change", (e) => { traceColor = e.target.value; updateGlow(); });
+  }
+  const paletteSelEl = document.getElementById("palette-select");
+  if (paletteSelEl) {
+    paletteSelEl.value = paletteMode;
+    paletteSelEl.addEventListener("change", (e) => {
+      paletteMode = e.target.value;
+      try { localStorage.setItem(PALETTE_KEY, paletteMode); } catch (_) {}
+      updateGlow();
+    });
   }
   if (traceStyleSelEl) {
     syncTraceStyleSelect();

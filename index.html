@@ -66,6 +66,17 @@
                 </select>
             </label>
             <label>
+                <span>Palette</span>
+                <select id="palette-select" title="Colour scheme for the metric trace gradients.">
+                    <option value="default">Default</option>
+                    <option value="reverse">Reverse</option>
+                    <option value="legacy">Legacy</option>
+                    <option value="rainbow">Rainbow</option>
+                    <option value="reverse-rainbow">Reverse rainbow</option>
+                    <option value="viridis">Viridis</option>
+                </select>
+            </label>
+            <label>
                 <span>Trace style</span>
                 <select id="trace-style-select" title="How track lines are drawn. Follows the map style automatically until you pick one.">
                     <option value="normal">Normal</option>
@@ -193,7 +204,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="static/js/app.js?v=167"></script>
+    <script src="static/js/app.js?v=168"></script>
     <script src="static/js/dropbox-source.js?v=7"></script>
     <script src="static/js/source-hints.js?v=40"></script>
 </body>

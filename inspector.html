@@ -125,6 +125,17 @@
                             </select>
                         </label>
                         <label>
+                            <span>Palette</span>
+                            <select id="palette-select" title="Colour scheme for the metric trace gradients.">
+                                <option value="default">Default</option>
+                                <option value="reverse">Reverse</option>
+                                <option value="legacy">Legacy</option>
+                                <option value="rainbow">Rainbow</option>
+                                <option value="reverse-rainbow">Reverse rainbow</option>
+                                <option value="viridis">Viridis</option>
+                            </select>
+                        </label>
+                        <label>
                             <span>Trace style</span>
                             <select id="trace-style-select" title="How track lines are drawn. Follows the map style automatically until you pick one.">
                                 <option value="normal">Normal</option>
@@ -278,6 +289,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=81"></script>
+    <script src="static/js/inspector.js?v=82"></script>
 </body>
 </html>

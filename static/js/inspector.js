@@ -465,6 +465,28 @@
     const f = t * n - seg, a = stops[seg], b = stops[seg + 1];
     return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * f) + "," + Math.round(a[1] + (b[1] - a[1]) * f) + "," + Math.round(a[2] + (b[2] - a[2]) * f) + ")";
   }
+  // Palette selector — shared with the viewer via dbb_trace_palette. "default"
+  // keeps each metric's own ramp; "reverse" flips it; the rest replace every
+  // metric with one shared ramp (legacy = the original blue→green→red rainbow).
+  const PALETTE_SINGLE = {
+    legacy:  [[0, 0, 255], [0, 255, 255], [0, 255, 0], [255, 255, 0], [255, 0, 0]],
+    rainbow: [[132, 0, 255], [0, 96, 255], [0, 210, 210], [0, 210, 60], [240, 220, 0], [255, 130, 0], [255, 0, 0]],
+    viridis: [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]],
+  };
+  const PALETTE_KEY = "dbb_trace_palette";
+  let paletteMode = "default";
+  try { const s = (localStorage.getItem(PALETTE_KEY) || "").toLowerCase(); if (s) paletteMode = s; } catch (_) {}
+  function stopsFor(mode) {
+    const base = RAMP_STOPS[mode] || RAMP_STOPS.speed;
+    switch (paletteMode) {
+      case "reverse": return base.slice().reverse();
+      case "legacy": return PALETTE_SINGLE.legacy;
+      case "rainbow": return PALETTE_SINGLE.rainbow;
+      case "reverse-rainbow": return PALETTE_SINGLE.rainbow.slice().reverse();
+      case "viridis": return PALETTE_SINGLE.viridis;
+      default: return base;
+    }
+  }
   // Mix: same trip-structure idea as the viewer. MapLibre can't dash / widen
   // per segment on one line, so the route is split into three band layers
   // (stops / walk / riding) each with its own dash + width; per-segment colour
@@ -495,7 +517,7 @@
   }
   function gradientCssFor(mode) {
     if (mode === "mix") return "linear-gradient(90deg, rgb(255,45,45) 0%, rgb(255,170,45) 45%, rgba(190,215,235,0.4) 100%)";
-    const stops = THRESHOLD_MODES[mode] ? RED_RAMP : RAMP_STOPS[mode];
+    const stops = THRESHOLD_MODES[mode] ? RED_RAMP : (RAMP_STOPS[mode] ? stopsFor(mode) : null);
     if (!stops) return "linear-gradient(90deg, #00e5ff, #ff2b2b)";
     return "linear-gradient(90deg, " + stops.map((s, i) => "rgb(" + s.join(",") + ") " + Math.round((i / (stops.length - 1)) * 100) + "%").join(", ") + ")";
   }
@@ -776,8 +798,7 @@
   }
 
   function metricColor(value, minV, maxV, mode) {
-    const stops = RAMP_STOPS[mode] || RAMP_STOPS.speed;
-    return rampRgb(stops, (value - minV) / (maxV - minV));
+    return rampRgb(stopsFor(mode), (value - minV) / (maxV - minV));
   }
 
   // Value range for a metric. With `endIdx` the scan is limited to the
@@ -1191,6 +1212,15 @@
         syncTraceModeOptions();
         applyTrace();
       });
+      const paletteSel = document.getElementById("palette-select");
+      if (paletteSel) {
+        paletteSel.value = paletteMode;
+        paletteSel.addEventListener("change", (e) => {
+          paletteMode = e.target.value;
+          try { localStorage.setItem(PALETTE_KEY, paletteMode); } catch (_) {}
+          applyTrace();
+        });
+      }
       document.getElementById("trace-mode-select").addEventListener("change", (e) => {
         currentTraceMode = e.target.value;
         applyTrace();

@@ -1489,11 +1489,11 @@
     cg.rebuildLegend = function () {
       legend.innerHTML = "";
       const sel = cg.selected();
-      if (!sel.length) { legend.innerHTML = '<span class="cc-empty">No metrics — edit in Customize.</span>'; return; }
+      if (!sel.length) { legend.innerHTML = '<span class="cc-empty">No metrics yet, add them in Customize.</span>'; return; }
       sel.forEach((a) => {
         const item = makeEl("span", "cc-leg");
         const dot = makeEl("span", "cc-dot"); dot.style.background = a.color;
-        const val = makeEl("span", "cc-val", "—");
+        const val = makeEl("span", "cc-val", "–");
         item.append(dot, makeEl("span", "cc-name", a.label), val);
         item._val = val; item._a = a;
         legend.appendChild(item);
@@ -2248,6 +2248,48 @@
     updateUI();
   }
 
+  // Keyboard shortcuts: Space toggles play/pause; Left/Right step one datapoint
+  // (Shift steps 10); Home/End jump to the section (or trip) ends. Stepping
+  // pauses first so it acts like frame-stepping. Skipped while a form field is
+  // focused or the Customize dialog is open, so those keep their native keys.
+  function stepSamples(dir, count) {
+    if (playing) setPlayingState(false);
+    const onSample = sampleFraction <= 0.0001;
+    let idx = currentSampleIdx;
+    if (dir > 0) idx = Math.min(ts.length - 1, idx + count);
+    else idx = Math.max(0, (onSample ? idx : idx + 1) - count);
+    setCurrentTime(ts[idx][SEC] - t0);
+  }
+  document.addEventListener("keydown", (e) => {
+    const el = e.target;
+    const tag = el && el.tagName;
+    if (tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable)) return;
+    if (tag === "INPUT" && el.type !== "range") return; // let the scrub range keep arrows
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const dlg = document.getElementById("charts-dialog");
+    if (dlg && !dlg.classList.contains("hidden")) return;
+    if (e.code === "Space" || e.key === " ") {
+      e.preventDefault();
+      autoplayCancelled = true;
+      setPlayingState(!playing);
+      if (playing) startPlayback(false);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      stepSamples(1, e.shiftKey ? 10 : 1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      stepSamples(-1, e.shiftKey ? 10 : 1);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      if (playing) setPlayingState(false);
+      setCurrentTime(isZoomed() ? viewT0 : 0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      if (playing) setPlayingState(false);
+      setCurrentTime(isZoomed() ? viewT1 : duration);
+    }
+  });
+
   function lerp(a, b, f) { return a + (b - a) * f; }
   // Test hook: playback/map state for automated checks.
   window.__inspDebug = () => ({
@@ -2401,7 +2443,7 @@
       el.className = "scrub-gap";
       el.style.left = (g.start / duration * 100) + "%";
       el.style.width = ((g.end - g.start) / duration * 100) + "%";
-      el.title = "No recording here (wheel off) — playback skips it";
+      el.title = "No recording here (wheel off), playback skips it";
       scrub.parentElement.appendChild(el);
     }
   }
@@ -2476,9 +2518,14 @@
       zoomHandleB.classList.add("hidden");
     }
     loopBtn.classList.toggle("ab-set", loopOn);
+    // Tooltip tracks whether a section is actually selected (no em-dashes).
+    const loopScope = isZoomed() ? "the selected section" : "the whole trip";
     loopBtn.title = loopOn
-      ? "Loop is ON — playback wraps at the end of the section"
-      : "Loop the selected section";
+      ? `Loop is on, playback repeats ${loopScope}`
+      : `Loop ${loopScope}`;
+    playBtn.title = isZoomed()
+      ? "Play / Pause (Space). ←/→ step a point (Shift ×10). Hold to restart the section."
+      : "Play / Pause (Space). ←/→ step a point (Shift ×10). Hold to restart from the start.";
   }
 
   // Suppress handle hit-testing when the playhead sits on top of it so

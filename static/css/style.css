@@ -1527,7 +1527,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     border: 1px solid rgba(255, 255, 255, 0.1); cursor: default;
 }
 #dbx-sync-modal .src-action { margin: 0.2rem 1.3rem 1.1rem; padding-top: 0.9rem; }
-#dbx-sync-modal .src-action-row { display: flex; align-items: center; justify-content: flex-end; gap: 0.7rem; }
+#dbx-sync-modal .src-action-row { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 0.7rem; }
 #dbx-sync-modal .src-primary-btn {
     display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.1rem;
     background: linear-gradient(180deg, #0061ff, #0049cc); color: #fff; border: none; border-radius: 8px;
@@ -1547,12 +1547,15 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 /* Synchronize split button: main does upload + archive, the caret reveals the
    individual actions. */
 #dbx-sync-modal .dbx-sync-split { position: relative; display: inline-flex; }
-#dbx-sync-modal .dbx-sync-main {
-    flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.15; text-align: left;
+/* Single-line label: "Synchronize (3 to upload, 2 to archive)". Grows the
+   button rather than wrapping the text; only the main half of a split flattens
+   its right corners against the caret. */
+#dbx-sync-modal .dbx-sync-main { gap: 0.35rem; white-space: nowrap; }
+#dbx-sync-modal .dbx-sync-split .dbx-sync-main {
     border-top-right-radius: 0; border-bottom-right-radius: 0;
 }
 #dbx-sync-modal .dbx-sync-title { font-weight: 600; }
-#dbx-sync-modal .dbx-sync-sub { font-size: 0.68rem; font-weight: 400; opacity: 0.85; }
+#dbx-sync-modal .dbx-sync-sub { font-weight: 400; opacity: 0.8; }
 #dbx-sync-modal .dbx-sync-caret {
     padding: 0.6rem 0.55rem; border-top-left-radius: 0; border-bottom-left-radius: 0;
     box-shadow: 0 6px 16px rgba(0, 97, 255, 0.32), inset 1px 0 0 rgba(255, 255, 255, 0.25);

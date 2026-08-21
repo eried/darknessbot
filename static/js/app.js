@@ -2784,7 +2784,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (up) subParts.push(`${up} to upload`);
     if (arch) subParts.push(`${arch} to archive`);
     const syncMainLabel = `<span class="dbx-sync-title">Synchronize</span>` +
-      (subParts.length ? `<span class="dbx-sync-sub">${subParts.join(" · ")}</span>` : "");
+      (subParts.length ? `<span class="dbx-sync-sub">(${subParts.join(", ")})</span>` : "");
 
     const rowsHtml = state.rows.map((r, i) => {
       const meta = r.kind === "remote"

@@ -85,7 +85,8 @@ body::before {
 .controls {
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: flex-end;
+    gap: 10px 4px;
     flex-wrap: wrap;
     margin-left: auto;
 }
@@ -1969,7 +1970,7 @@ body.print-mode .anomaly-row .anom-peak { color: #000 !important; }
     /* Stack the topbar contents so the controls don't elbow the title. */
     #topbar { padding: 8px 10px; }
     .page-title { width: 100%; }
-    .controls { width: 100%; gap: 8px; }
+    .controls { width: 100%; gap: 8px; justify-content: flex-start; }
     .controls label { flex-direction: row; align-items: center; gap: 6px; }
     .controls label.check-label { font-size: 0.76rem; }
     /* The vertical group separators turn into stray "|" marks once the

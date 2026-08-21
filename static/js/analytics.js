@@ -1928,7 +1928,8 @@
       if (failedClusters) extras.push(failedClusters + " location" + (failedClusters > 1 ? "s" : "") + " failed to fetch");
       setWeatherStatus(covered + " of " + dated.length + " trips ready", extras);
     } else {
-      weatherBtn.textContent = "Weather added · " + covered + " of " + dated.length + " trips";
+      weatherBtn.textContent = "Weather " + covered + "/" + dated.length;
+      weatherBtn.title = "Weather added for " + covered + " of " + dated.length + " trips";
       weatherBtn.disabled = true;
       const extras = [];
       if (tooRecent) extras.push(tooRecent + " from the last few days — Open-Meteo archive lags ~5 days");

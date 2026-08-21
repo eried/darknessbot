@@ -2523,9 +2523,7 @@
     loopBtn.title = loopOn
       ? `Loop is on, playback repeats ${loopScope}`
       : `Loop ${loopScope}`;
-    playBtn.title = isZoomed()
-      ? "Play / Pause (Space). ←/→ step a point (Shift ×10). Hold to restart the section."
-      : "Play / Pause (Space). ←/→ step a point (Shift ×10). Hold to restart from the start.";
+    playBtn.title = "Play / Pause (Space)";
   }
 
   // Suppress handle hit-testing when the playhead sits on top of it so

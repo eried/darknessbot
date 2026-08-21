@@ -383,7 +383,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // speeds so stops and walk actually vary. Returns {color, alpha, width, dash}.
   const MIX_STOP = 4, MIX_WALK = 8, MIX_COLOR_MAX = 15;
   function makeMixSegStyle() {
-    const stops = stopsFor("speed");
+    // Reversed speed ramp: Mix emphasises stops, so the stopped/slow parts take
+    // the hot end and riding fades to the cold end — matching Stopped mode
+    // (where a dead stop is also the hot colour) instead of contradicting it.
+    const stops = stopsFor("speed").slice().reverse();
     return (kmh) => {
       if (typeof kmh !== "number" || !(kmh >= 0)) return null;
       const color = rampColor(stops, Math.min(1, kmh / MIX_COLOR_MAX));
@@ -1136,9 +1139,11 @@ document.addEventListener("DOMContentLoaded", function () {
   function legendGradientCss(key) {
     // Movement modes colour by speed, so they show the speed palette; metrics
     // show their own (palette-adjusted) ramp.
-    const stops = (key === "moving" || key === "still" || key === "mix")
-      ? stopsFor("speed")
-      : (RAMP_STOPS[key] ? stopsFor(key) : null);
+    const stops = key === "mix"
+      ? stopsFor("speed").slice().reverse() // Mix: stops on the hot end (see makeMixSegStyle)
+      : (key === "moving" || key === "still")
+        ? stopsFor("speed")
+        : (RAMP_STOPS[key] ? stopsFor(key) : null);
     if (!stops) return "linear-gradient(90deg, rgb(0,229,255), rgb(255,43,43))";
     const parts = stops.map((s, i) => `rgb(${s[0]},${s[1]},${s[2]}) ${Math.round((i / (stops.length - 1)) * 100)}%`);
     return "linear-gradient(90deg, " + parts.join(", ") + ")";
@@ -3772,6 +3777,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     allRow.querySelector(".collapse-all").addEventListener("click", () => {
       tripList.querySelectorAll(".year-group, .month-group").forEach(g => g.classList.remove("expanded"));
+      deselectIfHidden();
     });
     header.appendChild(allRow);
 
@@ -3988,6 +3994,7 @@ document.addEventListener("DOMContentLoaded", function () {
         yHeader.addEventListener("click", (e) => {
           if (e.target.closest(".year-check")) return;
           yearEl.classList.toggle("expanded");
+          deselectIfHidden();
         });
 
         // Build months inside year body
@@ -4046,6 +4053,7 @@ document.addEventListener("DOMContentLoaded", function () {
       header.addEventListener("click", (e) => {
         if (e.target.closest(".month-check")) return;
         groupEl.classList.toggle("expanded");
+        deselectIfHidden();
       });
 
       // Build only the first few cards synchronously so the panel feels
@@ -4924,15 +4932,39 @@ document.addEventListener("DOMContentLoaded", function () {
     subtree: true, attributes: true, attributeFilter: ["class"],
   });
 
+  // Drop the current selection: clear the map focus, the active row, and any
+  // hover UI, then refit to the whole library. Shared by the click-again
+  // toggle and the collapse-hides-it path below.
+  function deselectCurrent() {
+    if (selectedIdx === -1) return;
+    selectedIdx = -1;
+    updateGlow();
+    fitAll();
+    tooltip.classList.add("hidden");
+    hideChartMarker();
+    document.querySelectorAll(".trip-item.active").forEach((el) => el.classList.remove("active"));
+    updateVisibilityUI();
+  }
+
+  // When a group holding the selected trip is collapsed, the trip is no longer
+  // on screen — drop the selection so the map matches the list. Only real
+  // collapse gates count: month groups always gate; a year group gates only in
+  // the multi-year layout (it then wraps a .year-body), never the single-year
+  // wrapper which has no header and stays open.
+  function deselectIfHidden() {
+    if (selectedIdx === -1) return;
+    const el = tripList.querySelector(`.trip-item[data-idx="${selectedIdx}"]`);
+    if (!el) return;
+    const monthGroup = el.closest(".month-group");
+    const yearGroup = el.closest(".year-group");
+    const monthHidden = monthGroup && !monthGroup.classList.contains("expanded");
+    const yearHidden = el.closest(".year-body") && yearGroup && !yearGroup.classList.contains("expanded");
+    if (monthHidden || yearHidden) deselectCurrent();
+  }
+
   function selectTrip(idx, opts) {
     if (selectedIdx === idx) {
-      selectedIdx = -1;
-      updateGlow();
-      fitAll();
-      tooltip.classList.add("hidden");
-      hideChartMarker();
-      document.querySelectorAll(".trip-item.active").forEach((el) => el.classList.remove("active"));
-      updateVisibilityUI();
+      deselectCurrent();
       return;
     }
 

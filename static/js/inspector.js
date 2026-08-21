@@ -497,7 +497,9 @@
   // colour string since MapLibre line-opacity is per-layer.
   function mixSeg(kmh) {
     if (typeof kmh !== "number" || !(kmh >= 0)) return null;
-    const c = rampRgb(stopsFor("speed"), Math.min(1, kmh / MIX_COLOR_MAX)); // "rgb(r,g,b)"
+    // Reversed speed ramp: stops take the hot end, riding fades to the cold end
+    // (matches Stopped mode, where a dead stop is also the hot colour).
+    const c = rampRgb(stopsFor("speed").slice().reverse(), Math.min(1, kmh / MIX_COLOR_MAX)); // "rgb(r,g,b)"
     const rgba = (a) => c.replace("rgb(", "rgba(").replace(")", "," + a + ")");
     if (kmh < MIX_STOP) return { band: "stop", color: c };
     if (kmh < MIX_WALK) {
@@ -519,9 +521,11 @@
   }
   function gradientCssFor(mode) {
     // Movement modes colour by speed, so they show the speed palette.
-    const stops = (THRESHOLD_MODES[mode] || mode === "mix")
-      ? stopsFor("speed")
-      : (RAMP_STOPS[mode] ? stopsFor(mode) : null);
+    const stops = mode === "mix"
+      ? stopsFor("speed").slice().reverse() // Mix: stops on the hot end (see mixSeg)
+      : THRESHOLD_MODES[mode]
+        ? stopsFor("speed")
+        : (RAMP_STOPS[mode] ? stopsFor(mode) : null);
     if (!stops) return "linear-gradient(90deg, #00e5ff, #ff2b2b)";
     return "linear-gradient(90deg, " + stops.map((s, i) => "rgb(" + s.join(",") + ") " + Math.round((i / (stops.length - 1)) * 100) + "%").join(", ") + ")";
   }

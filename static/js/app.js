@@ -700,15 +700,23 @@ document.addEventListener("DOMContentLoaded", function () {
             }
           }
           let lx = xs[0], ly = ys[0];
+          // Mask modes: carry the strongest qualifying value across a decimated
+          // run so a stop that collapses under MIN_PX still paints (judged by
+          // its best point, not just the segment's far endpoint).
+          let bestT = null;
           for (let i = 1; i < n; i++) {
+            if (pd.mask) {
+              const m = pd.mask(pts[i][pd.pointIdx]);
+              if (m !== null && (bestT === null || m > bestT)) bestT = m;
+            }
             const dx = xs[i] - lx, dy = ys[i] - ly;
             if (i < n - 1 && dx < MIN_PX && dx > -MIN_PX && dy < MIN_PX && dy > -MIN_PX) continue;
             let t01;
             if (pd.mode === "progress") {
               t01 = i / (n - 1);
             } else if (pd.mask) {
-              t01 = pd.mask(pts[i][pd.pointIdx]);
-              if (t01 === null) { lx = xs[i]; ly = ys[i]; continue; } // transparent: advance, don't draw
+              t01 = bestT; bestT = null;
+              if (t01 === null) { lx = xs[i]; ly = ys[i]; continue; } // no qualifying point in run
             } else {
               const v = pts[i][pd.pointIdx];
               t01 = typeof v === "number" ? (v - pd.min) / pd.span : 0;
@@ -821,13 +829,18 @@ document.addEventListener("DOMContentLoaded", function () {
               ctx.lineCap = "round";
               ctx.globalCompositeOperation = pass.comp;
               let lx = xs[0], ly = ys[0];
+              let bestT = null; // strongest qualifying mask value across a decimated run
               for (let i = 1; i < n; i++) {
+                if (pd.mask) {
+                  const m = pd.mask(pd.values[i]);
+                  if (m !== null && (bestT === null || m > bestT)) bestT = m;
+                }
                 const dx = xs[i] - lx, dy = ys[i] - ly;
                 if (i < n - 1 && dx < MIN_PX && dx > -MIN_PX && dy < MIN_PX && dy > -MIN_PX) continue;
                 let color;
                 if (pd.mask) {
-                  const t01 = pd.mask(pd.values[i]);
-                  if (t01 === null) { lx = xs[i]; ly = ys[i]; continue; } // transparent
+                  const t01 = bestT; bestT = null;
+                  if (t01 === null) { lx = xs[i]; ly = ys[i]; continue; } // no qualifying point in run
                   color = pd.colorFn(t01);
                 } else {
                   const t = pd.span ? (pd.values[i] - pd.min) / pd.span : 0.5;

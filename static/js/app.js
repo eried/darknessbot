@@ -2781,8 +2781,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const up = uploadTracks.length, arch = archiveTracks.length, upstream = up + arch;
     const bothUpstream = up > 0 && arch > 0;
     const subParts = [];
-    if (up) subParts.push(`${up} to upload`);
-    if (arch) subParts.push(`${arch} to archive`);
+    if (up) subParts.push(`upload ${up}`);
+    if (arch) subParts.push(`archive ${arch}`);
     const syncMainLabel = `<span class="dbx-sync-title">Synchronize</span>` +
       (subParts.length ? `<span class="dbx-sync-sub">(${subParts.join(", ")})</span>` : "");
 

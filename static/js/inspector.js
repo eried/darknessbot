@@ -491,18 +491,20 @@
   // per segment on one line, so the route is split into three band layers
   // (stops / walk / riding) each with its own dash + width; per-segment colour
   // (incl. the walk fade) rides as a feature property.
-  const MIX_STOP = 4, MIX_WALK = 8;
+  const MIX_STOP = 4, MIX_WALK = 8, MIX_COLOR_MAX = 15;
+  // Colour follows wheel speed through the selected palette (so Rainbow etc.
+  // carry through); the band sets the dash/width/opacity. Alpha rides in the
+  // colour string since MapLibre line-opacity is per-layer.
   function mixSeg(kmh) {
     if (typeof kmh !== "number" || !(kmh >= 0)) return null;
-    if (kmh < MIX_STOP) {
-      const t = Math.min(1, (MIX_STOP - kmh) / MIX_STOP);
-      return { band: "stop", color: rampRgb(RED_RAMP, t) };
-    }
+    const c = rampRgb(stopsFor("speed"), Math.min(1, kmh / MIX_COLOR_MAX)); // "rgb(r,g,b)"
+    const rgba = (a) => c.replace("rgb(", "rgba(").replace(")", "," + a + ")");
+    if (kmh < MIX_STOP) return { band: "stop", color: c };
     if (kmh < MIX_WALK) {
-      const a = 0.65 * (MIX_WALK - kmh) / (MIX_WALK - MIX_STOP); // fades to 0 by 8 km/h
-      return { band: "walk", color: "rgba(255,170,45," + a.toFixed(3) + ")" };
+      const a = (0.65 * (MIX_WALK - kmh) / (MIX_WALK - MIX_STOP)).toFixed(3); // fades to 0 by 8 km/h
+      return { band: "walk", color: rgba(a) };
     }
-    return { band: "ride", color: "rgba(190,215,235,0.13)" };
+    return { band: "ride", color: rgba("0.16") };
   }
   function mixFeatures() {
     const feats = [];
@@ -516,8 +518,10 @@
     return { type: "FeatureCollection", features: feats };
   }
   function gradientCssFor(mode) {
-    if (mode === "mix") return "linear-gradient(90deg, rgb(255,45,45) 0%, rgb(255,170,45) 45%, rgba(190,215,235,0.4) 100%)";
-    const stops = THRESHOLD_MODES[mode] ? RED_RAMP : (RAMP_STOPS[mode] ? stopsFor(mode) : null);
+    // Movement modes colour by speed, so they show the speed palette.
+    const stops = (THRESHOLD_MODES[mode] || mode === "mix")
+      ? stopsFor("speed")
+      : (RAMP_STOPS[mode] ? stopsFor(mode) : null);
     if (!stops) return "linear-gradient(90deg, #00e5ff, #ff2b2b)";
     return "linear-gradient(90deg, " + stops.map((s, i) => "rgb(" + s.join(",") + ") " + Math.round((i / (stops.length - 1)) * 100) + "%").join(", ") + ")";
   }
@@ -842,7 +846,7 @@
     const colorAt = (i) => {
       if (mask) {
         const t01 = mask(routePoints[i][P_SPD]);
-        return t01 === null ? "rgba(10,10,18,0)" : rampRgb(RED_RAMP, t01);
+        return t01 === null ? "rgba(10,10,18,0)" : rampRgb(stopsFor("speed"), t01);
       }
       return metricColor(routePoints[i][cfg.pointIdx], stats.min, stats.max, mode);
     };

@@ -368,24 +368,32 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!(kmh < MOVE_TH)) return null;                           // moving
     return Math.min(1, (MOVE_TH - kmh) / MOVE_TH);               // bright near TH → dark toward 0
   }
-  const redRampFn = (t) => rampColor(RED_RAMP, t);
+  // Movement modes colour by wheel speed through the SELECTED palette (so
+  // Rainbow etc. carry through) instead of a fixed red, keeping their masks.
+  // Factory captures the current palette once per draw.
+  function moveColorFn() {
+    const stops = stopsFor("speed");
+    return (t) => rampColor(stops, t);
+  }
 
-  // Mix mode: a trip-structure view. Stops (<4 km/h) draw solid, thick, red;
-  // walk speed (4–8 km/h) is amber dashes that fade out by 8 km/h — the
-  // mount/dismount "exit" points; riding (>8) is a faint dashed ghost of the
-  // route. Returns a per-segment style {color, alpha, width, dash} or null.
-  const MIX_STOP = 4, MIX_WALK = 8;
-  function mixSegStyle(kmh) {
-    if (typeof kmh !== "number" || !(kmh >= 0)) return null;
-    if (kmh < MIX_STOP) {
-      const t = Math.min(1, (MIX_STOP - kmh) / MIX_STOP); // brighter near 4, darkest at a dead stop
-      return { color: rampColor(RED_RAMP, t), alpha: 1, width: 6, dash: null };
-    }
-    if (kmh < MIX_WALK) {
-      const a = 0.65 * (MIX_WALK - kmh) / (MIX_WALK - MIX_STOP); // fades to 0 at 8 km/h
-      return { color: "255,170,45", alpha: a, width: 3, dash: [5, 4] };
-    }
-    return { color: "190,215,235", alpha: 0.13, width: 2.5, dash: [2, 6] }; // riding ghost
+  // Mix mode: a trip-structure view. Colour follows wheel speed through the
+  // palette; the band sets the style — stops (<4 km/h) thick + solid, walk
+  // (4–8) dashed and fading toward 8 (the mount/dismount points), riding (>8) a
+  // faint dashed ghost. MIX_COLOR_MAX spreads the palette over the low/mid
+  // speeds so stops and walk actually vary. Returns {color, alpha, width, dash}.
+  const MIX_STOP = 4, MIX_WALK = 8, MIX_COLOR_MAX = 15;
+  function makeMixSegStyle() {
+    const stops = stopsFor("speed");
+    return (kmh) => {
+      if (typeof kmh !== "number" || !(kmh >= 0)) return null;
+      const color = rampColor(stops, Math.min(1, kmh / MIX_COLOR_MAX));
+      if (kmh < MIX_STOP) return { color, alpha: 1, width: 6, dash: null };
+      if (kmh < MIX_WALK) {
+        const a = 0.65 * (MIX_WALK - kmh) / (MIX_WALK - MIX_STOP); // fades to 0 at 8 km/h
+        return { color, alpha: a, width: 3, dash: [5, 4] };
+      }
+      return { color, alpha: 0.16, width: 2.5, dash: [2, 6] }; // riding ghost
+    };
   }
 
   const PAINT_METRICS = {
@@ -953,16 +961,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const selTrack = selectedIdx >= 0 ? allTracks[selectedIdx] : null;
       const values = (selTrack && selTrack.points.length >= 2) ? selTrack.points.map((p) => p[2]) : null;
       if (traceColor === "mix") {
-        if (values) push({ trackIdx: selectedIdx, values, segStyle: mixSegStyle });
-        else if (allTracks.length) push({ all: true, tracks: allTracks, pointIdx: 2, segStyle: mixSegStyle });
+        const segStyle = makeMixSegStyle();
+        if (values) push({ trackIdx: selectedIdx, values, segStyle });
+        else if (allTracks.length) push({ all: true, tracks: allTracks, pointIdx: 2, segStyle });
         else push(null);
         updateTraceLegend("mix", 0, 1, { min: "Stops", max: "Riding" });
         return;
       }
       const mask = traceColor === "moving" ? movingMask : stillMask;
       const widthBoost = traceColor === "still" ? 2.5 : 0; // stopped lines read thicker
-      if (values) push({ trackIdx: selectedIdx, values, mask, colorFn: redRampFn, widthBoost });
-      else if (allTracks.length) push({ all: true, tracks: allTracks, pointIdx: 2, mask, colorFn: redRampFn, widthBoost });
+      const colorFn = moveColorFn();
+      if (values) push({ trackIdx: selectedIdx, values, mask, colorFn, widthBoost });
+      else if (allTracks.length) push({ all: true, tracks: allTracks, pointIdx: 2, mask, colorFn, widthBoost });
       else { push(null); }
       updateTraceLegend(traceColor, 0, 1,
         traceColor === "moving" ? { min: "Slow", max: "Fast" } : { min: "Slow", max: "Still" });
@@ -1111,10 +1121,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const TRACE_STATIC_UNIT = { pwm: "%", power: "W", current: "A", battery: "%", voltage: "V" };
   const legendEl = document.getElementById("color-legend");
   function legendGradientCss(key) {
-    // Mix reads stops (red) → walk (amber) → riding (faint) left to right.
-    if (key === "mix") return "linear-gradient(90deg, rgb(255,45,45) 0%, rgb(255,170,45) 45%, rgba(190,215,235,0.4) 100%)";
-    // Movement modes ramp bright → dark red; metrics follow the chosen palette.
-    const stops = (key === "moving" || key === "still") ? RED_RAMP : (RAMP_STOPS[key] ? stopsFor(key) : null);
+    // Movement modes colour by speed, so they show the speed palette; metrics
+    // show their own (palette-adjusted) ramp.
+    const stops = (key === "moving" || key === "still" || key === "mix")
+      ? stopsFor("speed")
+      : (RAMP_STOPS[key] ? stopsFor(key) : null);
     if (!stops) return "linear-gradient(90deg, rgb(0,229,255), rgb(255,43,43))";
     const parts = stops.map((s, i) => `rgb(${s[0]},${s[1]},${s[2]}) ${Math.round((i / (stops.length - 1)) * 100)}%`);
     return "linear-gradient(90deg, " + parts.join(", ") + ")";

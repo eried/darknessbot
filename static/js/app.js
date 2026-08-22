@@ -2919,6 +2919,38 @@ document.addEventListener("DOMContentLoaded", function () {
     if (syncBtn && uploadTracks.length) syncBtn.addEventListener("click", () => runSync(uploadTracks, ui));
     const archiveBtn = main.querySelector("#dbx-do-archive");
     if (archiveBtn && archiveTracks.length) archiveBtn.addEventListener("click", () => runArchive(archiveTracks, ui));
+
+    // Responsive action labels: when the Synchronize and Load buttons can't
+    // share one row, drop to compact text ("Upload 1" / "Load 353") so they fit
+    // on a line instead of wrapping. Full text returns when there's room again.
+    const actionRow = main.querySelector(".src-action-row");
+    if (actionRow) {
+      const syncMainEl = actionRow.querySelector(".dbx-sync-main");
+      const compactBits = [];
+      if (up) compactBits.push("Upload " + up);
+      if (arch) compactBits.push("Archive " + arch);
+      const compactSyncLabel = compactBits.join(", ");
+      const fitActions = () => {
+        // Restore full labels first so a widened dialog can re-expand them.
+        if (syncMainEl) syncMainEl.innerHTML = syncMainLabel;
+        if (loadBtn) loadBtn.textContent = "Load " + remoteFiles.length + " from Dropbox";
+        const kids = [...actionRow.children];
+        if (kids.length < 2) return; // only one button, nothing to trade off
+        if (new Set(kids.map((k) => k.offsetTop)).size === 1) return; // already fits
+        if (syncMainEl && compactSyncLabel) syncMainEl.textContent = compactSyncLabel;
+        if (loadBtn) loadBtn.textContent = "Load " + remoteFiles.length;
+      };
+      fitActions();
+      renderSyncState._lastFit = fitActions;
+      if (!renderSyncState._resizeBound) {
+        renderSyncState._resizeBound = true;
+        window.addEventListener("resize", () => {
+          if (dbxSyncRoot && !dbxSyncRoot.classList.contains("hidden") && renderSyncState._lastFit) {
+            renderSyncState._lastFit();
+          }
+        });
+      }
+    }
   }
 
   // One-pass upstream sync: upload first (so a combined trip is safely on

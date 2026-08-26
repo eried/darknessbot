@@ -125,8 +125,9 @@
   const PWM = 9, CURRENT = 10, POWER = 11;
   const GPSSPD = 12, GFORCE = 13, GFORCEX = 14, GFORCEY = 15;
   const TORQUE = 16, PHASE = 17; // EUC Planet 0.19+; 0/absent on wheels that don't report
-  // Derived (computed below) — spare columns for the "… avg" extra graphs.
-  const SPEEDAVG = 18, BATTERYAVG = 19, CURRENTAVG = 20, PWMAVG = 21;
+  // Derived (computed below) — spare columns for the "… avg" extra graphs and
+  // the synthesized state-of-charge series.
+  const SPEEDAVG = 18, BATTERYAVG = 19, CURRENTAVG = 20, PWMAVG = 21, SOC = 22;
   // Points layout: [lat, lon, speed, alt, volt, temp, battery, pwm, current, power, gpsSpeed]
   const P_LAT = 0, P_LON = 1, P_SPD = 2, P_ALT = 3, P_VOLT = 4, P_TEMP = 5, P_BATT = 6;
   const P_PWM = 7, P_CURRENT = 8, P_POWER = 9, P_GPSSPD = 10, P_TORQUE = 11, P_PHASE = 12;
@@ -153,6 +154,67 @@
     smooth(BATT, BATTERYAVG);
     smooth(CURRENT, CURRENTAVG);
     smooth(PWM, PWMAVG);
+  })();
+
+  // Battery envelope: a low-resolution view of the battery that follows what
+  // you're DOING instead of the load-driven sag. Raw battery % bounces because
+  // voltage sags under load and recovers when you coast/stop; the true charge
+  // trends one way. Primary model = coulomb count: integrate the current (drive
+  // draws down, idle holds flat, regen adds back), then scale that curve to the
+  // trip's real start/end battery so it's anchored to reality. Result goes
+  // steady-DOWN while riding, FLAT while stopped, UP on a regen descent, held in
+  // 30 s steps. Without a current column it falls back to a 30 s-median battery
+  // that only steps down (holds flat through the sag/recovery bounce). Parked in
+  // a spare column as a standalone custom-graph / inspector metric.
+  (function computeSoc() {
+    const n = ts.length;
+    if (!n) return;
+    const BUCKET = 30; // seconds per step
+    let hasCur = false;
+    for (let i = 0; i < n; i++) { if ((ts[i][CURRENT] || 0) !== 0) { hasCur = true; break; } }
+    if (hasCur) {
+      const t0 = ts[0][SEC], tEnd = ts[n - 1][SEC];
+      // Robust battery anchors: median of the first / last 30 s of readings.
+      const med = (from, to) => {
+        const a = [];
+        for (let i = from; i < to && i < n; i++) { const b = ts[i][BATT]; if (typeof b === "number") a.push(b); }
+        if (!a.length) return null;
+        a.sort((x, y) => x - y); return a[a.length >> 1];
+      };
+      let firstEnd = n; for (let i = 0; i < n; i++) { if (ts[i][SEC] - t0 >= BUCKET) { firstEnd = i; break; } }
+      let lastStart = 0; for (let i = n - 1; i >= 0; i--) { if (tEnd - ts[i][SEC] >= BUCKET) { lastStart = i + 1; break; } }
+      const battStart = med(0, firstEnd) ?? (ts[0][BATT] || 0);
+      const battEnd = med(lastStart, n) ?? (ts[n - 1][BATT] || 0);
+      // Cumulative net charge (drive positive, regen negative).
+      const cum = new Array(n).fill(0);
+      for (let i = 1; i < n; i++) {
+        const dt = Math.max(0, ts[i][SEC] - ts[i - 1][SEC]);
+        cum[i] = cum[i - 1] + (((ts[i][CURRENT] || 0) + (ts[i - 1][CURRENT] || 0)) / 2) * dt;
+      }
+      const total = cum[n - 1];
+      const soc = new Array(n);
+      for (let i = 0; i < n; i++) {
+        const frac = Math.abs(total) > 1e-6 ? cum[i] / total : (n > 1 ? i / (n - 1) : 0);
+        soc[i] = battStart - (battStart - battEnd) * frac;
+      }
+      // 30 s stepping: hold each bucket's opening value.
+      let bs = ts[0][SEC], step = soc[0];
+      for (let i = 0; i < n; i++) {
+        if (ts[i][SEC] - bs >= BUCKET) { bs = ts[i][SEC]; step = soc[i]; }
+        ts[i][SOC] = Math.round(step * 10) / 10;
+      }
+    } else {
+      // Battery-only fallback: 30 s median that only steps down (or up on a
+      // rise sustained across two buckets), so it holds flat through the bounce.
+      const buckets = []; let acc = [], bStart = ts[0][SEC];
+      const flush = (tEnd) => { if (!acc.length) return; const s = acc.slice().sort((a, b) => a - b); buckets.push({ t: tEnd, med: s[s.length >> 1] }); acc = []; };
+      for (let i = 0; i < n; i++) { const sec = ts[i][SEC]; if (sec - bStart >= BUCKET) { flush(ts[i - 1] ? ts[i - 1][SEC] : sec); bStart = sec; } const b = ts[i][BATT]; if (typeof b === "number") acc.push(b); }
+      flush(ts[n - 1][SEC]);
+      let soc = buckets.length ? buckets[0].med : 0;
+      for (let k = 0; k < buckets.length; k++) { const m = buckets[k].med; if (m < soc) soc = m; else if (m > soc + 1.5 && k + 1 < buckets.length && buckets[k + 1].med > soc + 1.5) soc = m; buckets[k].soc = soc; }
+      let bk = 0;
+      for (let i = 0; i < n; i++) { while (bk < buckets.length - 1 && ts[i][SEC] > buckets[bk].t) bk++; ts[i][SOC] = buckets.length ? buckets[bk].soc : (ts[i][BATT] || 0); }
+    }
   })();
 
   // The zoom window IS the playback section. viewT0/viewT1 are seconds
@@ -1062,10 +1124,9 @@
       // GPS speed has no chart block — it lives on the speed chart. Toggle it
       // by whether the trip carries the column.
       if (key === "gpsspeed") { opt.disabled = !hasGpsSpeed; continue; }
-      // Torque / phase current have no standalone chart block (custom-graph
-      // only), so gate them on the timeseries column directly.
-      if (key === "torque") { opt.disabled = !chartHasData(TORQUE); continue; }
-      if (key === "phase")  { opt.disabled = !chartHasData(PHASE);  continue; }
+      // Torque / phase stay selectable even without data (they colour flat),
+      // so choosing them survives a trip that happens to lack the column.
+      if (key === "torque" || key === "phase") { opt.disabled = false; continue; }
       const block = document.querySelector(`.chart-block[data-key="${key}"]`);
       opt.disabled = !block || block.classList.contains("hidden");
     }
@@ -1341,6 +1402,7 @@
     batteryavg: { color: "#b9f6ca", idx: BATTERYAVG, label: "Battery avg", dp: 0, render: "line", unit: "%" },
     currentavg: { color: "#ffe57f", idx: CURRENTAVG, label: "Current avg", dp: 1, render: "line", unit: "A" },
     pwmavg:     { color: "#ff80ab", idx: PWMAVG,     label: "PWM avg",     dp: 1, render: "line", unit: "%" },
+    batterysoc: { color: "#40c4ff", idx: SOC,        label: "Battery envelope", dp: 0, render: "line", unit: "%" },
   };
   function chartUnit(cfg) {
     if (cfg.unitKind === "speed") return UNITS.speedUnit;
@@ -1351,7 +1413,10 @@
 
   // PWM / Current / Power only exist on some wheels - hide a chart when the
   // trip carries no data for it (incl. legacy cached tracks without the column).
-  const OPTIONAL_CHARTS = new Set(["pwm", "current", "power", "torque", "phase", "batteryavg", "currentavg", "pwmavg"]);
+  // Torque / phase are NOT gated here: they stay offered in the custom-graph
+  // picker (and colour picker) even when a trip lacks them, drawing empty, so a
+  // saved layout that uses them isn't silently stripped on a trip without them.
+  const OPTIONAL_CHARTS = new Set(["pwm", "current", "power", "batteryavg", "currentavg", "pwmavg"]);
   function chartHasData(idx) {
     for (let i = 0; i < ts.length; i++) {
       const v = ts[i][idx];

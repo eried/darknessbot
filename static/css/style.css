@@ -825,6 +825,20 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     border: 1px solid rgba(0, 229, 255, 0.25);
     border-radius: 5px; color: #dff; font-size: 0.82rem; padding: 6px 8px;
 }
+/* Customize trip-detail rows: draggable show/hide list. */
+.dc-list { display: flex; flex-direction: column; gap: 2px; max-height: 52vh; overflow-y: auto; }
+.dc-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; font-size: 0.82rem;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid transparent;
+}
+.dc-row.dc-dragging { background: rgba(0, 229, 255, 0.12); border-color: rgba(0, 229, 255, 0.4); }
+.dc-grip { cursor: grab; color: #789; touch-action: none; user-select: none; padding: 0 2px; }
+.dc-grip:active { cursor: grabbing; }
+.dc-show { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; }
+.dc-show input { accent-color: #00e5ff; }
+.dc-show input:disabled { opacity: 0.6; }
+.dc-lock { font-size: 0.7rem; opacity: 0.6; }
 .tt-cuts { display: flex; flex-direction: column; gap: 2px; }
 .tt-cut {
     display: flex; align-items: center; gap: 10px;

@@ -923,6 +923,9 @@ document.addEventListener("DOMContentLoaded", function () {
     for (const opt of sel.options) {
       const key = opt.value;
       if (key === "solid") { opt.disabled = false; continue; }
+      // Torque / phase stay selectable even when the loaded trips lack them
+      // (absent trips just fall back to the base style), so the choice sticks.
+      if (key === "torque" || key === "phase") { opt.disabled = false; continue; }
       let hasData = false;
       if (key === "distance") {
         hasData = (track ? [track] : allTracks).some((tr) => tr && tr.points && tr.points.length);
@@ -3771,6 +3774,14 @@ document.addEventListener("DOMContentLoaded", function () {
           </svg>
           Batch edit
         </span>
+        <span class="tree-btn customize-detail" title="Customize which details show under a trip (reorder / hide)">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="2.5" y1="4" x2="13.5" y2="4"/><circle cx="6" cy="4" r="1.6" fill="currentColor" stroke="none"/>
+            <line x1="2.5" y1="8" x2="13.5" y2="8"/><circle cx="10.5" cy="8" r="1.6" fill="currentColor" stroke="none"/>
+            <line x1="2.5" y1="12" x2="13.5" y2="12"/><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+          </svg>
+          Customize
+        </span>
         <span class="tree-btn expand-all" title="Expand all">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="4 6 8 2 12 6"/>
@@ -3808,6 +3819,7 @@ document.addEventListener("DOMContentLoaded", function () {
       updateVisibilityUI();
     });
     allRow.querySelector(".manage-trips").addEventListener("click", openTripManager);
+    allRow.querySelector(".customize-detail").addEventListener("click", openDetailCustomize);
     allRow.querySelector(".expand-all").addEventListener("click", () => {
       tripList.querySelectorAll(".year-group, .month-group").forEach(g => g.classList.add("expanded"));
     });
@@ -4511,6 +4523,8 @@ document.addEventListener("DOMContentLoaded", function () {
     { key: "pwm",      label: "PWM",       color: "#ff4081", idx: 9,  unit: "%",    dp: 1 },
     { key: "power",    label: "Power",     color: "#7c4dff", idx: 11, unit: "W",    dp: 0 },
     { key: "current",  label: "Current",   color: "#ffd740", idx: 10, unit: "A",    dp: 1 },
+    { key: "torque",   label: "Torque",    color: "#ff7043", idx: 16, unit: "Nm",   dp: 1 },
+    { key: "phase",    label: "Phase current", color: "#4db6ac", idx: 17, unit: "A", dp: 1 },
     { key: "voltage",  label: "Voltage",   color: "#ff5252", idx: 2,  unit: "V",    dp: 1 },
     { key: "temp",     label: "Temp",      color: "#ffa000", idx: 3,  unitKind: "temp", dp: 1 },
     { key: "battery",  label: "Battery",   color: "#69f0ae", idx: 4,  unit: "%",    dp: 0 },
@@ -4536,6 +4550,36 @@ document.addEventListener("DOMContentLoaded", function () {
   const REGEN_COLOR = "#00e676";
   const DETAIL_ROW_MAP = {};
   DETAIL_ROWS.forEach(r => { DETAIL_ROW_MAP[r.key] = r; });
+
+  // Trip-detail row layout (viewer): which rows show under an expanded trip and
+  // in what order. Customised via the "Customize" toolbar button, saved per
+  // browser. Distance + Time reorder but never hide. A shown row still auto-
+  // skips on a trip that lacks its data (so no empty clutter).
+  const DETAIL_LAYOUT_KEY = "dbb_detail_layout";
+  const DETAIL_NEVER_HIDE = new Set(["distance", "time"]);
+  function defaultDetailLayout() {
+    return {
+      order: ["distance", "speed", "pwm", "temp", "battery", "altitude", "time",
+              "gpsspeed", "power", "current", "torque", "phase", "voltage"],
+      hidden: ["gpsspeed", "power", "current", "torque", "phase", "voltage"],
+    };
+  }
+  function loadDetailLayout() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(DETAIL_LAYOUT_KEY) || "null"); } catch (_) {}
+    const def = defaultDetailLayout();
+    if (!saved || !Array.isArray(saved.order)) return def;
+    const known = new Set(DETAIL_ROWS.map((r) => r.key));
+    const order = saved.order.filter((k) => known.has(k));
+    for (const k of def.order) if (!order.includes(k)) order.push(k); // new metrics appended
+    const hidden = (Array.isArray(saved.hidden) ? saved.hidden : [])
+      .filter((k) => known.has(k) && !DETAIL_NEVER_HIDE.has(k));
+    return { order, hidden };
+  }
+  let detailLayout = loadDetailLayout();
+  function saveDetailLayout() {
+    try { localStorage.setItem(DETAIL_LAYOUT_KEY, JSON.stringify(detailLayout)); } catch (_) {}
+  }
   let liveDetailIdx = -1;
 
   // Builds the detail rows for a trip — each shows a min–max range (total for
@@ -4562,7 +4606,11 @@ document.addEventListener("DOMContentLoaded", function () {
       return { avg, max: Math.max(mx, 0) };
     };
     let html = "";
-    for (const r of DETAIL_ROWS) {
+    const hiddenSet = new Set(detailLayout.hidden);
+    for (const key of detailLayout.order) {
+      if (hiddenSet.has(key)) continue;
+      const r = DETAIL_ROW_MAP[key];
+      if (!r) continue;
       let range = null;
       const unitLabel = unitForKind(r.unitKind, r.unit);
       if (r.key === "distance") {
@@ -4616,6 +4664,125 @@ document.addEventListener("DOMContentLoaded", function () {
               `<span class="detail-val" data-range="${range}">${range}</span></div>`;
     }
     return html;
+  }
+
+  // Re-render the rows of any open trip detail in place (keeping its mini chart)
+  // after the layout changes, and re-wire the click-to-hide-series toggles.
+  function refreshOpenDetails() {
+    document.querySelectorAll(".trip-item.active .trip-detail-inline").forEach((inline) => {
+      const item = inline.closest(".trip-item");
+      const idx = parseInt(item.dataset.idx);
+      const t = allTracks[idx];
+      if (!t) return;
+      const chartWrap = inline.querySelector(".chart-wrap");
+      inline.innerHTML = buildDetailHtml(t);
+      if (chartWrap) inline.appendChild(chartWrap);
+      inline.querySelectorAll('.detail-row[data-toggle="1"]').forEach((row) => {
+        row.addEventListener("click", (e) => {
+          e.stopPropagation();
+          row.classList.toggle("series-off");
+          const canvas = item.querySelector(".trip-chart");
+          if (canvas && canvas.offsetWidth > 0) {
+            drawChart(canvas, parseInt(canvas.dataset.idx));
+            if (canvas._persistCrosshair != null) drawCrosshair(canvas, canvas._persistCrosshair);
+          }
+        });
+      });
+    });
+  }
+
+  // "Customize" (trip-detail rows): drag to reorder, tick to show/hide, with
+  // JSON import/export. Distance + Time are locked shown. Saved per browser.
+  function openDetailCustomize() {
+    const rowHtml = (key) => {
+      const r = DETAIL_ROW_MAP[key];
+      if (!r) return "";
+      const shown = !detailLayout.hidden.includes(key);
+      const locked = DETAIL_NEVER_HIDE.has(key);
+      const dot = r.color ? `<i class="clr" style="--c:${r.color}"></i>` : `<i class="clr clr-spacer"></i>`;
+      return `<div class="dc-row" data-key="${key}">` +
+        `<span class="dc-grip" title="Drag to reorder">⠿</span>` +
+        `<label class="dc-show"><input type="checkbox"${shown ? " checked" : ""}${locked ? " disabled" : ""}>` +
+        `<span>${dot}${escapeHtml(r.label)}</span></label>` +
+        (locked ? `<span class="dc-lock" title="Always shown">🔒</span>` : "") +
+      `</div>`;
+    };
+    const body = `<div class="dc-list">${detailLayout.order.map(rowHtml).join("")}</div>` +
+      `<input type="file" id="dc-import-file" accept="application/json,.json" style="display:none">`;
+    const reset = ttBtn("Reset", "tt-ghost");
+    const imp = ttBtn("Import", "tt-ghost");
+    const exp = ttBtn("Export", "tt-ghost");
+    const done = ttBtn("Done", "tt-primary");
+    ttmodShow("DETAILS", "Customize trip details",
+      `<div class="tt-hint" style="padding:0 8px">Drag to reorder, tick to show. Distance and Time stay on.</div>`,
+      body, [reset, imp, exp, done]);
+    const listEl = ttmod.querySelector(".dc-list");
+    listEl.querySelectorAll(".dc-row").forEach((row) => {
+      const key = row.dataset.key;
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (cb && !cb.disabled) cb.addEventListener("change", () => {
+        const hid = new Set(detailLayout.hidden);
+        if (cb.checked) hid.delete(key); else hid.add(key);
+        detailLayout.hidden = [...hid];
+        saveDetailLayout();
+        refreshOpenDetails();
+      });
+      const grip = row.querySelector(".dc-grip");
+      grip.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+        row.classList.add("dc-dragging");
+        const move = (ev) => {
+          const others = [...listEl.querySelectorAll(".dc-row")].filter((rr) => rr !== row);
+          let target = null;
+          for (const other of others) { const rect = other.getBoundingClientRect(); if (ev.clientY < rect.top + rect.height / 2) { target = other; break; } }
+          if (target) { if (row.nextSibling !== target) listEl.insertBefore(row, target); }
+          else listEl.appendChild(row);
+        };
+        const up = () => {
+          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
+          row.classList.remove("dc-dragging");
+          grip.removeEventListener("pointermove", move);
+          grip.removeEventListener("pointerup", up);
+          detailLayout.order = [...listEl.querySelectorAll(".dc-row")].map((rr) => rr.dataset.key);
+          saveDetailLayout();
+          refreshOpenDetails();
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+      });
+    });
+    reset.addEventListener("click", () => { detailLayout = defaultDetailLayout(); saveDetailLayout(); refreshOpenDetails(); openDetailCustomize(); });
+    exp.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(detailLayout, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "eucviewer-trip-details.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    const impFile = ttmod.querySelector("#dc-import-file");
+    imp.addEventListener("click", () => impFile.click());
+    impFile.addEventListener("change", () => {
+      const f = impFile.files && impFile.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (parsed && Array.isArray(parsed.order)) {
+            localStorage.setItem(DETAIL_LAYOUT_KEY, JSON.stringify(parsed));
+            detailLayout = loadDetailLayout();
+            saveDetailLayout();
+            refreshOpenDetails();
+            openDetailCustomize();
+            appToast("Trip-detail layout imported.");
+          } else appToast("That file isn't a trip-detail layout.");
+        } catch (_) { appToast("Couldn't read that layout file."); }
+      };
+      reader.readAsText(f);
+    });
+    done.addEventListener("click", ttmodClose);
   }
 
   function clockAt(track, sec) {

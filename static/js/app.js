@@ -4782,11 +4782,20 @@ document.addEventListener("DOMContentLoaded", function () {
           grip.removeEventListener("pointermove", move);
           grip.removeEventListener("pointerup", up);
           try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
-          rows.forEach((r) => { r.style.transform = ""; r.style.zIndex = ""; r.style.position = ""; });
+          const moved = started && curIdx !== startIdx;
+          // Land in a single non-animated frame: freeze transitions, reorder,
+          // drop transforms, reflow, then restore — otherwise the neighbours
+          // animate back to origin and re-settle after the DOM reorders.
+          rows.forEach((r) => { r.style.transition = "none"; });
           row.classList.remove("dc-dragging");
-          if (started && curIdx !== startIdx) {
+          if (moved) {
             const ref = rows[curIdx];
             listEl.insertBefore(row, curIdx > startIdx ? ref.nextSibling : ref);
+          }
+          rows.forEach((r) => { r.style.transform = ""; r.style.zIndex = ""; r.style.position = ""; });
+          void listEl.offsetHeight; // commit with transitions off
+          rows.forEach((r) => { r.style.transition = ""; });
+          if (moved) {
             detailLayout.order = [...listEl.querySelectorAll(".dc-row")].map((rr) => rr.dataset.key);
             saveDetailLayout();
             refreshOpenDetails();

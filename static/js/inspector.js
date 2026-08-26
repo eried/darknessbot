@@ -463,33 +463,26 @@
       },
       paint: {}
     },
+    // Keyless Esri, matching the main viewer: Carto retired its free no-key
+    // basemaps and now watermarks tiles outside its cache. Dark Gray is cached
+    // to ~z16, so cap the source and let MapLibre overzoom past it.
     voyager: {
       source: {
         type: "raster",
-        tiles: [
-          "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-          "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-          "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-          "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
-        ],
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"],
         tileSize: 256,
-        maxzoom: 20,
-        attribution: "© OpenStreetMap © CARTO"
+        maxzoom: 18,
+        attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors"
       },
       paint: {}
     },
     cartodark: {
       source: {
         type: "raster",
-        tiles: [
-          "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
-        ],
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
         tileSize: 256,
-        maxzoom: 20,
-        attribution: "© OpenStreetMap contributors © CARTO"
+        maxzoom: 16,
+        attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors"
       },
       paint: {}
     },

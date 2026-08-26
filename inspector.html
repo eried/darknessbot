@@ -97,8 +97,8 @@
                                 <option value="cyclosm">CyclOSM</option>
                                 <option value="topo">OpenTopoMap</option>
                                 <option value="hot">Humanitarian</option>
-                                <option value="voyager">Carto Voyager</option>
-                                <option value="cartodark">Carto Dark</option>
+                                <option value="voyager">Streets</option>
+                                <option value="cartodark">Dark</option>
                                 <option value="satellite" selected>Satellite</option>
                             </select>
                         </label>
@@ -210,6 +210,7 @@
                 <div class="chart-block" data-key="batteryavg" data-default-hidden="1"><div class="chart-body"><canvas></canvas></div></div>
                 <div class="chart-block" data-key="currentavg" data-default-hidden="1"><div class="chart-body"><canvas></canvas></div></div>
                 <div class="chart-block" data-key="pwmavg" data-default-hidden="1"><div class="chart-body"><canvas></canvas></div></div>
+                <div class="chart-block" data-key="batterysoc" data-default-hidden="1"><div class="chart-body"><canvas></canvas></div></div>
                 <!-- Combined graphs are created dynamically before this marker. -->
                 <div id="sidebar-resize" title="Drag to resize charts"></div>
             </aside>
@@ -291,6 +292,6 @@
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <script src="static/js/inspector.js?v=91"></script>
+    <script src="static/js/inspector.js?v=92"></script>
 </body>
 </html>

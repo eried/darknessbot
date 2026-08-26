@@ -4695,6 +4695,13 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         });
       });
+      // Redraw so the mini chart reflects the new visible set (Customize can
+      // add or drop series, not just reorder rows).
+      const canvas = inline.querySelector(".trip-chart");
+      if (canvas && canvas.offsetWidth > 0) {
+        drawChart(canvas, idx);
+        if (canvas._persistCrosshair != null) drawCrosshair(canvas, canvas._persistCrosshair);
+      }
     });
   }
 
@@ -4877,9 +4884,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const cw = w - pad.left - pad.right;
     const ch = h - pad.top - pad.bottom;
 
-    // Series the user has toggled off on this trip's detail rows. Reading the
-    // DOM keeps the state right next to where it is set — no extra bookkeeping.
-    const hidden = new Set();
+    // Which series to leave off the mini chart: metrics hidden globally in the
+    // Customize dialog (their detail row isn't rendered at all), plus any the
+    // user click-toggled off on this trip's rows.
+    const hidden = new Set(detailLayout.hidden);
     const item = canvas.closest(".trip-item");
     if (item) {
       item.querySelectorAll(".detail-row.series-off").forEach(r => hidden.add(r.dataset.row));

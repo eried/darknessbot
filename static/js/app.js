@@ -112,9 +112,9 @@ document.addEventListener("DOMContentLoaded", function () {
   })();
 
   // --- Map setup with multiple tile layers ---
-  // The seven free (no-key) basemaps EUC Planet ships, so the two apps offer
-  // the same map choices. `light` marks pale basemaps so the trace glow can
-  // pick a colour that reads on them.
+  // Seven free (no-key) basemaps. `light` marks pale basemaps so the trace glow
+  // can pick a colour that reads on them. (EUC Planet still ships the two Carto
+  // styles; swap those there too once Carto's key requirement bites the app.)
   const standardLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19, attribution: "© OpenStreetMap contributors",
   });
@@ -127,12 +127,19 @@ document.addEventListener("DOMContentLoaded", function () {
   const hotLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
     subdomains: "ab", maxZoom: 20, attribution: "© OpenStreetMap contributors, tiles HOT / OSM France",
   });
-  const voyagerLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", {
-    subdomains: "abcd", maxZoom: 20, attribution: "© OpenStreetMap © CARTO",
-  });
-  const cartoDarkLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
-    subdomains: "abcd", maxZoom: 20, attribution: "© OpenStreetMap © CARTO",
-  });
+  // Esri keyless basemaps replace the two Carto styles: Carto deprecated its
+  // free no-key tiles and now stamps an "API KEY REQUIRED" watermark on tiles
+  // outside its cached set. Esri's Street / Dark Gray canvases are keyless and
+  // reliable. Dark Gray is only cached to ~z16, so cap the native level and let
+  // Leaflet upscale beyond (same trick as satellite).
+  const esriStreetsLayer = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 19, maxNativeZoom: 18, attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors" }
+  );
+  const esriDarkLayer = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 19, maxNativeZoom: 16, attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors" }
+  );
   const satelliteLayer = L.tileLayer(
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     // Esri's hi-res coverage ends early outside metros and serves "Map Data
@@ -147,8 +154,8 @@ document.addEventListener("DOMContentLoaded", function () {
     cyclosm:   { layer: cyclosmLayer,   light: true,  label: "CyclOSM" },
     topo:      { layer: topoLayer,      light: true,  label: "OpenTopoMap" },
     hot:       { layer: hotLayer,       light: true,  label: "Humanitarian" },
-    voyager:   { layer: voyagerLayer,   light: true,  label: "Carto Voyager" },
-    cartodark: { layer: cartoDarkLayer, light: false, label: "Carto Dark" },
+    voyager:   { layer: esriStreetsLayer, light: true,  label: "Streets" },
+    cartodark: { layer: esriDarkLayer,    light: false, label: "Dark" },
     satellite: { layer: satelliteLayer, light: false, label: "Satellite" },
   };
   let selectedStyle = "satellite"; // default for new users
@@ -3775,10 +3782,8 @@ document.addEventListener("DOMContentLoaded", function () {
           Batch
         </span>
         <span class="tree-btn customize-detail" title="Customize which details show under a trip (reorder / hide)">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="2.5" y1="4" x2="13.5" y2="4"/><circle cx="6" cy="4" r="1.6" fill="currentColor" stroke="none"/>
-            <line x1="2.5" y1="8" x2="13.5" y2="8"/><circle cx="10.5" cy="8" r="1.6" fill="currentColor" stroke="none"/>
-            <line x1="2.5" y1="12" x2="13.5" y2="12"/><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+            <path d="M2 4h9M2 8h6M2 12h9"/><circle cx="13" cy="4" r="1.6"/><circle cx="10" cy="8" r="1.6"/><circle cx="13" cy="12" r="1.6"/>
           </svg>
           Customize
         </span>

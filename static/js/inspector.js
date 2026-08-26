@@ -2836,7 +2836,15 @@
           }
         }
       } catch (_) {}
-      STATIC_ORDER.forEach((k) => { if (!layout.order.includes(k)) layout.order.push(k); });
+      // Append static charts the saved layout predates. A newly added
+      // default-hidden chart (e.g. Battery envelope) must also join `hidden`,
+      // or existing users would see it enabled — new charts stay opt-in.
+      STATIC_ORDER.forEach((k) => {
+        if (!layout.order.includes(k)) {
+          layout.order.push(k);
+          if (DEFAULT_HIDDEN.includes(k) && !layout.hidden.includes(k)) layout.hidden.push(k);
+        }
+      });
       layout.combined.forEach((d) => { if (!layout.order.includes(d.id)) layout.order.push(d.id); });
     })();
 

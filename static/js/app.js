@@ -3766,13 +3766,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const allRow = document.createElement("div");
     allRow.className = "all-trips-row";
     allRow.innerHTML = `
-      <label><input type="checkbox" class="all-check" checked> All trips</label>
+      <label title="Show or hide every trip"><input type="checkbox" class="all-check" checked> All</label>
       <div class="tree-actions">
         <span class="tree-btn manage-trips" title="Batch edit: assign wheels or remove across many trips at once">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="2" y="2.5" width="5" height="5" rx="1"/><rect x="9" y="2.5" width="5" height="5" rx="1"/><rect x="2" y="9.5" width="5" height="5" rx="1"/><rect x="9" y="9.5" width="5" height="5" rx="1"/>
           </svg>
-          Batch edit
+          Batch
         </span>
         <span class="tree-btn customize-detail" title="Customize which details show under a trip (reorder / hide)">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -4700,22 +4700,33 @@ document.addEventListener("DOMContentLoaded", function () {
       const shown = !detailLayout.hidden.includes(key);
       const locked = DETAIL_NEVER_HIDE.has(key);
       const dot = r.color ? `<i class="clr" style="--c:${r.color}"></i>` : `<i class="clr clr-spacer"></i>`;
-      return `<div class="dc-row" data-key="${key}">` +
+      return `<div class="dc-row${shown ? "" : " is-hidden"}" data-key="${key}">` +
         `<span class="dc-grip" title="Drag to reorder">⠿</span>` +
-        `<label class="dc-show"><input type="checkbox"${shown ? " checked" : ""}${locked ? " disabled" : ""}>` +
-        `<span>${dot}${escapeHtml(r.label)}</span></label>` +
-        (locked ? `<span class="dc-lock" title="Always shown">🔒</span>` : "") +
+        `<label class="dc-switch${locked ? " dc-locked" : ""}" title="${locked ? "Always shown" : "Show or hide"}">` +
+          `<input type="checkbox"${shown ? " checked" : ""}${locked ? " disabled" : ""}>` +
+          `<span class="dc-knob"></span>` +
+        `</label>` +
+        `<span class="dc-name">${dot}${escapeHtml(r.label)}</span>` +
       `</div>`;
     };
     const body = `<div class="dc-list">${detailLayout.order.map(rowHtml).join("")}</div>` +
       `<input type="file" id="dc-import-file" accept="application/json,.json" style="display:none">`;
     const reset = ttBtn("Reset", "tt-ghost");
-    const imp = ttBtn("Import", "tt-ghost");
-    const exp = ttBtn("Export", "tt-ghost");
     const done = ttBtn("Done", "tt-primary");
     ttmodShow("DETAILS", "Customize trip details",
-      `<div class="tt-hint" style="padding:0 8px">Drag to reorder, tick to show. Distance and Time stay on.</div>`,
-      body, [reset, imp, exp, done]);
+      `<div class="tt-hint" style="padding:0 8px">Drag to reorder, toggle to show. Distance and Time stay on.</div>`,
+      body, [reset, done]);
+    // Import / export as title-bar icon buttons, matching the inspector dialog.
+    const header = ttmod.querySelector(".tm-header");
+    const closeBtn = header.querySelector(".tm-close");
+    const imp = document.createElement("button");
+    imp.type = "button"; imp.className = "ttmod-icon"; imp.title = "Import layout (.json)";
+    imp.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>`;
+    const exp = document.createElement("button");
+    exp.type = "button"; exp.className = "ttmod-icon"; exp.title = "Export layout (.json)";
+    exp.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>`;
+    header.insertBefore(imp, closeBtn);
+    header.insertBefore(exp, closeBtn);
     const listEl = ttmod.querySelector(".dc-list");
     listEl.querySelectorAll(".dc-row").forEach((row) => {
       const key = row.dataset.key;
@@ -4724,6 +4735,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const hid = new Set(detailLayout.hidden);
         if (cb.checked) hid.delete(key); else hid.add(key);
         detailLayout.hidden = [...hid];
+        row.classList.toggle("is-hidden", !cb.checked);
         saveDetailLayout();
         refreshOpenDetails();
       });

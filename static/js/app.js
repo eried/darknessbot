@@ -3163,6 +3163,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   function ttmodShow(tag, title, subHtml, bodyHtml, footNodes) {
     if (!ttmod) return null;
+    // Drop any header icons a previous dialog injected, so reopening (e.g. the
+    // Reset path re-running openDetailCustomize) doesn't stack duplicates.
+    ttmod.querySelectorAll(".tm-header .ttmod-icon").forEach((el) => el.remove());
     const tagEl = ttmod.querySelector("#ttmod-tag");
     tagEl.textContent = tag || "";
     tagEl.classList.toggle("hidden", !tag); // no chip when the caller omits a tag
@@ -4578,9 +4581,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!saved || !Array.isArray(saved.order)) return def;
     const known = new Set(DETAIL_ROWS.map((r) => r.key));
     const order = saved.order.filter((k) => known.has(k));
-    for (const k of def.order) if (!order.includes(k)) order.push(k); // new metrics appended
     const hidden = (Array.isArray(saved.hidden) ? saved.hidden : [])
       .filter((k) => known.has(k) && !DETAIL_NEVER_HIDE.has(k));
+    const defHidden = new Set(def.hidden);
+    // Append metrics the saved layout predates; a new default-hidden one stays
+    // hidden so it doesn't appear enabled for existing users or on import.
+    for (const k of def.order) if (!order.includes(k)) {
+      order.push(k);
+      if (defHidden.has(k) && !hidden.includes(k)) hidden.push(k);
+    }
     return { order, hidden };
   }
   let detailLayout = loadDetailLayout();
@@ -4741,6 +4750,52 @@ document.addEventListener("DOMContentLoaded", function () {
     header.insertBefore(imp, closeBtn);
     header.insertBefore(exp, closeBtn);
     const listEl = ttmod.querySelector(".dc-list");
+    // Smooth drag-reorder: the grabbed row tracks the pointer while the rest
+    // slide to open a gap; the DOM reorders once, on drop.
+    function attachDcDrag(row, grip) {
+      grip.style.touchAction = "none";
+      grip.addEventListener("pointerdown", (e) => {
+        if (e.button != null && e.button !== 0) return;
+        e.preventDefault();
+        const rows = [...listEl.querySelectorAll(".dc-row")];
+        const startIdx = rows.indexOf(row);
+        const st = getComputedStyle(listEl);
+        const step = row.getBoundingClientRect().height + (parseFloat(st.rowGap || st.gap) || 0);
+        const startY = e.clientY;
+        let curIdx = startIdx, started = false;
+        try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+        const gaps = (t) => rows.forEach((r, i) => {
+          if (r === row) return;
+          let sh = 0;
+          if (startIdx < t && i > startIdx && i <= t) sh = -step;
+          else if (startIdx > t && i >= t && i < startIdx) sh = step;
+          r.style.transform = sh ? `translateY(${sh}px)` : "";
+        });
+        const move = (ev) => {
+          const dy = ev.clientY - startY;
+          if (!started) { if (Math.abs(dy) < 3) return; started = true; row.classList.add("dc-dragging"); row.style.position = "relative"; row.style.zIndex = "10"; }
+          row.style.transform = `translateY(${dy}px)`;
+          const t = Math.max(0, Math.min(rows.length - 1, startIdx + Math.round(dy / step)));
+          if (t !== curIdx) { curIdx = t; gaps(t); }
+        };
+        const up = () => {
+          grip.removeEventListener("pointermove", move);
+          grip.removeEventListener("pointerup", up);
+          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
+          rows.forEach((r) => { r.style.transform = ""; r.style.zIndex = ""; r.style.position = ""; });
+          row.classList.remove("dc-dragging");
+          if (started && curIdx !== startIdx) {
+            const ref = rows[curIdx];
+            listEl.insertBefore(row, curIdx > startIdx ? ref.nextSibling : ref);
+            detailLayout.order = [...listEl.querySelectorAll(".dc-row")].map((rr) => rr.dataset.key);
+            saveDetailLayout();
+            refreshOpenDetails();
+          }
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+      });
+    }
     listEl.querySelectorAll(".dc-row").forEach((row) => {
       const key = row.dataset.key;
       const cb = row.querySelector('input[type="checkbox"]');
@@ -4752,30 +4807,7 @@ document.addEventListener("DOMContentLoaded", function () {
         saveDetailLayout();
         refreshOpenDetails();
       });
-      const grip = row.querySelector(".dc-grip");
-      grip.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        try { grip.setPointerCapture(e.pointerId); } catch (_) {}
-        row.classList.add("dc-dragging");
-        const move = (ev) => {
-          const others = [...listEl.querySelectorAll(".dc-row")].filter((rr) => rr !== row);
-          let target = null;
-          for (const other of others) { const rect = other.getBoundingClientRect(); if (ev.clientY < rect.top + rect.height / 2) { target = other; break; } }
-          if (target) { if (row.nextSibling !== target) listEl.insertBefore(row, target); }
-          else listEl.appendChild(row);
-        };
-        const up = () => {
-          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
-          row.classList.remove("dc-dragging");
-          grip.removeEventListener("pointermove", move);
-          grip.removeEventListener("pointerup", up);
-          detailLayout.order = [...listEl.querySelectorAll(".dc-row")].map((rr) => rr.dataset.key);
-          saveDetailLayout();
-          refreshOpenDetails();
-        };
-        grip.addEventListener("pointermove", move);
-        grip.addEventListener("pointerup", up);
-      });
+      attachDcDrag(row, row.querySelector(".dc-grip"));
     });
     reset.addEventListener("click", () => { detailLayout = defaultDetailLayout(); saveDetailLayout(); refreshOpenDetails(); openDetailCustomize(); });
     exp.addEventListener("click", () => {

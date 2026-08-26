@@ -2962,26 +2962,46 @@
       newBtn.textContent = layout.combined.length >= MAX_COMBINED ? "Max 8 graphs" : "+ New graph";
     }
 
+    // Smooth drag-reorder: the grabbed row tracks the pointer while the rest
+    // slide to open a gap; the DOM reorders once, on drop.
     function attachRowDrag(row, grip) {
       grip.style.touchAction = "none";
       grip.addEventListener("pointerdown", (e) => {
+        if (e.button != null && e.button !== 0) return;
         e.preventDefault();
+        const rows = [...listEl.querySelectorAll(".cd-row")];
+        const startIdx = rows.indexOf(row);
+        const st = getComputedStyle(listEl);
+        const step = row.getBoundingClientRect().height + (parseFloat(st.rowGap || st.gap) || 0);
+        const startY = e.clientY;
+        let curIdx = startIdx, started = false;
         try { grip.setPointerCapture(e.pointerId); } catch (_) {}
-        row.classList.add("cd-dragging");
+        const gaps = (t) => rows.forEach((r, i) => {
+          if (r === row) return;
+          let sh = 0;
+          if (startIdx < t && i > startIdx && i <= t) sh = -step;
+          else if (startIdx > t && i >= t && i < startIdx) sh = step;
+          r.style.transform = sh ? `translateY(${sh}px)` : "";
+        });
         const move = (ev) => {
-          const rows = [...listEl.querySelectorAll(".cd-row")].filter((r) => r !== row);
-          let target = null;
-          for (const other of rows) { const r = other.getBoundingClientRect(); if (ev.clientY < r.top + r.height / 2) { target = other; break; } }
-          if (target) { if (row.nextSibling !== target) listEl.insertBefore(row, target); }
-          else listEl.appendChild(row);
+          const dy = ev.clientY - startY;
+          if (!started) { if (Math.abs(dy) < 3) return; started = true; row.classList.add("cd-dragging"); row.style.position = "relative"; row.style.zIndex = "10"; }
+          row.style.transform = `translateY(${dy}px)`;
+          const t = Math.max(0, Math.min(rows.length - 1, startIdx + Math.round(dy / step)));
+          if (t !== curIdx) { curIdx = t; gaps(t); }
         };
         const up = () => {
-          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
-          row.classList.remove("cd-dragging");
           grip.removeEventListener("pointermove", move);
           grip.removeEventListener("pointerup", up);
-          layout.order = [...listEl.querySelectorAll(".cd-row")].map((r) => r.dataset.key);
-          save(); apply();
+          try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
+          rows.forEach((r) => { r.style.transform = ""; r.style.zIndex = ""; r.style.position = ""; });
+          row.classList.remove("cd-dragging");
+          if (started && curIdx !== startIdx) {
+            const ref = rows[curIdx];
+            listEl.insertBefore(row, curIdx > startIdx ? ref.nextSibling : ref);
+            layout.order = [...listEl.querySelectorAll(".cd-row")].map((r) => r.dataset.key);
+            save(); apply();
+          }
         };
         grip.addEventListener("pointermove", move);
         grip.addEventListener("pointerup", up);
@@ -3112,9 +3132,10 @@
           if (Array.isArray(s.combined)) next.combined = s.combined.filter((d) => d && typeof d.id === "string").map((d) => ({ id: d.id, name: String(d.name || "Combined"), metrics: cleanMetrics(d.metrics) }));
           const valid = (k) => STATIC_ORDER.includes(k) || next.combined.some((d) => d.id === k);
           if (Array.isArray(s.order)) next.order = s.order.filter(valid);
-          STATIC_ORDER.forEach((k) => { if (!next.order.includes(k)) next.order.push(k); });
-          next.combined.forEach((d) => { if (!next.order.includes(d.id)) next.order.push(d.id); });
           if (Array.isArray(s.hidden)) next.hidden = s.hidden.filter(valid);
+          // A new default-hidden chart the imported layout predates stays off.
+          STATIC_ORDER.forEach((k) => { if (!next.order.includes(k)) { next.order.push(k); if (DEFAULT_HIDDEN.includes(k) && !next.hidden.includes(k)) next.hidden.push(k); } });
+          next.combined.forEach((d) => { if (!next.order.includes(d.id)) next.order.push(d.id); });
           layout = next; save(); apply(); backToList();
         } catch (err) { alert("That doesn't look like a valid layout file."); }
       };

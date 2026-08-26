@@ -842,9 +842,11 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     padding: 8px 10px; border-radius: 7px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    transition: opacity 0.12s;
+    transition: transform 0.16s ease, opacity 0.12s;
 }
-.dc-row.dc-dragging { opacity: 0.75; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+/* The grabbed row follows the pointer 1:1, so it must not lag behind a
+   transition; the other rows keep theirs to slide the gap smoothly. */
+.dc-row.dc-dragging { opacity: 0.9; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55); transition: none; }
 .dc-row.is-hidden { opacity: 0.6; }
 .dc-row.is-hidden .dc-name { color: #7a828a; }
 .dc-grip { cursor: grab; color: #5a5a62; font-size: 0.85rem; letter-spacing: -2px; user-select: none; touch-action: none; padding: 2px 0; }

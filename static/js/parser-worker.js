@@ -421,6 +421,12 @@ function buildTrackFromRows(rows, displayName) {
     const gForce = safeFloat(row["G-Force"]);
     const gForceX = safeFloat(row["G-Force X"]);
     const gForceY = safeFloat(row["G-Force Y"]);
+    // EUC Planet 0.19+: motor torque (Nm, signed, negative = regen) and motor
+    // phase current (A, signed). Resolved by header name; absent on older files
+    // (safeFloat -> 0). Wheels that don't report one log a constant 0, so an
+    // all-zero column reads as "not recorded" downstream.
+    const torque = safeFloat(row.Torque);
+    const phaseCurrent = safeFloat(row["Phase current"]);
     const lat = safeFloat(row.Latitude);
     const lon = safeFloat(row.Longitude);
     const date = row.Date || "";
@@ -468,6 +474,8 @@ function buildTrackFromRows(rows, displayName) {
       roundTo(gForce, 3),
       roundTo(gForceX, 3),
       roundTo(gForceY, 3),
+      roundTo(torque, 2),
+      roundTo(phaseCurrent, 1),
     ]);
 
     if (speed > 0) speeds.push(speed);
@@ -488,6 +496,8 @@ function buildTrackFromRows(rows, displayName) {
         roundTo(current, 1),
         roundTo(power, 0),
         roundTo(gpsSpeed, 1),
+        roundTo(torque, 2),
+        roundTo(phaseCurrent, 1),
       ]);
     }
   }
@@ -606,6 +616,8 @@ function parseGpxText(text, name) {
       0, // gForce
       0, // gForceX
       0, // gForceY
+      0, // torque
+      0, // phase current
     ]);
 
     if (speed > 0) speeds.push(speed);
@@ -624,6 +636,8 @@ function parseGpxText(text, name) {
         0, // current
         0, // power
         0, // gpsSpeed
+        0, // torque
+        0, // phase current
       ]);
     }
   }

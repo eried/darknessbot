@@ -70,9 +70,11 @@ shows **"Trip not found"**. Always read IndexedDB first in the inspector.
 ```
 {
   name, date, dateStart, dateEnd,
-  points:     [[lat, lon, speed, alt, volt, temp, battery, pwm, current, power, gpsSpeed], ...],
+  points:     [[lat, lon, speed, alt, volt, temp, battery, pwm, current, power, gpsSpeed,
+                torque, phaseCurrent], ...],
   timeseries: [[sec, speed, voltage, temp, battery, altitude, lat, lon, mileageKm,
-                pwm, current, power, gpsSpeed, gForce, gForceX, gForceY], ...],  // downsampled to <= 500
+                pwm, current, power, gpsSpeed, gForce, gForceX, gForceY,
+                torque, phaseCurrent], ...],  // downsampled to <= 500
   stats:      { points, rows, distanceKm, maxSpeed, avgSpeed, maxAlt, minAlt, maxVoltage, minVoltage, maxTemp }
 }
 ```
@@ -81,6 +83,18 @@ Columns are **append-only** — legacy cached tracks lack the trailing fields, s
 every reader guards for `undefined`. `gpsSpeed` (timeseries 12 / points 10) and
 the three `gForce*` columns (timeseries 13-15) come from newer EUC Planet
 exports; a value of `0` for `gForce` means "no IMU sample for that row".
+`torque` (Nm, signed) and `phaseCurrent` (A, signed) at timeseries 16-17 come
+from EUC Planet 0.19+ (resolved by CSV header name, never fixed index). A wheel
+that doesn't report one logs a constant `0`, so an **all-zero column is treated
+as absent** (shown nothing, not a flat 0). The inspector's derived "…avg" spare
+columns therefore live at 18-21, not 16-19. Both are also appended to `points`
+(11-12) so the viewer + inspector map traces can colour by them (palette-aware,
+bipolar like Current); the `_pointFromRow` split/combine mapper carries them,
+and the trace-colour option is disabled when the column is absent. `trackToCSV`
+now writes a **full** telemetry row
+(PWM/Current/Power/mileage/GPS speed/G-Force/Torque/Phase current all included),
+so a `.csv` export or Dropbox re-sync round-trips losslessly; columns resolve by
+header name, and legacy 16-col tracks emit "" for the trailing ones.
 
 Index `i` in `inspector.html?i=<i>` is the position in `allTracks` *after* sorting (newest
 first, by `dateStart` / `date`). The inspector trusts this order — any change to sort logic in

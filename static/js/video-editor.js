@@ -54,14 +54,14 @@
   }
 
   // --- Config (everything the setup .json carries) ---
-  const DEFAULT_ORDER = ["maxSpeed", "gps", "voltage", "temp", "battery", "mileage", "pwm", "power", "current", "speed", "time", "dragy"];
+  const DEFAULT_ORDER = ["maxSpeed", "gps", "voltage", "temp", "battery", "mileage", "pwm", "power", "current", "torque", "phase", "speed", "time", "dragy"];
   const DEFAULT_CFG = {
     version: 1,
     chroma: "#0000ff",
     useIcons: false,
     debug: false,
     order: DEFAULT_ORDER.slice(),
-    elements: { speed: false, maxSpeed: true, gps: true, voltage: true, temp: true, battery: true, mileage: true, pwm: true, power: true, current: true, time: false, dragy: false },
+    elements: { speed: false, maxSpeed: true, gps: true, voltage: true, temp: true, battery: true, mileage: true, pwm: true, power: true, current: true, torque: false, phase: false, time: false, dragy: false },
     text: { fontSize: 22, vPos: 4, hPos: 50, pad: 14, spacing: 10, radius: 13, opacity: 100, textOffset: 0, staticSize: false, vertical: false },
     gauge: { on: true, scale: 100, hPos: 48, vPos: 76, numSize: 138, unitSize: 90, numY: -15, unitY: -5 },
     map: { on: false, source: "trip", hPos: 84, vPos: 30, size: 30, opacity: 100 },
@@ -163,7 +163,8 @@
     const n = ts.length;
     const arr = () => new Float64Array(n);
     const out = { dur, n, t: arr(), spd: arr(), volt: arr(), temp: arr(), batt: arr(),
-      pwm: arr(), cur: arr(), pow: arr(), gps: arr(), lat: arr(), lon: arr(), mil: arr(), maxSpd: arr() };
+      pwm: arr(), cur: arr(), pow: arr(), gps: arr(), lat: arr(), lon: arr(), mil: arr(), maxSpd: arr(),
+      torque: arr(), phase: arr() };
     for (let i = 0; i < n; i++) {
       const r = ts[i];
       out.t[i] = r[0] - t0;
@@ -173,6 +174,7 @@
       out.pwm[i] = r[9] || 0; out.cur[i] = r[10] || 0;
       out.pow[i] = r[11] !== undefined ? r[11] : (out.volt[i] * out.cur[i]);
       out.gps[i] = r[12] || 0;
+      out.torque[i] = r[16] || 0; out.phase[i] = r[17] || 0; // EUC Planet 0.19+
       out.maxSpd[i] = Math.max(i ? out.maxSpd[i - 1] : 0, out.spd[i]);
     }
     out.tsT = out.t; out.tsMil = out.mil;
@@ -229,6 +231,7 @@
       speed: g(S.spd), maxSpeed: lerpAt(S.t, S.maxSpd, tau), volt: g(S.volt),
       temp: g(S.temp), batt: g(S.batt), pwm: g(S.pwm), cur: g(S.cur), pow: g(S.pow),
       gps: g(S.gps), mileage: lerpAt(S.tsT, S.tsMil, tau),
+      torque: g(S.torque), phase: g(S.phase),
       lat: g(S.lat), lon: g(S.lon),
       dragy: vbo ? lerpAt(vbo.t, vbo.spd, tau) : 0,
       clock: S.dateStart ? new Date(S.dateStart.getTime() + tau * 1000) : null,
@@ -247,6 +250,8 @@
     pwm:      { label: "PWM",       fmt: (s) => s.pwm.toFixed(0) + " %" },
     power:    { label: "Power",     fmt: (s) => s.pow.toFixed(0) + " W" },
     current:  { label: "Current",   fmt: (s) => s.cur.toFixed(1) + " A" },
+    torque:   { label: "Torque",    fmt: (s) => s.torque.toFixed(1) + " Nm" },
+    phase:    { label: "Phase",     fmt: (s) => s.phase.toFixed(1) + " A" },
     time:     { label: "Time",      fmt: (s) => s.clock ? s.clock.toTimeString().slice(0, 8) : "--:--:--" },
     dragy:    { label: "Dragy",     fmt: (s) => UNITS.speed(s.dragy).toFixed(0) + " " + UNITS.speedUnit },
   };
@@ -257,7 +262,7 @@
   {
     const map = { speed: "speed", maxSpeed: "max_speed", gps: "gps", voltage: "voltage",
       temp: "temp", battery: "battery", mileage: "mileage", pwm: "pwm", power: "power",
-      current: "current", time: "time", dragy: "dragy_speed" };
+      current: "current", torque: "torque", phase: "phase", time: "time", dragy: "dragy_speed" };
     for (const key in map) {
       const img = new Image();
       img.onload = () => {
@@ -1451,7 +1456,7 @@
     toast("Parsing trip…");
     try {
       const tracks = await new Promise((resolve, reject) => {
-        const worker = new Worker("static/js/parser-worker.js?v=21");
+        const worker = new Worker("static/js/parser-worker.js?v=25");
         const acc = [];
         worker.onmessage = (ev) => {
           const m = ev.data || {};

@@ -312,6 +312,8 @@ document.addEventListener("DOMContentLoaded", function () {
     pwm:      [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
     power:    [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     current:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    torque:   [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    phase:    [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     battery:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     voltage:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     temp:     [[51, 181, 255], [255, 138, 31], [255, 43, 43]],
@@ -406,6 +408,8 @@ document.addEventListener("DOMContentLoaded", function () {
     pwm:      { pointIdx: 7 },
     power:    { pointIdx: 9 },
     current:  { pointIdx: 8 },
+    torque:   { pointIdx: 11 },
+    phase:    { pointIdx: 12 },
     battery:  { pointIdx: 6 },
     voltage:  { pointIdx: 4 },
     temp:     { pointIdx: 5 },
@@ -1134,7 +1138,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Legend label per metric — the value gets converted via UNITS for the
   // distance / speed / temp / altitude rows so the units match the rest of UI.
   const TRACE_UNIT_KIND = { speed: "speed", gpsspeed: "speed", temp: "temp", altitude: "alt", distance: "dist" };
-  const TRACE_STATIC_UNIT = { pwm: "%", power: "W", current: "A", battery: "%", voltage: "V" };
+  const TRACE_STATIC_UNIT = { pwm: "%", power: "W", current: "A", torque: "Nm", phase: "A", battery: "%", voltage: "V" };
   const legendEl = document.getElementById("color-legend");
   function legendGradientCss(key) {
     // Movement modes colour by speed, so they show the speed palette; metrics
@@ -1531,7 +1535,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createParserWorker() {
-    return new Worker("static/js/parser-worker.js?v=23");
+    return new Worker("static/js/parser-worker.js?v=25");
   }
 
   function createRecentFilesUi() {
@@ -3190,7 +3194,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function _maxOf(a) { if (!a.length) return 0; let m = a[0]; for (const v of a) if (v > m) m = v; return _rn(m, 1); }
   function _minOf(a) { if (!a.length) return 0; let m = a[0]; for (const v of a) if (v < m) m = v; return _rn(m, 1); }
   // timeseries row -> points row (schema in CLAUDE.md).
-  function _pointFromRow(r) { return [r[6], r[7], r[1], r[5], r[2], r[3], r[4], r[9], r[10], r[11], r[12]]; }
+  function _pointFromRow(r) { return [r[6], r[7], r[1], r[5], r[2], r[3], r[4], r[9], r[10], r[11], r[12], r[16], r[17]]; }
   function _statsFrom(points, ts) {
     const speeds = [], volts = [], temps = [], alts = [];
     for (const r of ts) {
@@ -4299,13 +4303,19 @@ document.addEventListener("DOMContentLoaded", function () {
   function trackToCSV(track) {
     const imp = UNITS.imperial;
     const wheelPairs = extraMetaPairs(track);
-    const header = "Date,Speed,Voltage,PWM,Current,Power,Battery level,Total mileage,Temperature,Pitch,Roll,Latitude,Longitude,Altitude"
+    // Full telemetry export: every column the viewer carries, so a .csv export
+    // or Dropbox round-trip loses nothing (older exports left PWM/Current/Power/
+    // mileage empty and dropped GPS speed + G-Force). Columns resolve by header
+    // name on re-import, so order is free; trailing ones are absent on legacy
+    // cached tracks (guarded to "").
+    const header = "Date,Speed,Voltage,PWM,Current,Power,Battery level,Total mileage,Temperature,Latitude,Longitude,Altitude,GPS speed,G-Force,G-Force X,G-Force Y,Torque,Phase current"
       + (imp ? "," + IMPERIAL_COLS.join(",") : "")
       + (wheelPairs.length ? ",Extra" : "") + "\n";
     let csv = header;
     const t0 = track.dateStart ? new Date(track.dateStart).getTime() : 0;
     const cum = imp ? exportCumKm(track) : null;
     const ts = track.timeseries;
+    const g = (row, k) => (row[k] === undefined ? "" : row[k]);
     for (let i = 0; i < ts.length; i++) {
       const row = ts[i];
       let dateStr = "";
@@ -4313,7 +4323,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const d = new Date(t0 + row[0] * 1000);
         dateStr = d.toISOString().replace("Z", "");
       }
-      const cols = [dateStr, row[1], row[2], "", "", "", row[4], "", row[3], "", "", row[6], row[7], row[5]];
+      const cols = [dateStr, g(row, 1), g(row, 2), g(row, 9), g(row, 10), g(row, 11),
+        g(row, 4), g(row, 8), g(row, 3), g(row, 6), g(row, 7), g(row, 5),
+        g(row, 12), g(row, 13), g(row, 14), g(row, 15), g(row, 16), g(row, 17)];
       if (imp) cols.push(...imperialVals(row[1], cum[i], row[3]));
       if (wheelPairs.length) cols.push(i < wheelPairs.length ? wheelPairs[i] : "");
       csv += cols.join(",") + "\n";

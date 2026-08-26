@@ -476,6 +476,22 @@
                 </div>
                 <div class="chart-takeaway" id="motor-trend-takeaway"></div>
                 <p class="chart-explainer">Median amps per km/h per group. A speed-independent view of the same drift, easier to read than the raw scatter.</p>
+                <div class="chart-host hidden" id="torque-trend-host">
+                    <div class="chart-title">Peak motor torque over time <span class="chart-title-axes">(median per group, drive &amp; regen)</span></div>
+                    <canvas id="chart-torque-trend"></canvas>
+                </div>
+                <div class="chart-takeaway" id="torque-trend-takeaway"></div>
+                <div class="chart-host hidden" id="phase-trend-host">
+                    <div class="chart-title">Peak phase current over time <span class="chart-title-axes">(median per group, drive &amp; regen)</span></div>
+                    <canvas id="chart-phase-trend"></canvas>
+                </div>
+                <div class="chart-takeaway" id="phase-trend-takeaway"></div>
+                <div class="chart-host hidden" id="phase-current-host">
+                    <div class="chart-title">Phase current vs wire current <span class="chart-title-axes">(one dot per trip, old &rarr; new)</span></div>
+                    <canvas id="chart-phase-current"></canvas>
+                </div>
+                <div class="chart-takeaway" id="phase-current-takeaway"></div>
+                <p class="chart-explainer hidden" id="torque-phase-explainer">Torque (Nm) and phase current (A) come from EUC Planet 0.19+. <b>Drive</b> is motor effort, <b>regen</b> is braking. On Begode and Veteran the phase current equals the wire current, so the dots sit on the diagonal; a wheel that derives or omits phase will fall off it.</p>
             </section>
 
             <section class="chart-section" data-section="thermal" data-tab="thermal">
@@ -721,6 +737,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=80"></script>
+    <script src="static/js/analytics.js?v=82"></script>
 </body>
 </html>

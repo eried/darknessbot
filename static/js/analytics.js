@@ -304,6 +304,7 @@
   //                     pwm, current, power, gpsSpeed, gForce, gForceX, gForceY]
   const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7, MILEAGE = 8;
   const PWM = 9, CURRENT = 10, POWER = 11, GPSSPD = 12, GFORCE = 13;
+  const TORQUE = 16, PHASE = 17; // EUC Planet 0.19+ (absent/0 on older tracks)
 
   // ---------- Small stats helpers ----------
   function median(values) {
@@ -760,6 +761,9 @@
       regenWh: null,           // Wh fed back into the battery (negative power)
       regenPct: null,          // regenWh / driveWh * 100
       avgMovingSpeed: null, avgCurrent: null, avgPower: null,
+      torqueDrive: null, torqueRegen: null,   // Nm, peak drive / peak regen (EUC Planet 0.19+)
+      phaseDrive: null, phaseRegen: null,      // A, peak drive / peak regen
+      avgPhase: null,                          // A, avg positive phase (for phase-vs-current)
       ohmIR: null,
       tempMax: null, tempStart: null,
       ambientC: null,
@@ -994,6 +998,20 @@
     if (spdCnt >= 10) m.avgMovingSpeed = spdSum / spdCnt;
     if (curCnt >= 10) m.avgCurrent = curSum / curCnt;
     if (powCnt >= 10) m.avgPower = powSum / powCnt;
+
+    // Torque / phase current (EUC Planet 0.19+): peak drive + peak regen per
+    // trip, plus average positive phase for the phase-vs-current scatter.
+    // Absent columns read 0, so an all-zero column leaves these null (the
+    // library-level presence check then hides the charts).
+    let tqD = 0, tqR = 0, phD = 0, phR = 0, phSum = 0, phCnt = 0;
+    for (const row of ts) {
+      const tq = row[TORQUE], ph = row[PHASE];
+      if (typeof tq === "number") { if (tq > tqD) tqD = tq; if (-tq > tqR) tqR = -tq; }
+      if (typeof ph === "number") { if (ph > phD) phD = ph; if (-ph > phR) phR = -ph; if (ph > 0) { phSum += ph; phCnt++; } }
+    }
+    if (tqD > 0 || tqR > 0) { m.torqueDrive = tqD; m.torqueRegen = tqR; }
+    if (phD > 0 || phR > 0) { m.phaseDrive = phD; m.phaseRegen = phR; }
+    if (phCnt >= 10) m.avgPhase = phSum / phCnt;
 
     // Voltage sag %: how far the pack droops between unloaded peak and
     // loaded trough during the ride. Useful as a battery-aging proxy
@@ -1484,7 +1502,7 @@
     drFill.style.width = (maxV - minV) + "%";
     drLo.textContent = drFmt.format(dateRangeStart);
     drHi.textContent = drFmt.format(dateRangeEnd);
-    const wheelGi = wheelScopeSel ? Number(wheelScopeSel.value) : -1;
+    const wheelGi = (wheelScopeSel && wheelScopeSel.value !== "") ? Number(wheelScopeSel.value) : -1;
     updateMixedTags(wheelGi);
     const sub = datedFull.filter((m) =>
       m.date >= dateRangeStart && m.date <= dateRangeEnd &&
@@ -1526,7 +1544,7 @@
   // A ?wheel= preselect must scope the very first render too; renderAll
   // isn't defined yet, so filter `dated` directly (the date range is
   // still full-width here).
-  const initWheelGi = wheelScopeSel ? Number(wheelScopeSel.value) : -1;
+  const initWheelGi = (wheelScopeSel && wheelScopeSel.value !== "") ? Number(wheelScopeSel.value) : -1;
   updateMixedTags(initWheelGi);
   if (initWheelGi >= 0) {
     const sub = datedFull.filter((m) => m.wheelGi === initWheelGi);
@@ -5871,6 +5889,63 @@
         }
         setTakeaway("motor-trend-takeaway", trendParts);
       }
+
+      // Torque + phase current (EUC Planet 0.19+). Independent of the current
+      // scatter above; each chart shows only when the loaded trips record it.
+      const anyTorque = dated.some((m) => m.torqueDrive != null || m.torqueRegen != null);
+      const anyPhase = dated.some((m) => m.phaseDrive != null || m.phaseRegen != null);
+      const bestOf = (getter) => {
+        let best = null;
+        for (const m of dated) { const v = getter(m); if (v != null && (!best || v > best.v)) best = { v, label: m.label, tripIdx: m.tripIdx }; }
+        return best;
+      };
+      const tHost = document.getElementById("torque-trend-host");
+      if (tHost) {
+        tHost.classList.toggle("hidden", !anyTorque);
+        if (anyTorque) {
+          drawTrendChart(document.getElementById("chart-torque-trend"), bins, [
+            { stats: binStats(bins, (m) => m.torqueDrive, minPerBin), color: "#ff7043", label: "drive", unit: "Nm", band: true, dp: 1 },
+            { stats: binStats(bins, (m) => m.torqueRegen, minPerBin), color: "#90a4ae", label: "regen", unit: "Nm", dp: 1 },
+          ], { rolling });
+          const bd = bestOf((m) => m.torqueDrive), br = bestOf((m) => m.torqueRegen);
+          const p = [];
+          if (bd) p.push(`Peak drive: <b>${bd.v.toFixed(1)} Nm</b> in <b>${tripLink(bd.label, bd.tripIdx)}</b>`);
+          if (br) p.push(`Peak regen: <b>${br.v.toFixed(1)} Nm</b>`);
+          setTakeaway("torque-trend-takeaway", p);
+        }
+      }
+      const phHost = document.getElementById("phase-trend-host");
+      if (phHost) {
+        phHost.classList.toggle("hidden", !anyPhase);
+        if (anyPhase) {
+          drawTrendChart(document.getElementById("chart-phase-trend"), bins, [
+            { stats: binStats(bins, (m) => m.phaseDrive, minPerBin), color: "#4db6ac", label: "drive", unit: "A", band: true, dp: 0 },
+            { stats: binStats(bins, (m) => m.phaseRegen, minPerBin), color: "#90a4ae", label: "regen", unit: "A", dp: 0 },
+          ], { rolling });
+          const bd = bestOf((m) => m.phaseDrive), br = bestOf((m) => m.phaseRegen);
+          const p = [];
+          if (bd) p.push(`Peak drive: <b>${bd.v.toFixed(0)} A</b> in <b>${tripLink(bd.label, bd.tripIdx)}</b>`);
+          if (br) p.push(`Peak regen: <b>${br.v.toFixed(0)} A</b>`);
+          setTakeaway("phase-trend-takeaway", p);
+        }
+      }
+      const pcHost = document.getElementById("phase-current-host");
+      if (pcHost) {
+        const pcActive = anyPhase && dated.some((m) => m.avgPhase != null && m.avgCurrent != null);
+        pcHost.classList.toggle("hidden", !pcActive);
+        if (pcActive) {
+          const ppts = [];
+          for (const m of dated) {
+            if (m.avgPhase == null || m.avgCurrent == null) continue;
+            ppts.push({ x: m.avgCurrent, y: m.avgPhase, epoch: m.epoch,
+              meta: `<b>${m.label}</b><br>Avg current: <b>${fmtVal(m.avgCurrent, 1)}</b> A<br>Avg phase: <b>${fmtVal(m.avgPhase, 1)}</b> A` });
+          }
+          drawScatter(document.getElementById("chart-phase-current"), ppts, { xLabel: "avg current (A)", yLabel: "avg phase (A)" });
+          setTakeaway("phase-current-takeaway", [`<b>${ppts.length}</b> trips plotted`]);
+        }
+      }
+      const expl = document.getElementById("torque-phase-explainer");
+      if (expl) expl.classList.toggle("hidden", !(anyTorque || anyPhase));
     }
 
     // 4. Thermal.

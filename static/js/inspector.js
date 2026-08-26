@@ -118,16 +118,18 @@
   }
 
   // Timeseries layout: [sec, speed, voltage, temp, battery, altitude, lat, lon, mileageKm,
-  //                     pwm, current, power, gpsSpeed, gForce, gForceX, gForceY]
-  // Indices 12-15 are absent on legacy cached tracks — always guard for undefined.
+  //                     pwm, current, power, gpsSpeed, gForce, gForceX, gForceY,
+  //                     torque, phaseCurrent]
+  // Indices 12-17 are absent on legacy cached tracks — always guard for undefined.
   const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7, MILEAGE = 8;
   const PWM = 9, CURRENT = 10, POWER = 11;
   const GPSSPD = 12, GFORCE = 13, GFORCEX = 14, GFORCEY = 15;
+  const TORQUE = 16, PHASE = 17; // EUC Planet 0.19+; 0/absent on wheels that don't report
   // Derived (computed below) — spare columns for the "… avg" extra graphs.
-  const SPEEDAVG = 16, BATTERYAVG = 17, CURRENTAVG = 18, PWMAVG = 19;
+  const SPEEDAVG = 18, BATTERYAVG = 19, CURRENTAVG = 20, PWMAVG = 21;
   // Points layout: [lat, lon, speed, alt, volt, temp, battery, pwm, current, power, gpsSpeed]
   const P_LAT = 0, P_LON = 1, P_SPD = 2, P_ALT = 3, P_VOLT = 4, P_TEMP = 5, P_BATT = 6;
-  const P_PWM = 7, P_CURRENT = 8, P_POWER = 9, P_GPSSPD = 10;
+  const P_PWM = 7, P_CURRENT = 8, P_POWER = 9, P_GPSSPD = 10, P_TORQUE = 11, P_PHASE = 12;
 
   // GPS speed overlays the wheel-speed chart as a dashed companion line.
   const GPS_COLOR = "#80d8ff";
@@ -291,6 +293,25 @@
         line2.push("avg " + UNITS.speed(totalKm / (duration / 3600)).toFixed(1) + " " + UNITS.speedUnit);
       }
     }
+    // Torque / phase current (EUC Planet 0.19+): peak drive and peak regen
+    // shown separately (both are bipolar), only when the trip records them.
+    // An all-zero column stays hidden.
+    let tqDrive = 0, tqRegen = 0, phDrive = 0, phRegen = 0;
+    for (let i = 0; i < ts.length; i++) {
+      const tq = ts[i][TORQUE], ph = ts[i][PHASE];
+      if (typeof tq === "number") { if (tq > tqDrive) tqDrive = tq; if (-tq > tqRegen) tqRegen = -tq; }
+      if (typeof ph === "number") { if (ph > phDrive) phDrive = ph; if (-ph > phRegen) phRegen = -ph; }
+    }
+    const driveRegen = (drv, rgn, unit, dp) => {
+      const p = [];
+      if (drv > 0) p.push(drv.toFixed(dp) + " " + unit + " drive");
+      if (rgn > 0) p.push(rgn.toFixed(dp) + " " + unit + " regen");
+      return p.join(" / ");
+    };
+    const tqLabel = driveRegen(tqDrive, tqRegen, "Nm", 1);
+    const phLabel = driveRegen(phDrive, phRegen, "A", 0);
+    if (tqLabel) line2.push(tqLabel);
+    if (phLabel) line2.push(phLabel);
     line2.push((track.stats.rows || ts.length).toLocaleString() + " samples");
   }
   document.getElementById("trip-subtitle").innerHTML =
@@ -432,6 +453,8 @@
     pwm:      { pointIdx: P_PWM,     unit: "%",    invert: false },
     power:    { pointIdx: P_POWER,   unit: "W",    invert: false },
     current:  { pointIdx: P_CURRENT, unit: "A",    invert: false },
+    torque:   { pointIdx: P_TORQUE,  unit: "Nm",   invert: false },
+    phase:    { pointIdx: P_PHASE,   unit: "A",    invert: false },
     battery:  { pointIdx: P_BATT,    unit: "%",    invert: true  },
     voltage:  { pointIdx: P_VOLT,    unit: "V",    invert: true  },
     temp:     { pointIdx: P_TEMP,    unit: "\u00b0C", invert: false, unitKind: "temp" },
@@ -445,6 +468,8 @@
     pwm:      [[47, 216, 90], [255, 155, 31], [255, 43, 43]],
     power:    [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     current:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    torque:   [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
+    phase:    [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     battery:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     voltage:  [[43, 140, 255], [161, 59, 255], [255, 59, 59]],
     temp:     [[51, 181, 255], [255, 138, 31], [255, 43, 43]],
@@ -1037,6 +1062,10 @@
       // GPS speed has no chart block — it lives on the speed chart. Toggle it
       // by whether the trip carries the column.
       if (key === "gpsspeed") { opt.disabled = !hasGpsSpeed; continue; }
+      // Torque / phase current have no standalone chart block (custom-graph
+      // only), so gate them on the timeseries column directly.
+      if (key === "torque") { opt.disabled = !chartHasData(TORQUE); continue; }
+      if (key === "phase")  { opt.disabled = !chartHasData(PHASE);  continue; }
       const block = document.querySelector(`.chart-block[data-key="${key}"]`);
       opt.disabled = !block || block.classList.contains("hidden");
     }
@@ -1302,6 +1331,8 @@
     pwm:      { color: "#ff4081", idx: PWM,     label: "PWM",      dp: 1, unit: "%" },
     power:    { color: "#7c4dff", idx: POWER,   label: "Power",    dp: 0, unit: "W" },
     current:  { color: "#ffd740", idx: CURRENT, label: "Current",  dp: 1, render: "current", unit: "A" },
+    torque:   { color: "#ff7043", idx: TORQUE,  label: "Torque",   dp: 1, render: "current", unit: "Nm" },
+    phase:    { color: "#4db6ac", idx: PHASE,   label: "Phase current", dp: 1, render: "current", unit: "A" },
     battery:  { color: "#69f0ae", idx: BATT,    label: "Battery",  dp: 0, unit: "%" },
     voltage:  { color: "#ff5252", idx: VOLT,    label: "Voltage",  dp: 1, unit: "V" },
     temp:     { color: "#ffa000", idx: TEMP,    label: "Temp",     dp: 1, render: "line", unitKind: "temp" },
@@ -1320,7 +1351,7 @@
 
   // PWM / Current / Power only exist on some wheels - hide a chart when the
   // trip carries no data for it (incl. legacy cached tracks without the column).
-  const OPTIONAL_CHARTS = new Set(["pwm", "current", "power", "batteryavg", "currentavg", "pwmavg"]);
+  const OPTIONAL_CHARTS = new Set(["pwm", "current", "power", "torque", "phase", "batteryavg", "currentavg", "pwmavg"]);
   function chartHasData(idx) {
     for (let i = 0; i < ts.length; i++) {
       const v = ts[i][idx];

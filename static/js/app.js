@@ -3163,7 +3163,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   function ttmodShow(tag, title, subHtml, bodyHtml, footNodes) {
     if (!ttmod) return null;
-    ttmod.querySelector("#ttmod-tag").textContent = tag;
+    const tagEl = ttmod.querySelector("#ttmod-tag");
+    tagEl.textContent = tag || "";
+    tagEl.classList.toggle("hidden", !tag); // no chip when the caller omits a tag
     ttmod.querySelector("#ttmod-title").textContent = title;
     ttmod.querySelector("#ttmod-sub").innerHTML = subHtml || "";
     ttmod.querySelector("#ttmod-body").innerHTML = bodyHtml || "";
@@ -4714,13 +4716,12 @@ document.addEventListener("DOMContentLoaded", function () {
         `<span class="dc-name">${dot}${escapeHtml(r.label)}</span>` +
       `</div>`;
     };
-    const body = `<div class="dc-list">${detailLayout.order.map(rowHtml).join("")}</div>` +
+    const body = `<div class="dc-hint">Drag to reorder. Toggle to show or hide.</div>` +
+      `<div class="dc-list">${detailLayout.order.map(rowHtml).join("")}</div>` +
       `<input type="file" id="dc-import-file" accept="application/json,.json" style="display:none">`;
     const reset = ttBtn("Reset", "tt-ghost");
     const done = ttBtn("Done", "tt-primary");
-    ttmodShow("DETAILS", "Customize trip details",
-      `<div class="tt-hint" style="padding:0 8px">Drag to reorder, toggle to show. Distance and Time stay on.</div>`,
-      body, [reset, done]);
+    ttmodShow("", "Customize graphs", "", body, [reset, done]);
     // Import / export as title-bar icon buttons, matching the inspector dialog.
     const header = ttmod.querySelector(".tm-header");
     const closeBtn = header.querySelector(".tm-close");

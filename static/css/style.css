@@ -834,7 +834,8 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     border-radius: 5px; color: #dff; font-size: 0.82rem; padding: 6px 8px;
 }
 /* Customize trip-detail rows: draggable show/hide list.
-   Styled to match the inspector's Customize dialog (.cd-row / .cd-switch). */
+   Styled to match the inspector's Customize dialog (.cd-hint / .cd-row / .cd-switch). */
+.dc-hint { font-size: 0.7rem; color: #8a97a0; margin-bottom: 8px; }
 .dc-list { display: flex; flex-direction: column; gap: 3px; max-height: 52vh; overflow-y: auto; }
 .dc-row {
     display: flex; align-items: center; gap: 10px;

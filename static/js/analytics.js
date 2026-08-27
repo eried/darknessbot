@@ -1341,12 +1341,29 @@
     // GPS centroid rounded to 0.1° (~11 km) — coarse on purpose, both for
     // weather-cache hits and so precise locations never leave the browser.
     let latSum = 0, lonSum = 0, gpsCnt = 0;
+    let fLat = null, fLon = null, lLat = null, lLon = null;
     for (const row of ts) {
       const lat = row[LAT] || 0, lon = row[LON] || 0;
-      if (lat !== 0 || lon !== 0) { latSum += lat; lonSum += lon; gpsCnt++; }
+      if (lat !== 0 || lon !== 0) {
+        latSum += lat; lonSum += lon; gpsCnt++;
+        if (fLat == null) { fLat = lat; fLon = lon; }
+        lLat = lat; lLon = lon;
+      }
     }
     if (gpsCnt >= 3) {
       m.centroid = [Math.round((latSum / gpsCnt) * 10) / 10, Math.round((lonSum / gpsCnt) * 10) / 10];
+      // Net travel bearing plus how "one-way" the trip was (net displacement
+      // over ridden distance). Together with archive wind speed + direction
+      // this gives a signed along-track headwind regressor; round trips have
+      // netRatio near 0, so wind correctly cancels out for them.
+      const dLon = (lLon - fLon) * Math.PI / 180;
+      const la1 = fLat * Math.PI / 180, la2 = lLat * Math.PI / 180;
+      const yb = Math.sin(dLon) * Math.cos(la2);
+      const xb = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
+      m.bearingDeg = (Math.atan2(yb, xb) * 180 / Math.PI + 360) % 360;
+      const hav = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+      const netKm = 6371 * 2 * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
+      m.netRatio = m.distKm > 0 ? Math.min(1, netKm / m.distKm) : 0;
     }
     return m;
   }
@@ -1430,6 +1447,16 @@
     groups.forEach((g, gi) => { for (const m of g.members) m.wheelGi = gi; });
     return groups.map((g) => ({ label: g.label, count: g.members.length, key: g.key, unknown: g.unknown }));
   })();
+  // Per-wheel odometer before each trip (the aging regressor): cumulative km
+  // on that wheel at the trip's start, walked in date order.
+  {
+    const acc = {};
+    for (const m of datedFull) {
+      const k = m.wheelGi != null ? m.wheelGi : -1;
+      m.cumKmBefore = acc[k] || 0;
+      acc[k] = m.cumKmBefore + m.distKm;
+    }
+  }
   const wheelScopeSel = document.getElementById("scope-wheel");
   if (wheelScopeSel && wheelGroups.length > 1) {
     document.getElementById("scope-wheel-row").classList.remove("hidden");
@@ -1450,9 +1477,9 @@
     for (const m of dated) totalKm += m.distKm;
     const lo = dated[0] ? dated[0].date : datedFull[0].date;
     const hi = dated[dated.length - 1] ? dated[dated.length - 1].date : datedFull[datedFull.length - 1].date;
-    let sub = `${dated.length} trips · ${UNITS.dist(totalKm).toFixed(0)} ${UNITS.distUnit} · ` +
+    // Trip counts live on the Scope button, so the subtitle stays km + dates.
+    let sub = `${UNITS.dist(totalKm).toFixed(0)} ${UNITS.distUnit} · ` +
               `${subtitleFmt.format(lo)} – ${subtitleFmt.format(hi)}`;
-    if (dated.length < datedFull.length) sub += ` · scoped from ${datedFull.length}`;
     if (undatedCount) sub += ` · ${undatedCount} undated skipped`;
     subtitleEl.textContent = sub;
   }
@@ -1576,8 +1603,11 @@
     if (!scopeToggle) return;
     const active = dated.length !== datedFull.length;
     scopeToggle.classList.toggle("active", active);
+    // The button carries the trip count (the subtitle no longer does).
     const span = scopeToggle.querySelector("span");
-    if (span) span.textContent = active ? "Scoped (" + dated.length + ")" : "Scope";
+    if (span) span.textContent = active
+      ? "Scoped (" + dated.length + " of " + datedFull.length + ")"
+      : "Scope (" + datedFull.length + " trip" + (datedFull.length === 1 ? "" : "s") + ")";
   }
 
   // Print: switch to a light-on-white theme, force single-page layout so
@@ -1813,6 +1843,12 @@
   }
 
   async function fetchWeather() {
+    // Archive source picked in the weather card. Cache entries are keyed per
+    // source (default ERA5 keeps the legacy bare key) so switching sources
+    // never mixes values from different archives.
+    const wSrcSel = document.getElementById("weather-source-select");
+    const wSrc = wSrcSel ? wSrcSel.value : "era5";
+    const wKey = (k) => wSrc === "era5" ? k : wSrc + ":" + k;
     const clusters = weatherClusters();
     if (!clusters.length) {
       weatherStatus.textContent = "No GPS data in these trips.";
@@ -1824,8 +1860,10 @@
     let done = 0, failed = 0;
     for (const c of clusters) {
       weatherStatus.textContent = `Fetching ${++done}/${clusters.length}…`;
-      const cached = (await readWeatherCache(c.key)) || { days: {} };
-      const missing = [...c.dates].filter((d) => !(d in cached.days));
+      const cached = (await readWeatherCache(wKey(c.key))) || { days: {} };
+      // A day is missing if absent, or cached before wind was collected (the
+      // wind term needs windMs, so those days refetch once to backfill it).
+      const missing = [...c.dates].filter((d) => !(d in cached.days) || cached.days[d].windMs === undefined);
       if (missing.length) {
         missing.sort();
         // The ERA5 archive lags ~5 days; clamp so the request never 400s.
@@ -1834,21 +1872,55 @@
         const end = missing[missing.length - 1] < maxDate ? missing[missing.length - 1] : maxDate;
         if (start <= end) {
           try {
-            const url = "https://archive-api.open-meteo.com/v1/archive" +
-              `?latitude=${c.lat}&longitude=${c.lon}` +
-              `&start_date=${start}&end_date=${end}` +
-              "&daily=temperature_2m_mean,temperature_2m_max&timezone=auto";
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error("HTTP " + resp.status);
-            const data = await resp.json();
-            const times = (data.daily && data.daily.time) || [];
-            const means = (data.daily && data.daily.temperature_2m_mean) || [];
-            const maxes = (data.daily && data.daily.temperature_2m_max) || [];
-            for (let i = 0; i < times.length; i++) {
-              if (means[i] != null) cached.days[times[i]] = { mean: means[i], max: maxes[i] != null ? maxes[i] : means[i] };
+            if (wSrc === "nasa_power") {
+              // NASA POWER: independent keyless archive, dates as YYYYMMDD,
+              // -999 marks missing days.
+              const s8 = start.replace(/-/g, ""), e8 = end.replace(/-/g, "");
+              const url = "https://power.larc.nasa.gov/api/temporal/daily/point" +
+                `?parameters=T2M,T2M_MAX,WS10M,WD10M&community=RE&latitude=${c.lat}&longitude=${c.lon}` +
+                `&start=${s8}&end=${e8}&format=JSON`;
+              const resp = await fetch(url);
+              if (!resp.ok) throw new Error("HTTP " + resp.status);
+              const data = await resp.json();
+              const p = (data.properties && data.properties.parameter) || {};
+              const t2m = p.T2M || {}, t2x = p.T2M_MAX || {};
+              const ws = p.WS10M || {}, wd = p.WD10M || {};
+              for (const k in t2m) {
+                const mean = t2m[k], max = t2x[k];
+                if (mean == null || mean <= -900) continue;
+                const iso = k.slice(0, 4) + "-" + k.slice(4, 6) + "-" + k.slice(6, 8);
+                cached.days[iso] = {
+                  mean,
+                  max: (max != null && max > -900) ? max : mean,
+                  windMs: (ws[k] != null && ws[k] > -900) ? ws[k] : null,
+                  windDir: (wd[k] != null && wd[k] > -900) ? wd[k] : null,
+                };
+              }
+            } else {
+              const url = "https://archive-api.open-meteo.com/v1/archive" +
+                `?latitude=${c.lat}&longitude=${c.lon}` +
+                `&start_date=${start}&end_date=${end}` +
+                "&daily=temperature_2m_mean,temperature_2m_max,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto" +
+                (wSrc === "era5_land" ? "&models=era5_land" : "");
+              const resp = await fetch(url);
+              if (!resp.ok) throw new Error("HTTP " + resp.status);
+              const data = await resp.json();
+              const times = (data.daily && data.daily.time) || [];
+              const means = (data.daily && data.daily.temperature_2m_mean) || [];
+              const maxes = (data.daily && data.daily.temperature_2m_max) || [];
+              const wspd = (data.daily && data.daily.wind_speed_10m_max) || [];
+              const wdir = (data.daily && data.daily.wind_direction_10m_dominant) || [];
+              for (let i = 0; i < times.length; i++) {
+                if (means[i] != null) cached.days[times[i]] = {
+                  mean: means[i],
+                  max: maxes[i] != null ? maxes[i] : means[i],
+                  windMs: wspd[i] != null ? wspd[i] / 3.6 : null, // km/h to m/s
+                  windDir: wdir[i] != null ? wdir[i] : null,
+                };
+              }
             }
             cached.fetchedAt = new Date().toISOString();
-            await writeWeatherCache(c.key, cached);
+            await writeWeatherCache(wKey(c.key), cached);
           } catch (e) {
             failed++;
           }
@@ -1856,7 +1928,13 @@
       }
       for (const m of c.trips) {
         const day = cached.days[m.dateStr];
-        if (day) m.ambientC = day.mean;
+        if (!day) continue;
+        m.ambientC = day.mean;
+        // Signed along-track headwind (m/s): wind blowing FROM the direction
+        // ridden into is positive, scaled by how one-way the trip was.
+        m.headwindMs = (day.windMs != null && day.windDir != null && m.bearingDeg != null)
+          ? day.windMs * Math.cos((day.windDir - m.bearingDeg) * Math.PI / 180) * (m.netRatio || 0)
+          : null;
       }
     }
     const withAmbient = dated.filter((m) => m.ambientC != null).length;
@@ -1956,6 +2034,19 @@
     }
   }
   weatherBtn.addEventListener("click", fetchWeather);
+  // Archive source sticks per browser; it applies to the next fetch (already
+  // loaded trips keep their values, the tooltip on the select says so).
+  (function initWeatherSource() {
+    const sel = document.getElementById("weather-source-select");
+    if (!sel) return;
+    try {
+      const s = localStorage.getItem("eucviewer-archive-source");
+      if (s && sel.querySelector(`option[value="${s}"]`)) sel.value = s;
+    } catch (_) {}
+    sel.addEventListener("change", () => {
+      try { localStorage.setItem("eucviewer-archive-source", sel.value); } catch (_) {}
+    });
+  })();
 
   // "Remove weather" - keeps the IDB cache (so re-adding is instant) but
   // clears the in-memory ambient temps and turns off the body class so every
@@ -2566,8 +2657,16 @@
   // fit isn't available (need all three features per trip + n ≥ 20).
   let multiFit = null;
   function computeMultiFit() {
-    const X = [], y = [];
-    const speeds = [], temps = [], climbs = [];
+    // Trip-level range model, tiered by how much data the scope actually has
+    // (roughly 12+ rows per fitted parameter so coefficients stay stable):
+    //   basic (n >= 20): 1, speed, temp, climb           (plain linear)
+    //   mid   (n >= 45): + speed^2                        (drag curvature)
+    //   full  (n >= 90): + cold hinge, pack age, headwind (wind only when the
+    //                      archive supplied it for most usable rows)
+    // The cold hinge max(0, 10-t)^2 models the nonlinear Li-ion capacity drop
+    // below ~10 C on top of the linear temp trend; pack age is the wheel's
+    // odometer km at trip start; headwind is the signed along-track wind.
+    const rows = [];
     for (const m of dated) {
       if (m.estRangeKm == null) continue;
       if (m.avgMovingSpeed == null || m.avgMovingSpeed <= 5) continue;
@@ -2575,30 +2674,65 @@
       if (m.climbM == null || m.distKm < 2) continue;
       const climbPerKm = m.climbM / m.distKm;
       if (climbPerKm < 0) continue;
-      X.push([1, m.avgMovingSpeed, m.ambientC, climbPerKm]);
-      y.push(m.estRangeKm);
-      speeds.push(m.avgMovingSpeed);
-      temps.push(m.ambientC);
-      climbs.push(climbPerKm);
+      rows.push({
+        s: m.avgMovingSpeed, t: m.ambientC, c: climbPerKm,
+        w: m.headwindMs != null ? m.headwindMs : null,
+        o: (m.cumKmBefore || 0) / 1000,
+        y: m.estRangeKm,
+      });
     }
-    if (X.length < 20) { multiFit = null; return; }
+    if (rows.length < 20) { multiFit = null; return; }
+    const withWind = rows.filter((r) => r.w != null);
+    const useWind = rows.length >= 90 && withWind.length >= 0.7 * rows.length && withWind.length >= 90;
+    const used = useWind ? withWind : rows;
+    const n = used.length;
+    const tier = n >= 90 ? "full" : (n >= 45 ? "mid" : "basic");
+    const features = ["s", "t", "c"];
+    if (tier !== "basic") features.push("s2");
+    if (tier === "full") { features.push("cold", "o"); if (useWind) features.push("w"); }
+    const featVal = (r, f) =>
+      f === "s" ? r.s :
+      f === "t" ? r.t :
+      f === "c" ? r.c :
+      f === "s2" ? r.s * r.s :
+      f === "cold" ? Math.pow(Math.max(0, 10 - r.t), 2) :
+      f === "o" ? r.o :
+      f === "w" ? (r.w || 0) : 0;
+    const X = used.map((r) => [1].concat(features.map((f) => featVal(r, f))));
+    const y = used.map((r) => r.y);
     const fit = multipleLinearRegression(X, y);
     if (!fit) { multiFit = null; return; }
+    const beta = { intercept: fit.beta[0] };
+    features.forEach((f, i) => { beta[f] = fit.beta[i + 1]; });
+    const speeds = used.map((r) => r.s), temps = used.map((r) => r.t), climbs = used.map((r) => r.c);
+    const medS = median(speeds), medT = median(temps);
+    const dof = Math.max(1, fit.n - (features.length + 1));
+    let odoNow = 0;
+    for (const r of used) odoNow = Math.max(odoNow, r.o);
     multiFit = {
-      intercept: fit.beta[0],
-      speedSlope: fit.beta[1],   // km of range per km/h
-      tempSlope:  fit.beta[2],   // km of range per °C
-      climbSlope: fit.beta[3],   // km of range per (m climbed / km ridden)
+      version: 2,
+      tier,
+      features,
+      beta,
+      // Marginal slopes at the medians, kept under the legacy names so the
+      // insights text keeps reading d(range)/d(input) around a typical ride.
+      intercept: beta.intercept,
+      speedSlope: beta.s + (beta.s2 ? 2 * beta.s2 * medS : 0),
+      tempSlope: beta.t + (beta.cold && medT < 10 ? -2 * beta.cold * (10 - medT) : 0),
+      climbSlope: beta.c,
+      windSlope: beta.w != null ? beta.w : null,       // km of range per m/s headwind
+      ageSlopePer1000km: beta.o != null ? beta.o : null,
       n: fit.n,
       r2: fit.r2,
       rss: fit.rss,
       ssTot: fit.ssTot,
-      medSpeedKmh: median(speeds),
-      medTempC:    median(temps),
+      sigmaKm: Math.sqrt(fit.rss / dof),
+      odoNowKm: Math.round(odoNow * 1000),
+      medSpeedKmh: medS,
+      medTempC: medT,
       medClimbMperKm: median(climbs),
-      // Envelope of trip-average speeds the fit actually saw. Outside it
-      // the linear speed term is extrapolation; the hybrid model in
-      // calcRangeKm switches to the in-ride cost curve there.
+      // Envelope of trip-average speeds the fit actually saw. Outside it the
+      // prediction follows the in-ride cost curve (hybrid in calcRangeKm).
       sLoKmh: percentile(speeds, 0.05),
       sHiKmh: percentile(speeds, 0.95),
     };
@@ -3846,12 +3980,14 @@
     speed:    document.getElementById("calc-speed"),
     climb:    document.getElementById("calc-climb"),
     temp:     document.getElementById("calc-temp"),
+    wind:     document.getElementById("calc-wind"),
     roundtrip: document.getElementById("calc-roundtrip"),
     battOut:  document.getElementById("calc-batt-out"),
     distOut:  document.getElementById("calc-dist-out"),
     speedOut: document.getElementById("calc-speed-out"),
     climbOut: document.getElementById("calc-climb-out"),
     tempOut:  document.getElementById("calc-temp-out"),
+    windOut:  document.getElementById("calc-wind-out"),
     time:     document.getElementById("calc-time"),
     battUse:  document.getElementById("calc-batt-use"),
     battArr:  document.getElementById("calc-batt-arr"),
@@ -3878,7 +4014,7 @@
     if (speedCurveCache !== undefined) return speedCurveCache;
     const rows = computeSpeedCostRows();
     speedCurveCache = rows.length >= 3
-      ? { pts: rows.map((r) => ({ s: (r.from + r.to) / 2, r: r.rangeKm })), sMax: rows[rows.length - 1].to }
+      ? { pts: rows.map((r) => ({ s: (r.from + r.to) / 2, r: r.rangeKm, km: Math.round(r.km), n: r.n })), sMax: rows[rows.length - 1].to }
       : null;
     return speedCurveCache;
   }
@@ -3898,13 +4034,32 @@
   // prediction continues along the measured in-ride cost-of-speed curve, so
   // pushing the speed slider past your data bends the estimate down with
   // drag instead of riding the positive linear speed term into fantasy.
-  function calcRangeKm(sKmh, tC, climbMperKm) {
+  // Evaluate a fit at the given inputs. Handles v2 (named features / beta)
+  // and legacy v1 imports (three bare slopes).
+  function predictFit(fit, sKmh, tC, climbMperKm, windMs, odoKm) {
+    if (fit.beta && fit.features) {
+      let r = fit.beta.intercept;
+      for (const f of fit.features) {
+        const b = fit.beta[f];
+        if (b == null) continue;
+        r += b * (
+          f === "s" ? sKmh :
+          f === "t" ? tC :
+          f === "c" ? climbMperKm :
+          f === "s2" ? sKmh * sKmh :
+          f === "cold" ? Math.pow(Math.max(0, 10 - tC), 2) :
+          f === "o" ? (odoKm || 0) / 1000 :
+          f === "w" ? (windMs || 0) : 0);
+      }
+      return r;
+    }
+    return fit.intercept + fit.speedSlope * sKmh + fit.tempSlope * tC + fit.climbSlope * climbMperKm;
+  }
+  function calcRangeKm(sKmh, tC, climbMperKm, windMs, odoKm) {
     const fit = activeFit();
     if (!fit) return null;
-    const lin = (s) => fit.intercept
-                     + fit.speedSlope * s
-                     + fit.tempSlope  * tC
-                     + fit.climbSlope * climbMperKm;
+    const odo = odoKm != null ? odoKm : (fit.odoNowKm || 0);
+    const lin = (s) => predictFit(fit, s, tC, climbMperKm, windMs || 0, odo);
     const curve = activeCurve();
     if (!curve || fit.sLoKmh == null) return lin(sKmh);
     if (sKmh > fit.sHiKmh) {
@@ -3926,8 +4081,8 @@
   // Battery-used (pess / neut / opt) for a single leg of distance D km,
   // given internal-units inputs. Pessimistic = the worst (largest) battery
   // draw, derived from the shorter range that sits at neutral - sigma.
-  function calcLegBatt(distKm, sKmh, tC, climbMperKm, sigmaKm) {
-    const rangeNeutral = calcRangeKm(sKmh, tC, climbMperKm);
+  function calcLegBatt(distKm, sKmh, tC, climbMperKm, sigmaKm, windMs) {
+    const rangeNeutral = calcRangeKm(sKmh, tC, climbMperKm, windMs);
     if (rangeNeutral == null || !isFinite(rangeNeutral)) return null;
     const rangeOpt  = rangeNeutral + sigmaKm;
     const rangePess = Math.max(0.5, rangeNeutral - sigmaKm);
@@ -3951,7 +4106,8 @@
   function calcSpeedKmh(s){ return UNITS.imperial ? s / 0.621371 : s; }
   function calcTempC(t)   { return UNITS.imperial ? (t - 32) * 5 / 9 : t; }
   function updateCalculator(srcEvt) {
-    if (!calcEls.modal || !activeFit()) return;
+    const fitA = activeFit();
+    if (!calcEls.modal || !fitA) return;
     const B = Number(calcEls.batt.value);
     let dDisp = Number(calcEls.dist.value);
     const sDisp = Number(calcEls.speed.value);
@@ -3959,13 +4115,22 @@
     const tDisp = Number(calcEls.temp.value);
     const sKmh = calcSpeedKmh(sDisp);
     const tC = calcTempC(tDisp);
+    // Headwind input (m/s internally; mph shown in imperial). No effect when
+    // the active model has no wind term, so the slider is disabled then.
+    const wDisp = calcEls.wind ? Number(calcEls.wind.value) : 0;
+    const windMs = UNITS.imperial ? wDisp / 2.23694 : wDisp;
+    const fitHasWind = !!(fitA.beta && fitA.beta.w != null);
+    if (calcEls.wind) {
+      calcEls.wind.disabled = !fitHasWind;
+      calcEls.wind.title = fitHasWind ? "" : "No wind term in this model yet. Re-add weather data so trips pick up archive wind (needs about 90 usable rides), or import a Wheel DNA that has one.";
+    }
     // Dynamic distance-slider ceiling: a bit beyond the optimistic max range
     // for the *current* battery + speed + temp + climb. We don't know the
     // climb-per-km until we know distance, so use the user's current climb
     // total at the prevailing rate (or flat = 0) for the projection.
     const climbMTotal = calcClimbM(cDisp);
     const climbProjPerKm = dDisp > 0 ? climbMTotal / calcDistKm(dDisp) : 0;
-    const rangeOptKm = calcRangeKm(sKmh, tC, climbProjPerKm) + calcModelSigmaKm();
+    const rangeOptKm = calcRangeKm(sKmh, tC, climbProjPerKm, windMs) + calcModelSigmaKm();
     const maxOptKm = Math.max(2, (B / 100) * Math.max(0.5, rangeOptKm));
     const newMaxDisp = Math.max(5, Math.ceil(UNITS.dist(maxOptKm) * 1.15));
     const srcId = srcEvt && srcEvt.target && srcEvt.target.id;
@@ -3990,9 +4155,10 @@
     const signC = cDisp >= 0 ? "+" : "";
     calcEls.climbOut.textContent = `${signC}${cDisp} ${altUnit}`;
     calcEls.tempOut.textContent = `${tDisp} ${UNITS.tempUnit}`;
+    if (calcEls.windOut) calcEls.windOut.textContent = `${wDisp > 0 ? "+" : ""}${wDisp} ${UNITS.imperial ? "mph" : "m/s"}`;
 
     const sigma = calcModelSigmaKm();
-    const legA = calcLegBatt(distKm, sKmh, tC, climbMperKm, sigma);
+    const legA = calcLegBatt(distKm, sKmh, tC, climbMperKm, sigma, windMs);
     if (!legA) { calcEls.verdict.textContent = "Model not ready."; return; }
     const fmtDur = (h) => {
       if (!isFinite(h) || h <= 0) return "—";
@@ -4011,7 +4177,8 @@
 
     let totalPess = legA.battPess, totalNeut = legA.battNeut, totalOpt = legA.battOpt;
     if (calcEls.roundtrip.checked) {
-      const legB = calcLegBatt(distKm, sKmh, tC, -climbMperKm, sigma);
+      // Return leg: climb reverses and so does the wind.
+      const legB = calcLegBatt(distKm, sKmh, tC, -climbMperKm, sigma, -windMs);
       calcEls.legBack.classList.remove("hidden");
       if (legB) {
         calcEls.timeTotal.textContent = fmtDur(timeH * 2);
@@ -4058,7 +4225,7 @@
       }
     }
 
-    drawCalcChart(B, distKm, sKmh, tC, climbMperKm, calcEls.roundtrip.checked);
+    drawCalcChart(B, distKm, sKmh, tC, climbMperKm, windMs, calcEls.roundtrip.checked);
   }
   // Stash the chart state so the mouseover handler can recompute battery,
   // distance, and time at the hovered X without re-reading sliders.
@@ -4068,10 +4235,10 @@
   // The band between pessimistic and optimistic is hatched so the
   // uncertainty range reads at a glance. Hovering shows a vertical
   // crosshair with battery, time, and range remaining at that distance.
-  function drawCalcChart(B, distKm, sKmh, tC, climbMperKm, isRound) {
+  function drawCalcChart(B, distKm, sKmh, tC, climbMperKm, windMs, isRound) {
     const c = calcEls.canvas;
     if (!c || !activeFit()) return;
-    calcChartLastArgs = [B, distKm, sKmh, tC, climbMperKm, isRound];
+    calcChartLastArgs = [B, distKm, sKmh, tC, climbMperKm, windMs, isRound];
     const dpr = window.devicePixelRatio || 1;
     const cssW = c.clientWidth || c.width;
     const cssH = c.clientHeight || c.height;
@@ -4091,7 +4258,7 @@
     const sigma = calcModelSigmaKm();
     // Battery-used-per-km for the three scenarios at each leg's climb.
     const legBattPerKm = (climbMperKm_) => {
-      const rN = calcRangeKm(sKmh, tC, climbMperKm_);
+      const rN = calcRangeKm(sKmh, tC, climbMperKm_, windMs);
       if (rN == null || !isFinite(rN)) return null;
       const rO = rN + sigma, rP = Math.max(0.5, rN - sigma);
       return { pess: 100 / rP, neut: 100 / rN, opt: 100 / rO };
@@ -4440,8 +4607,8 @@
   function wireCalculator() {
     if (calcWired || !calcEls.modal) return;
     calcWired = true;
-    ["batt", "dist", "speed", "climb", "temp"].forEach((k) => {
-      calcEls[k].addEventListener("input", updateCalculator);
+    ["batt", "dist", "speed", "climb", "temp", "wind"].forEach((k) => {
+      if (calcEls[k]) calcEls[k].addEventListener("input", updateCalculator);
     });
     calcEls.roundtrip.addEventListener("change", updateCalculator);
     if (calcEls.btn) calcEls.btn.addEventListener("click", openCalc);
@@ -4922,7 +5089,7 @@
       // keyless, mirroring the source combo in the EUC Planet app.
       const srcSel = document.getElementById("calc-weather-source");
       const src = srcSel ? srcSel.value : "best_match";
-      let times = [], temps = [];
+      let times = [], temps = [], wSpds = [], wDirs = [];
       if (src === "metno") {
         const r = await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`);
         if (!r.ok) throw new Error("HTTP " + r.status);
@@ -4937,17 +5104,26 @@
           if (!det || det.air_temperature == null) continue;
           times.push(local.slice(0, 13) + ":00");
           temps.push(det.air_temperature);
+          wSpds.push(det.wind_speed != null ? det.wind_speed : null); // already m/s
+          wDirs.push(det.wind_from_direction != null ? det.wind_from_direction : null);
         }
         if (!temps.length) throw new Error("MET Norway has no hourly data for that date (hourly ~3 days out, ~10 days total).");
       } else {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m&start_date=${date}&end_date=${date}&timezone=auto` +
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m,wind_speed_10m,wind_direction_10m&start_date=${date}&end_date=${date}&timezone=auto` +
           (src !== "best_match" ? `&models=${src}` : "");
         const r = await fetch(url);
         const j = await r.json();
         const rawT = (j.hourly && j.hourly.time) || [];
         const rawV = (j.hourly && j.hourly.temperature_2m) || [];
+        const rawW = (j.hourly && j.hourly.wind_speed_10m) || [];
+        const rawD = (j.hourly && j.hourly.wind_direction_10m) || [];
         // A model that doesn't cover this point / date returns nulls; drop them.
-        for (let i = 0; i < rawV.length; i++) if (rawV[i] != null) { times.push(rawT[i]); temps.push(rawV[i]); }
+        for (let i = 0; i < rawV.length; i++) if (rawV[i] != null) {
+          times.push(rawT[i]);
+          temps.push(rawV[i]);
+          wSpds.push(rawW[i] != null ? rawW[i] / 3.6 : null); // km/h to m/s
+          wDirs.push(rawD[i] != null ? rawD[i] : null);
+        }
         if (!temps.length) throw new Error("No hourly forecast for that date from this source (max +14 days).");
       }
       const [sh, sm] = startEl.value.split(":").map(Number);
@@ -4963,18 +5139,34 @@
         if (eMin >= sMin) return pE > sMin && pS < eMin;
         return pE > sMin || pS < eMin;
       };
-      let sum = 0, n = 0;
+      let sum = 0, n = 0, wU = 0, wV = 0, wN = 0;
       const cells = [];
       for (let i = 0; i < temps.length; i++) {
         const h = Number(times[i].slice(11, 13));
         const inside = inRide(h);
-        if (inside) { sum += temps[i]; n++; }
-        cells.push({ h, t: temps[i], inRide: inside });
+        if (inside) {
+          sum += temps[i]; n++;
+          if (wSpds[i] != null && wDirs[i] != null) {
+            const th = wDirs[i] * Math.PI / 180;
+            wU += wSpds[i] * Math.sin(th); wV += wSpds[i] * Math.cos(th); wN++;
+          }
+        }
+        cells.push({ h, t: temps[i], w: wSpds[i], wd: wDirs[i], inRide: inside });
       }
       if (!n) { status.textContent = "Ride window outside forecast hours."; return; }
       const avg = sum / n;
+      // Headwind needs a travel direction, which only a picked route gives.
+      const bearingDeg = routeBearingDeg();
+      let headwindMs = null;
+      if (bearingDeg != null && wN) {
+        const bR = bearingDeg * Math.PI / 180;
+        headwindMs = (wU / wN) * Math.sin(bR) + (wV / wN) * Math.cos(bR);
+      }
       const SRC_NAMES = { best_match: "Open-Meteo", metno: "MET Norway", ecmwf_ifs025: "ECMWF", gfs_seamless: "NOAA GFS", icon_seamless: "DWD ICON", meteofrance_seamless: "Meteo-France" };
-      pendingWeather = { ambientC: avg, label: `${date} ${startEl.value}–${endEl.value} @ ${locLabel} (avg ${avg.toFixed(1)} °C, ${SRC_NAMES[src] || src})` };
+      const windBit = headwindMs != null
+        ? `, ${headwindMs >= 0 ? "headwind" : "tailwind"} ${Math.abs(headwindMs).toFixed(1)} m/s`
+        : "";
+      pendingWeather = { ambientC: avg, headwindMs, label: `${date} ${startEl.value}–${endEl.value} @ ${locLabel} (avg ${avg.toFixed(1)} °C${windBit}, ${SRC_NAMES[src] || src})` };
       // Stash the cells so we can re-render highlighting without re-fetching.
       lastForecastCells = cells;
       renderForecastCells();
@@ -4990,6 +5182,16 @@
   // Re-render the forecast hour grid using the cached cells. Updates the
   // in-ride highlighting + the average based on the current start/end time
   // (which may have moved after a cell click).
+  // Net bearing of a picked route (first to last coordinate), or null.
+  function routeBearingDeg() {
+    if (!routeLocked || !routeLocked.coords || routeLocked.coords.length < 2) return null;
+    const a = routeLocked.coords[0], b = routeLocked.coords[routeLocked.coords.length - 1];
+    const dLon = (b[0] - a[0]) * Math.PI / 180;
+    const la1 = a[1] * Math.PI / 180, la2 = b[1] * Math.PI / 180;
+    const yb = Math.sin(dLon) * Math.cos(la2);
+    const xb = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLon);
+    return (Math.atan2(yb, xb) * 180 / Math.PI + 360) % 360;
+  }
   function renderForecastCells() {
     if (!lastForecastCells) return;
     const startEl = document.getElementById("calc-weather-start");
@@ -5004,16 +5206,28 @@
       if (eMin >= sMin) return pE > sMin && pS < eMin;
       return pE > sMin || pS < eMin;
     };
-    let sum = 0, n = 0;
+    let sum = 0, n = 0, wU = 0, wV = 0, wN = 0;
     const cells = lastForecastCells.map((c) => {
       const inside = inRide(c.h);
-      if (inside) { sum += c.t; n++; }
+      if (inside) {
+        sum += c.t; n++;
+        if (c.w != null && c.wd != null) {
+          const th = c.wd * Math.PI / 180;
+          wU += c.w * Math.sin(th); wV += c.w * Math.cos(th); wN++;
+        }
+      }
       return { ...c, inRide: inside };
     });
     lastForecastCells = cells;
     const avg = n ? sum / n : 0;
     if (n) {
-      pendingWeather = { ambientC: avg, label: `${startEl.value}-${endEl.value} avg ${avg.toFixed(1)} °C` };
+      const bearingDeg = routeBearingDeg();
+      let headwindMs = null;
+      if (bearingDeg != null && wN) {
+        const bR = bearingDeg * Math.PI / 180;
+        headwindMs = (wU / wN) * Math.sin(bR) + (wV / wN) * Math.cos(bR);
+      }
+      pendingWeather = { ambientC: avg, headwindMs, label: `${startEl.value}-${endEl.value} avg ${avg.toFixed(1)} °C` };
       document.getElementById("calc-weather-apply").disabled = false;
     }
     const cellsHtml = cells.map((c) => {
@@ -5041,6 +5255,14 @@
     calcEls.temp.min = String(Math.min(Number(calcEls.temp.min), tDisp - 5));
     calcEls.temp.max = String(Math.max(Number(calcEls.temp.max), tDisp + 5));
     calcEls.temp.value = String(tDisp);
+    // A picked route gave the forecast a direction: lock the headwind too.
+    if (weatherLocked.headwindMs != null && calcEls.wind) {
+      const wD = UNITS.imperial ? weatherLocked.headwindMs * 2.23694 : weatherLocked.headwindMs;
+      const v = Math.round(wD * 2) / 2;
+      calcEls.wind.min = String(Math.min(Number(calcEls.wind.min), v - 2));
+      calcEls.wind.max = String(Math.max(Number(calcEls.wind.max), v + 2));
+      calcEls.wind.value = String(v);
+    }
     refreshLockUI();
     setCalcMode("calc");
     updateCalculator();
@@ -5062,8 +5284,8 @@
       calcEls.btn.classList.remove("hidden");
       calcEls.btn.removeAttribute("disabled");
       calcEls.btn.title = (dnaActive && importedDna)
-        ? `Range calculator using imported Wheel DNA "${importedDna.wheel || "?"}" (n=${fit.n != null ? fit.n : "?"}, R²=${fit.r2 != null ? fit.r2.toFixed(2) : "?"}).`
-        : `Range calculator. Pessimistic, neutral, optimistic forecast from your own history (n=${fit.n}, R²=${fit.r2.toFixed(2)}).`;
+        ? `Plan a ride on the imported Wheel DNA "${importedDna.wheel || "?"}".`
+        : `Plan a ride with the range model fitted from ${fit.n} of your rides.`;
       wireCalculator();
     } else {
       // Keep the button visible so the user knows the feature exists, but
@@ -5099,16 +5321,17 @@
     if (!multiFit) return null;
     let totalKm = 0;
     for (const m of dated) totalKm += m.distKm;
-    const dof = Math.max(1, multiFit.n - 4);
     return {
       format: "eucviewer-wheel-dna",
-      version: 1,
+      version: 2,
       wheel: dnaWheelLabel(),
       generated: new Date().toISOString().slice(0, 10),
       totalKm: Math.round(totalKm),
       trips: dated.length,
       // The trips-based model, always (never re-exports an imported DNA).
-      model: Object.assign({}, multiFit, { sigmaKm: Math.sqrt(multiFit.rss / dof) }),
+      // Carries the v2 feature set (speed^2, cold hinge, pack age, headwind
+      // when present) plus sigma and the marginal slopes.
+      model: Object.assign({}, multiFit),
       speedCurve: getSpeedCurve(),
     };
   }
@@ -5117,17 +5340,33 @@
     if (expBtn) expBtn.disabled = !multiFit;
     const row = document.getElementById("calc-dna-row");
     if (!row) return;
-    row.classList.toggle("hidden", !importedDna);
-    if (!importedDna) { dnaActive = false; return; }
+    // Row always shows so the feature is discoverable; with nothing imported
+    // the second chip is a dashed "Import DNA" that opens the file picker.
+    row.classList.remove("hidden");
     const tripsBtn = document.getElementById("calc-dna-trips");
     const impBtn = document.getElementById("calc-dna-imported");
+    const clearBtn = document.getElementById("calc-dna-clear");
+    if (!importedDna) {
+      dnaActive = false;
+      tripsBtn.disabled = false;
+      tripsBtn.classList.add("on");
+      tripsBtn.title = "Model fitted from your own trips";
+      impBtn.classList.remove("on");
+      impBtn.classList.add("ghost");
+      impBtn.textContent = "Import DNA…";
+      impBtn.title = "Import another wheel's exported Wheel DNA .json to plan on its model";
+      if (clearBtn) clearBtn.classList.add("hidden");
+      return;
+    }
     if (!multiFit) dnaActive = true; // nothing to fall back to
     tripsBtn.disabled = !multiFit;
     tripsBtn.title = multiFit ? "Use the model fitted from your own trips" : "Not enough usable trips in this scope for a trips-based model";
     tripsBtn.classList.toggle("on", !dnaActive);
+    impBtn.classList.remove("ghost");
     impBtn.classList.toggle("on", dnaActive);
     impBtn.textContent = "\u{1F9EC} " + (importedDna.wheel || "Imported");
     impBtn.title = `Wheel DNA: ${importedDna.wheel || "?"} · ${importedDna.totalKm != null ? importedDna.totalKm : "?"} km · ${importedDna.trips != null ? importedDna.trips : "?"} trips · exported ${importedDna.generated || "?"}`;
+    if (clearBtn) clearBtn.classList.remove("hidden");
   }
   function persistDna() {
     try {
@@ -5169,8 +5408,9 @@
         rd.onload = () => {
           try {
             const dna = JSON.parse(rd.result);
-            if (!dna || dna.format !== "eucviewer-wheel-dna" || !dna.model
-                || typeof dna.model.intercept !== "number") throw new Error("bad");
+            const validModel = dna && dna.model
+              && (typeof dna.model.intercept === "number" || (dna.model.beta && dna.model.features));
+            if (!dna || dna.format !== "eucviewer-wheel-dna" || !validModel) throw new Error("bad");
             importedDna = dna;
             dnaActive = true;
             persistDna();
@@ -5193,7 +5433,11 @@
     const impSel = document.getElementById("calc-dna-imported");
     const clearBtn = document.getElementById("calc-dna-clear");
     if (tripsBtn) tripsBtn.addEventListener("click", () => setActive(false));
-    if (impSel) impSel.addEventListener("click", () => setActive(true));
+    if (impSel) impSel.addEventListener("click", () => {
+      // No DNA yet: the chip doubles as the import entry point.
+      if (!importedDna) { if (fileEl) fileEl.click(); return; }
+      setActive(true);
+    });
     if (clearBtn) clearBtn.addEventListener("click", () => {
       importedDna = null;
       setActive(false);

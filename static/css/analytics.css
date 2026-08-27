@@ -152,6 +152,18 @@ body::before {
 .print-btn.print-btn-icon { padding: 6px; }
 .print-btn.print-btn-icon svg { display: block; }
 
+/* Scope sits as a full-width bar under the params rows and carries the trip
+   count ("Scope (161 trips)" / "Scoped (23 of 161)"). */
+.tb-params > .scope-toggle { justify-content: center; }
+
+/* Stable weather card: the button label changes while fetching ("Fetching
+   2/5", "Add weather for 12 more") and sub-buttons appear when loaded, so
+   reserve enough room that neither resizes the card or shifts neighbours. */
+.tb-weather { min-width: 240px; }
+.tb-weather #weather-btn { min-width: 172px; text-align: center; }
+.tb-weather #weather-status { display: block; min-height: 0.95rem; }
+.tb-weather-src select { max-width: 100%; }
+
 .weather-capsule {
     display: inline-flex;
     align-items: stretch;
@@ -1293,7 +1305,10 @@ body.weather-loaded .forensic-tag.weather-tag {
     white-space: nowrap;
 }
 .calc-dna-opt.on { color: #dff; background: rgba(105, 240, 174, 0.12); border-color: rgba(105, 240, 174, 0.5); }
+.calc-dna-opt.ghost { border-style: dashed; color: #789; background: transparent; }
+.calc-dna-opt.ghost:hover { color: #bfeef7; border-color: rgba(0, 229, 255, 0.4); }
 .calc-dna-opt:disabled { opacity: 0.4; cursor: default; }
+.calc-dna-clear.hidden { display: none; }
 .calc-dna-clear {
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.12);

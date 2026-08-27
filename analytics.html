@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=56" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=57" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -60,12 +60,6 @@
                         </label>
                     </div>
                     <div class="tb-row tb-row-toggles">
-                        <button type="button" id="scope-toggle" class="scope-toggle" title="Narrow the analyses to a sub-range of your history.">
-                            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <circle cx="3.5" cy="8" r="1.6"/><circle cx="12.5" cy="8" r="1.6"/><line x1="5.1" y1="8" x2="10.9" y2="8"/>
-                            </svg>
-                            <span>Scope</span>
-                        </button>
                         <label class="check-label">
                             <input type="checkbox" id="rolling-check" checked />
                             <span>Smooth <span class="info-icon" title="Adds a dashed white line over each chart that averages every point with its two neighbours. Hides single-bin noise so the trend is easier to read.">i</span></span>
@@ -75,10 +69,24 @@
                             <span>Norm 20&nbsp;&deg;C <span class="info-icon" title="Subtracts the temperature effect from range so a cold month doesn't look like battery aging. Needs weather data loaded and at least 10 trips with both battery and ambient temp.">i</span></span>
                         </label>
                     </div>
+                    <button type="button" id="scope-toggle" class="scope-toggle" title="Narrow the analyses to a sub-range of your history or one wheel.">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="3.5" cy="8" r="1.6"/><circle cx="12.5" cy="8" r="1.6"/><line x1="5.1" y1="8" x2="10.9" y2="8"/>
+                        </svg>
+                        <span id="scope-toggle-text">Scope</span>
+                    </button>
                 </div>
 
                 <!-- Weather region. -->
                 <div class="tb-region tb-weather">
+                    <label class="tb-field tb-weather-src">
+                        <span>Source <span class="info-icon" title="Historical archive used when fetching. All keyless. ERA5 goes back decades (lags ~5 days), ERA5-Land is higher resolution over land, NASA POWER is an independent archive (lags about a week). Trips already loaded keep their values; the source applies to the next fetch.">i</span></span>
+                        <select id="weather-source-select">
+                            <option value="era5" selected>Open-Meteo ERA5</option>
+                            <option value="era5_land">Open-Meteo ERA5-Land</option>
+                            <option value="nasa_power">NASA POWER</option>
+                        </select>
+                    </label>
                     <span class="weather-capsule">
                         <button type="button" id="weather-btn" title="Downloads historical daily temperatures from open-meteo.com for each trip's rounded location. Unlocks ambient-aware analyses (range vs temp, thermal vs ambient).">Add weather data</button>
                         <button type="button" id="weather-refresh-btn" class="weather-refresh" title="Try again for the trips not yet in the archive.">!</button>
@@ -89,7 +97,7 @@
 
                 <!-- Output region: range calculator + print / layout. -->
                 <div class="tb-region tb-output">
-                    <button type="button" id="calc-btn" class="calc-btn hidden" title="Range calculator. Pick battery, distance, speed, climb, ambient and get a pessimistic, neutral, optimistic forecast based on your own history.">
+                    <button type="button" id="calc-btn" class="calc-btn hidden" title="Plan a ride with your wheel's measured range model.">
                         <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <rect x="2.5" y="1.5" width="11" height="13" rx="0.5"/><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="5" y1="8" x2="5" y2="12"/><line x1="8" y1="8" x2="8" y2="12"/><line x1="11" y1="8" x2="11" y2="12"/>
                         </svg>
@@ -179,7 +187,7 @@
             </section>
 
             <section id="insights" class="hidden" data-tab="overview">
-                <h2><span class="forensic-tag">FINDINGS</span><span class="weather-bit plus">+</span><span class="forensic-tag weather-tag weather-bit">WEATHER</span> Key takeaways <span class="sec-meta">computed from your history</span></h2>
+                <h2><span class="forensic-tag">FINDINGS</span> Key takeaways <span class="sec-meta">computed from your history</span></h2>
                 <div id="insights-list"></div>
             </section>
 
@@ -206,7 +214,7 @@
             </section>
 
             <section class="chart-section" data-section="range" data-tab="range">
-                <h2><span class="forensic-tag">EVIDENCE</span><span class="weather-bit plus">+</span><span class="forensic-tag weather-tag weather-bit">WEATHER</span> Estimated full range <span class="sec-meta" id="range-meta"></span></h2>
+                <h2><span class="forensic-tag">EVIDENCE</span> Estimated full range <span class="sec-meta" id="range-meta"></span></h2>
                 <div class="chart-host">
                     <div class="chart-title">Range over time <span class="chart-title-axes">(median per group)</span></div>
                     <canvas id="chart-range"></canvas>
@@ -495,7 +503,7 @@
             </section>
 
             <section class="chart-section" data-section="thermal" data-tab="thermal">
-                <h2><span class="forensic-tag">EVIDENCE</span><span class="weather-bit plus">+</span><span class="forensic-tag weather-tag weather-bit">WEATHER</span> Thermal <span class="sec-meta" id="thermal-meta"></span></h2>
+                <h2><span class="forensic-tag">EVIDENCE</span> Thermal <span class="sec-meta" id="thermal-meta"></span></h2>
                 <p class="sec-hint" id="thermal-hint">Temperature rise is how much hotter the board got versus the air around you. Hot motors mean more electrical losses, more cooling pressure on the pack, and higher risk of thermal cutoff on long climbs.</p>
                 <div class="chart-host tall">
                     <div class="chart-title">How much hotter the wheel got <span class="weather-chip">WEATHER</span> <span class="chart-title-axes">(per ride, vs power output)</span></div>
@@ -614,6 +622,11 @@
                 <input type="range" id="calc-temp" min="-15" max="40" step="1" value="20" />
                 <output id="calc-temp-out" class="calc-out">20 &deg;C</output>
               </label>
+              <label class="calc-row" data-locked-group="weather">
+                <span class="calc-name">Headwind</span>
+                <input type="range" id="calc-wind" min="-8" max="8" step="0.5" value="0" />
+                <output id="calc-wind-out" class="calc-out">0 m/s</output>
+              </label>
             </div>
             <label class="calc-check">
               <input type="checkbox" id="calc-roundtrip" />
@@ -665,9 +678,10 @@
           </div>
           <p class="calc-foot">
             Bands are <b class="calc-pess">pessimistic</b> &middot; <b class="calc-neut">neutral</b> &middot; <b class="calc-opt">optimistic</b>,
-            derived from your own history using the multivariate range model (intercept + speed + temp + climb).
-            Speeds beyond your usual trip averages follow your measured in-ride cost-of-speed curve instead of the
-            linear speed term. Pessimistic / optimistic come from the model&rsquo;s residual standard error.
+            from the multivariate range model fitted to your history: speed and speed&sup2;, temperature with an extra
+            cold penalty below 10&nbsp;&deg;C, climb, headwind and pack age, each term included once your data supports it.
+            Speeds beyond your usual trip averages follow your measured in-ride cost-of-speed curve.
+            Pessimistic / optimistic come from the model&rsquo;s residual standard error.
           </p>
         </div>
         <div class="calc-subview hidden" id="calc-mapview">
@@ -761,6 +775,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=84"></script>
+    <script src="static/js/analytics.js?v=86"></script>
 </body>
 </html>

@@ -2181,7 +2181,9 @@
   // width, so the entries stack below it inside the reserved band. The
   // caller must size pad.top with legendPadTop() so the rows fit.
   function legendPadTop(w, count) {
-    return w < 480 ? 48 + count * 13 : 42;
+    // Wide canvases keep the legend on one row at the top; the band has to
+    // clear the two-line HTML title overlay (name + italic axes note).
+    return w < 480 ? 48 + count * 13 : 46;
   }
   function drawLegend(ctx, w, padTop, padLeft, items) {
     ctx.font = FONT;
@@ -5443,12 +5445,16 @@
     tripsBtn.disabled = !multiFit;
     tripsBtn.classList.toggle("on", !!multiFit && !dnaActive);
     tripsSub.textContent = multiFit
-      ? `Fitted from ${multiFit.n} of your rides${!dnaActive ? " · active" : ""}`
-      : "Not enough usable rides in this scope yet";
+      ? `Current model from your ${multiFit.n} trips`
+      : "No model from your trips yet";
+    tripsBtn.title = multiFit ? "" : "Not enough usable rides in this scope";
     dnaBtn.classList.toggle("on", !!importedDna && dnaActive);
     dnaSub.textContent = importedDna
-      ? `\u{1F9EC} ${importedDna.wheel || "?"} · ${importedDna.totalKm != null ? importedDna.totalKm : "?"} km · ${importedDna.generated || "?"}${dnaActive ? " · active" : ""}`
-      : "Import a saved .dna.json…";
+      ? `${importedDna.wheel || "Wheel DNA"} (${importedDna.totalKm != null ? importedDna.totalKm + " km" : "?"})`
+      : "Load saved Wheel DNA…";
+    dnaBtn.title = importedDna
+      ? `Exported ${importedDna.generated || "?"} from ${importedDna.trips != null ? importedDna.trips : "?"} trips`
+      : "";
     if (acts) acts.classList.toggle("hidden", !importedDna);
   }
   function persistDna() {
@@ -5484,7 +5490,22 @@
     // The load icon (and the header chip) open a small chooser: your trips
     // vs a saved Wheel DNA. Importing a file happens from inside it.
     const dlg = document.getElementById("calc-model-dialog");
-    const openDlg = () => { syncDnaUi(); if (dlg) dlg.classList.remove("hidden"); };
+    const openDlg = () => {
+      syncDnaUi();
+      if (!dlg) return;
+      dlg.classList.remove("hidden");
+      // Anchor the menu under whichever control opened it (the load icon, or
+      // the model chip when one is showing) so the caret always points at it.
+      const menu = dlg.querySelector(".cmd-menu");
+      const anchor = document.getElementById("calc-dna-import");
+      const panel = dlg.offsetParent || dlg.parentElement;
+      if (menu && anchor && panel) {
+        const pr = panel.getBoundingClientRect();
+        const ar = anchor.getBoundingClientRect();
+        menu.style.right = Math.max(8, Math.round(pr.right - ar.right)) + "px";
+        menu.style.top = Math.round(ar.bottom - pr.top + 7) + "px";
+      }
+    };
     const closeDlg = () => { if (dlg) dlg.classList.add("hidden"); };
     if (impBtn) impBtn.addEventListener("click", openDlg);
     const chip = document.getElementById("calc-model-chip");

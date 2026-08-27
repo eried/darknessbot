@@ -96,18 +96,22 @@ body::before {
 .tb-region {
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    /* Content starts at the top so every card's title sits on one line. */
+    justify-content: flex-start;
     gap: 7px;
     padding: 7px 11px;
     border: 1px solid rgba(179, 136, 255, 0.16);
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.025);
 }
-.tb-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+/* Fields stretch so their labels line up along the top of the row and the
+   controls line up along the bottom, even when a label wraps. */
+.tb-row { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
 .tb-row-toggles { align-items: center; }
 .tb-field {
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     gap: 3px;
     font-size: 0.62rem;
     color: #888;
@@ -142,15 +146,18 @@ body::before {
 /* Weather card: capsule on top, status underneath, so a status string that
    grows / shrinks never widens the row and shoves its neighbours. */
 .tb-weather { align-items: flex-start; min-width: 150px; }
+/* Tools card pushes its buttons to the bottom so the row of Print + layout
+   lines up with the weather capsule and the analysis controls. */
+.tb-output .calc-btn { margin-top: auto; }
 .tb-weather #weather-status { max-width: 220px; }
 
-/* Output card: range calc beside the icon buttons, vertically centred. */
-.tb-output { flex-direction: row; align-items: center; gap: 8px; }
-.tb-output-icons { display: inline-flex; align-items: center; gap: 6px; }
-
-/* Print collapses to a compact square icon button. */
-.print-btn.print-btn-icon { padding: 6px; }
-.print-btn.print-btn-icon svg { display: block; }
+/* Output card: Range calc on top, Print + layout toggle on the row below.
+   The calc button spans the full card width so it lines up with the pair. */
+.tb-output { align-items: stretch; gap: 7px; }
+.tb-output .calc-btn { width: 100%; justify-content: center; }
+.tb-output-icons { display: flex; align-items: stretch; gap: 6px; }
+.tb-output-icons .print-btn { flex: 1; justify-content: center; }
+.tb-output-icons .layout-toggle-btn { flex-shrink: 0; margin-left: 0; }
 
 /* Scope lives in the title block, under the km + date subtitle, and carries
    the trip count ("Scope (161 trips)" / "Scoped (23 of 161)"). */
@@ -748,6 +755,8 @@ body[data-layout="tabs"] [data-tab]:not(.tab-btn):not(.tab-active) { display: no
     position: absolute;
     top: 8px;
     right: 12px;
+    /* Never spans far enough left to cover the legend drawn on the canvas. */
+    max-width: 62%;
     font-size: 0.95rem;
     font-weight: 700;
     color: #fff;
@@ -763,6 +772,9 @@ body[data-layout="tabs"] [data-tab]:not(.tab-btn):not(.tab-active) { display: no
     line-height: 1.2;
 }
 .chart-title-axes {
+    /* Own line at every width: on one line the title plus this note grows
+       long enough to reach across and sit on top of the canvas legend. */
+    display: block;
     font-weight: 400;
     color: #aaa;
     font-size: 0.74rem;
@@ -773,6 +785,9 @@ body[data-layout="tabs"] [data-tab]:not(.tab-btn):not(.tab-active) { display: no
 /* Small yellow "weather" marker that appears on charts whose data is
    enriched with ambient temperature - so the user knows at a glance which
    sections actually pull the cross-referenced weather. */
+/* Keeps a chip glued to the word before it so it never starts its own line
+   when a right-aligned chart title wraps. */
+.nb { white-space: nowrap; }
 .weather-chip {
     display: none;
     font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
@@ -1331,45 +1346,84 @@ body.weather-loaded .forensic-tag.weather-tag {
 }
 .calc-model-chip.hidden { display: none; }
 
-/* Model-source chooser: a small pre-dialog behind the load icon. */
+/* Model source: a dropdown menu hanging off the load icon, squared off to
+   match the rest of the analytics chrome. */
 #calc-model-dialog { position: absolute; inset: 0; z-index: 30; }
 #calc-model-dialog.hidden { display: none; }
-.cmd-backdrop { position: absolute; inset: 0; background: rgba(5, 8, 12, 0.55); }
-.cmd-panel {
+.cmd-backdrop { position: absolute; inset: 0; }
+.cmd-menu {
     position: absolute;
-    top: 52px;
-    right: 14px;
-    width: min(340px, calc(100% - 28px));
-    background: linear-gradient(180deg, #131822, #0c0f15);
-    border: 1px solid rgba(105, 240, 174, 0.3);
-    border-radius: 8px;
-    box-shadow: 0 18px 44px -8px rgba(0, 0, 0, 0.7);
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    top: 44px;
+    right: 40px;
+    width: min(300px, calc(100% - 28px));
+    background: #12151c;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 2px;
+    box-shadow: 0 10px 26px -6px rgba(0, 0, 0, 0.75);
+    padding: 4px;
 }
-.cmd-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8fa7b0; }
+/* Caret tying the menu to the load button above it. */
+.cmd-menu::before {
+    content: "";
+    position: absolute;
+    top: -5px;
+    right: 9px;
+    width: 8px;
+    height: 8px;
+    background: #12151c;
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    transform: rotate(45deg);
+}
 .cmd-opt {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
     text-align: left;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 7px;
-    padding: 9px 11px;
+    background: none;
+    border: none;
+    border-radius: 2px;
+    padding: 8px 9px;
     cursor: pointer;
+    color: #cdd6dd;
+    font-size: 0.78rem;
 }
-.cmd-opt:hover:not(:disabled) { border-color: rgba(105, 240, 174, 0.4); }
-.cmd-opt.on { background: rgba(105, 240, 174, 0.1); border-color: rgba(105, 240, 174, 0.55); }
-.cmd-opt:disabled { opacity: 0.45; cursor: default; }
-.cmd-name { font-size: 0.82rem; color: #e8f6ee; font-weight: 600; }
-.cmd-sub { font-size: 0.7rem; color: #8a97a0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmd-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.cmd-opt:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.cmd-opt:disabled { opacity: 0.4; cursor: default; }
+/* Checkbox-style mark: filled with a tick on the active option. */
+.cmd-mark {
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    position: relative;
+}
+.cmd-opt.on .cmd-mark { border-color: #69f0ae; background: rgba(105, 240, 174, 0.18); }
+.cmd-opt.on .cmd-mark::after {
+    content: "";
+    position: absolute;
+    left: 3.5px;
+    top: 0.5px;
+    width: 4px;
+    height: 8px;
+    border: solid #69f0ae;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+.cmd-opt.on { color: #eafff4; }
+.cmd-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 5px 9px 3px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 3px;
+}
 .cmd-actions.hidden { display: none; }
-.cmd-link { background: none; border: none; color: #7a8a99; font-size: 0.7rem; cursor: pointer; padding: 2px; text-decoration: underline; }
+.cmd-link { background: none; border: none; color: #7a8a99; font-size: 0.7rem; cursor: pointer; padding: 2px; }
 .cmd-link:hover { color: #bfeef7; }
 .cmd-link.cmd-danger:hover { color: #ff6b6b; }
 
@@ -2122,7 +2176,7 @@ body.print-mode .anomaly-row .anom-peak { color: #000 !important; }
     .weather-capsule #weather-btn { min-width: 0; }
     #weather-status { font-size: 0.68rem; }
     .chart-title { font-size: 0.82rem; max-width: 75%; }
-    .chart-title-axes { display: block; font-size: 0.66rem; }
+    .chart-title-axes { font-size: 0.66rem; }
     .stat-card { padding: 10px 12px; min-height: 56px; }
     .stat-card .sv { font-size: 1rem; }
     .insight { font-size: 0.78rem; }

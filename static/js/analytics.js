@@ -4227,9 +4227,9 @@
     if (rtInfo) {
       const locked = weatherLocked && weatherLocked.cells && weatherLocked.cells.length;
       const legMin = Math.round(timeH * 60);
-      rtInfo.title = locked
-        ? `Return leg reads the forecast hours after you arrive (about ${legMin} min out, then ${legMin} min back) and flips the bearing, so its temperature and wind follow the real time of day. Accuracy is then limited by the forecast itself.`
-        : `Without a locked forecast the return leg only flips the headwind sign and reuses the same temperature. Over about an hour of riding the real wind and temperature drift, so a long round trip is a rough estimate. Use "Use forecast" with a picked route for a per-leg calculation.`;
+      rtInfo.title = "Same distance, climb and wind reversed.\n" + (locked
+        ? `Conditions come from the forecast hours after you arrive (${legMin} min out, ${legMin} min back) on the reversed bearing.`
+        : "Wind only flips sign and the temperature is reused, so a ride past an hour drifts. Lock a forecast with a picked route for per-leg conditions.");
     }
     const legA = calcLegBatt(distKm, sKmh, legCond.tA, climbMperKm, sigma, legCond.wA);
     if (!legA) { calcEls.verdict.textContent = "Model not ready."; return; }

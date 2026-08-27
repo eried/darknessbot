@@ -2695,13 +2695,21 @@
   function resetView() { setView(0, duration); }
 
   // Zooming anchors on the gesture, so the playhead can end up outside the
-  // window and vanish. Park it on whichever edge it left through, keeping a
-  // small inset so it stays visible rather than sitting under the border.
+  // window and vanish. Slide the window back over it rather than moving the
+  // playhead: nudging the time each frame meant two redraws per frame at
+  // slightly different positions, which read as a flicker at the border and
+  // could still round its way outside. Shifting the view keeps the moment
+  // under the cursor exactly where it was.
   function keepPlayheadInView() {
     if (!isZoomed()) return;
-    const inset = Math.min(0.25, (viewT1 - viewT0) * 0.02);
-    if (currentTime < viewT0) setCurrentTime(viewT0 + inset);
-    else if (currentTime > viewT1) setCurrentTime(viewT1 - inset);
+    const span = viewT1 - viewT0;
+    if (currentTime < viewT0) {
+      const a = Math.max(0, currentTime);
+      setView(a, Math.min(duration, a + span));
+    } else if (currentTime > viewT1) {
+      const b = Math.min(duration, currentTime);
+      setView(Math.max(0, b - span), b);
+    }
   }
 
   // Pan the zoom window without resizing it: clamped at the trip edges so

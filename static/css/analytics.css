@@ -378,6 +378,7 @@ body[data-layout="single"] .layout-toggle-btn .layout-icon-tabs { display: block
 /* Same look as the Customize dialogs' Reset button. */
 .dr-reset {
     margin-left: auto;
+    /* Done sits to its right, so only Reset takes the auto push. */
     background: rgba(255, 255, 255, 0.04);
     color: #cdd;
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -387,6 +388,17 @@ body[data-layout="single"] .layout-toggle-btn .layout-icon-tabs { display: block
     cursor: pointer;
 }
 .dr-reset:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+/* Done: the primary action, same treatment as the Customize dialogs. */
+.dr-done {
+    background: rgba(179, 136, 255, 0.16);
+    color: #eadfff;
+    border: 1px solid rgba(179, 136, 255, 0.5);
+    border-radius: 6px;
+    padding: 5px 15px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.dr-done:hover { background: rgba(179, 136, 255, 0.28); color: #fff; }
 .dr-track {
     position: relative;
     height: 22px;

@@ -2245,18 +2245,25 @@
     timeMarker.style.left = (duration > 0 ? (currentTime / duration) * 100 : 0) + "%";
     timeMarker.textContent = timeMarkerText();
     timeMarker.classList.toggle("hidden", !(playing || scrubActive));
+    syncBubbleCollision();
   }
-  // The zoom range pill and the time bubble share the same strip above the
-  // scrub bar, so they sit on top of each other while the playhead is being
-  // dragged. Fade the range out for the duration of the movement and bring it
-  // back shortly after the finger settles.
-  let playheadBusyTimer = null;
-  function markPlayheadActivity() {
+  // The zoom range pill and the time bubble share the strip above the scrub
+  // bar. They coexist happily while they are apart, so only step the range
+  // aside when the two actually overlap. Dragging cuts it instantly (the
+  // bubble is chasing a finger and a fade leaves both readable at once);
+  // playback fades it, which is calm enough at playback speeds.
+  function syncBubbleCollision() {
     const zi = document.getElementById("zoom-indicator");
-    if (!zi) return;
-    zi.classList.add("yielding");
-    clearTimeout(playheadBusyTimer);
-    playheadBusyTimer = setTimeout(() => zi.classList.remove("yielding"), 650);
+    if (!zi || !timeMarker) return;
+    const bothUp = !zi.classList.contains("hidden") && !timeMarker.classList.contains("hidden");
+    if (!bothUp) { zi.classList.remove("yielding", "yield-instant"); return; }
+    const a = timeMarker.getBoundingClientRect();
+    const b = zi.getBoundingClientRect();
+    // A few px of margin so they never touch shoulders before one gives way.
+    const overlap = a.right > b.left - 6 && a.left < b.right + 6
+                 && a.bottom > b.top && a.top < b.bottom;
+    zi.classList.toggle("yield-instant", overlap && scrubActive);
+    zi.classList.toggle("yielding", overlap);
   }
   if (timeMarker && isFinite(tripStartMs)) {
     timeMarker.style.cursor = "pointer";
@@ -2345,7 +2352,6 @@
   scrub.addEventListener("input", e => {
     const t = (e.target.value / 1000) * duration;
     setCurrentTime(t);
-    markPlayheadActivity();
   });
   // Show the time bubble while dragging the scrub, hide it on release
   // (unless playback keeps it up).
@@ -2880,7 +2886,7 @@
         // readable while dragging on a chart too.
         if (!solo.scrubbing) { solo.scrubbing = true; scrubActive = true; }
         const t = timeFromClientX(c.canvas, e.clientX);
-        queueDragUpdate(() => { setCurrentTime(t); markPlayheadActivity(); });
+        queueDragUpdate(() => setCurrentTime(t));
       }
     });
     const endSolo = (e, tap) => {

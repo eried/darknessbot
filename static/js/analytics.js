@@ -2003,17 +2003,16 @@
         ? tooRecent + " trip" + (tooRecent === 1 ? "" : "s") + " from the last few days isn't in the archive yet. Open-Meteo's historical data lags about 5 days. Click to try again."
         : "";
     }
+    // Caveats (trips too recent for the archive, trips without GPS, failed
+    // fetches) live on the card title's info icon, so the status line under
+    // the button stays a single short sentence.
     function setWeatherStatus(mainText, extras) {
-      weatherStatus.textContent = "";
-      if (mainText) weatherStatus.appendChild(document.createTextNode(mainText));
-      if (extras && extras.length) {
-        const icon = document.createElement("span");
-        icon.className = "info-icon";
-        icon.title = extras.join("\n");
-        icon.textContent = "i";
-        if (mainText) weatherStatus.appendChild(document.createTextNode(" "));
-        weatherStatus.appendChild(icon);
-      }
+      weatherStatus.textContent = mainText || "";
+      const note = document.getElementById("weather-note");
+      if (!note) return;
+      const has = !!(extras && extras.length);
+      note.classList.toggle("hidden", !has);
+      note.title = has ? extras.join("\n") : "";
     }
     if (missing > 0) {
       weatherBtn.textContent = "Add weather for " + missing + " more";
@@ -5230,7 +5229,7 @@
       // Stash the cells so we can re-render highlighting without re-fetching.
       lastForecastCells = cells;
       renderForecastCells();
-      status.textContent = "Click an hour to set start time. Press Apply to lock the temperature.";
+      status.textContent = "Click an hour to set the start time.";
       document.getElementById("calc-weather-apply").disabled = false;
     } catch (err) {
       console.warn("Forecast fetch failed:", err);

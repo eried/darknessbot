@@ -169,6 +169,16 @@ body::before {
 .tb-weather .weather-capsule { width: 100%; }
 .tb-weather #weather-btn { flex: 1 1 auto; min-width: 0; text-align: center; }
 .tb-weather #weather-status { display: block; min-height: 0.95rem; }
+/* Card title row: name on the left, caveats info icon beside it. */
+.tb-region-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.62rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #888;
+}
 /* Source combo matches the weather button width below so the card reads as
    one aligned column. */
 .tb-weather-src { width: 100%; }

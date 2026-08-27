@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=62" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=63" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -79,9 +79,12 @@
 
                 <!-- Weather region. -->
                 <div class="tb-region tb-weather">
+                    <div class="tb-region-head">
+                        <span>Ambient weather</span>
+                        <span class="info-icon hidden" id="weather-note">i</span>
+                    </div>
                     <label class="tb-field tb-weather-src">
-                        <span>Source</span>
-                        <select id="weather-source-select" title="Historical archive used when fetching. All keyless. ERA5 goes back decades (lags ~5 days), ERA5-Land is higher resolution over land, NASA POWER is an independent archive (lags about a week). Trips already loaded keep their values; the source applies to the next fetch.">
+                        <select id="weather-source-select" title="Historical archive used when fetching. All keyless. ERA5 goes back decades (lags about 5 days), ERA5-Land is higher resolution over land, NASA POWER is an independent archive (lags about a week). Trips already loaded keep their values; the source applies to the next fetch.">
                             <option value="era5" selected>Open-Meteo ERA5</option>
                             <option value="era5_land">Open-Meteo ERA5-Land</option>
                             <option value="nasa_power">NASA POWER</option>
@@ -723,7 +726,7 @@
           <div class="calc-subview-head">
             <span class="calc-tag">FORECAST</span>
             <h4>Use weather forecast</h4>
-            <div class="calc-mapview-status" id="calc-weather-status">Pick a date and time. Forecast loads automatically.</div>
+            <div class="calc-mapview-status" id="calc-weather-status">Pick a date and time.</div>
             <button type="button" class="calc-icon-btn" id="calc-weather-refresh" title="Refresh forecast">
               <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M13.5 6 A 6 6 0 1 0 14 11"/>
@@ -788,6 +791,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=89"></script>
+    <script src="static/js/analytics.js?v=90"></script>
 </body>
 </html>

@@ -1438,6 +1438,8 @@ body.weather-loaded .forensic-tag.weather-tag {
 .cmd-mark.cmd-mark-none { border: none; background: none; }
 .cmd-opt.hidden { display: none; }
 
+/* Hours already gone today: visible for context, not selectable. */
+.wh-cell.is-past { opacity: 0.32; cursor: default; }
 /* Wind mini-line in the forecast hour cells: rotated arrow + m/s. */
 .wh-wind { font-size: 0.6rem; color: #8fa7b0; display: flex; align-items: center; justify-content: center; gap: 2px; }
 .wh-wind-arrow { display: inline-block; font-size: 0.62rem; line-height: 1; }
@@ -1755,6 +1757,13 @@ body.weather-loaded .forensic-tag.weather-tag {
     font-style: italic;
 }
 
+/* Forecast summary: one stat per row, label / value / note, so nothing
+   wraps mid-sentence. */
+.cw-stats { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.cw-stat { display: flex; align-items: baseline; gap: 7px; font-size: 0.74rem; color: #9ab; }
+.cw-stat span { min-width: 78px; color: #8a97a0; }
+.cw-stat b { color: #fff; font-size: 0.82rem; }
+.cw-stat i { font-style: normal; color: #7a8791; font-size: 0.7rem; }
 .calc-weather-result {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);

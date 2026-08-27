@@ -101,7 +101,7 @@
   // Anomaly detector settings - persisted per-browser so the user can
   // tune them once for their wheel/loadout and keep the result.
   const ANOM_STORAGE_KEY = "wheel-forensics-anom-settings";
-  const ANOM_DEFAULTS = { gpsThresh: 2, accelThresh: 6, preFallSpd: 12, postStopStreak: 5, minEventLen: 2, motorActiveA: 1 };
+  const ANOM_DEFAULTS = { gpsThresh: 2, freeSpinSpd: 12, accelThresh: 6, preFallSpd: 12, postStopStreak: 5, minEventLen: 2, motorActiveA: 1 };
   let anomalySettings = (() => {
     try {
       const raw = localStorage.getItem(ANOM_STORAGE_KEY);
@@ -118,6 +118,7 @@
   function bindAnomSettings() {
     const inputs = [
       ["anom-gps-thresh", "gpsThresh"],
+      ["anom-freespin-spd", "freeSpinSpd"],
       ["anom-accel-thresh", "accelThresh"],
       ["anom-prefall-spd", "preFallSpd"],
       ["anom-poststop", "postStopStreak"],
@@ -496,6 +497,10 @@
   function detectAnomalies(ts, opts) {
     opts = opts || {};
     const gpsThresh = opts.gpsThresh != null ? opts.gpsThresh : 2;
+    // Wheel speed that counts as a genuine free spin. Walking a wheel or a
+    // GPS that has not locked yet sits around 5 to 8 km/h, so a low floor
+    // turns every ride start into a "lift".
+    const freeSpinSpd = opts.freeSpinSpd != null ? opts.freeSpinSpd : 12;
     const accelThresh = opts.accelThresh != null ? opts.accelThresh : 6;
     const preFallSpd = opts.preFallSpd != null ? opts.preFallSpd : 12;
     const postStopStreak = opts.postStopStreak != null ? opts.postStopStreak : 5;
@@ -507,6 +512,15 @@
     const indices = new Set();
     const events = [];
     if (ts.length < 4) return { indices, events };
+    // Older logs (and some exporters) carry no Current / Power column at all.
+    // Every "was the motor working" test then reads 0 and silently answers
+    // "no", which used to flag all fast riding as phantom speed and file every
+    // event as a logger glitch. Detect that once and fall back to GPS-only
+    // reasoning instead of treating absent data as proof of an idle motor.
+    let hasMotorData = false;
+    for (let k = 0; k < ts.length; k++) {
+      if (Math.abs(ts[k][CURRENT] || 0) > 0 || Math.abs(ts[k][POWER] || 0) > 0) { hasMotorData = true; break; }
+    }
     // First pass: per-sample anomaly flagging
     const flags = new Array(ts.length).fill(false);
     for (let i = 1; i < ts.length; i++) {
@@ -518,7 +532,7 @@
       // Free spin detection requires GPS data to be present (>0 on either
       // side of the window; otherwise we'd flag wheels parked indoors).
       const hasGps = (typeof g === "number" && g > 0.3) || (typeof prevG === "number" && prevG > 0.3);
-      if (hasGps && w > 5 && typeof g === "number" && g < gpsThresh) {
+      if (hasGps && w > freeSpinSpd && typeof g === "number" && g < gpsThresh) {
         flags[i] = true;
         indices.add(i);
       }
@@ -534,7 +548,7 @@
       // values with current = 0 / power = 0; this catches them even
       // when the GPS column was already corrupted (so the regular
       // free-spin check would have missed them).
-      if (w >= 25) {
+      if (w >= 25 && hasMotorData) {
         const cur = Math.abs(ts[i][CURRENT] || 0);
         const pwr = Math.abs(ts[i][POWER] || 0);
         if (cur < motorActiveA && pwr < motorActiveW) {
@@ -596,12 +610,16 @@
       // Logger-glitch: nothing in the surrounding ±8 sample window was
       // actually driving the wheel: current and power were both flat.
       // This is a cascade of phantom readings, not a rider event.
-      let surroundingWorked = false;
-      for (let k = Math.max(0, startI - 8); k <= Math.min(ts.length - 1, endI + 8); k++) {
-        if (k >= startI && k <= endI) continue;
-        const cur = Math.abs(ts[k][CURRENT] || 0);
-        const pwr = Math.abs(ts[k][POWER] || 0);
-        if (cur >= motorActiveA || pwr >= motorActiveW) { surroundingWorked = true; break; }
+      // Without a current column there is no evidence either way, so don't
+      // let the missing data masquerade as a dead motor.
+      let surroundingWorked = !hasMotorData;
+      if (hasMotorData) {
+        for (let k = Math.max(0, startI - 8); k <= Math.min(ts.length - 1, endI + 8); k++) {
+          if (k >= startI && k <= endI) continue;
+          const cur = Math.abs(ts[k][CURRENT] || 0);
+          const pwr = Math.abs(ts[k][POWER] || 0);
+          if (cur >= motorActiveA || pwr >= motorActiveW) { surroundingWorked = true; break; }
+        }
       }
       // Stricter pre-window check: a real fall happens AFTER the rider was
       // genuinely cruising, not after a 12 km/h hop. Require at least half
@@ -610,7 +628,7 @@
       // borderline samples averaging up).
       const PRE_REQUIRED = Math.max(6, Math.ceil((preFallSpd >= 20 ? 8 : 6)));
       const preLooksLikeRiding = preFastCount >= PRE_REQUIRED
-        && preWorked >= PRE_REQUIRED
+        && (!hasMotorData || preWorked >= PRE_REQUIRED)
         && prePeakGps >= preFallSpd + 5;
       // Stricter post-window: stay still for a sustained stretch (default
       // 12 samples, roughly 40-60 s on most loggers). Real falls don't
@@ -642,7 +660,9 @@
         if (cur < motorActiveA && pwr < motorActiveW) motorIdle++;
       }
       const gpsStationaryRatio = gpsTotal > 0 ? gpsLow / gpsTotal : 0;
-      const motorIdleRatio = motorIdle / eventLen;
+      // No current column means motor idleness is unknown, so a lift is judged
+      // on GPS standstill alone rather than being blocked outright.
+      const motorIdleRatio = hasMotorData ? motorIdle / eventLen : 1;
       // Fall events have to LOOK like a fall: the wheel reached freespin
       // speed during the event (>= 20 km/h) AND the rider was clearly
       // cruising before (peak GPS >= 18 km/h). A 6 km/h peak event isn't
@@ -2181,9 +2201,10 @@
   // width, so the entries stack below it inside the reserved band. The
   // caller must size pad.top with legendPadTop() so the rows fit.
   function legendPadTop(w, count) {
-    // Wide canvases keep the legend on one row at the top; the band has to
-    // clear the two-line HTML title overlay (name + italic axes note).
-    return w < 480 ? 48 + count * 13 : 46;
+    // The HTML chart title overlays the top of the canvas on two lines (name
+    // plus the italic axes note), reaching about 42 px. Legends are drawn just
+    // above the plot rather than at the very top, so the band has to clear it.
+    return w < 480 ? 58 + count * 13 : 58;
   }
   function drawLegend(ctx, w, padTop, padLeft, items) {
     ctx.font = FONT;
@@ -2191,11 +2212,12 @@
     ctx.textAlign = "left";
     if (w >= 480) {
       let lx = padLeft + 4;
+      const ly = padTop - 14;
       for (const it of items) {
         ctx.fillStyle = it.color;
-        ctx.fillRect(lx, 6, 8, 3);
+        ctx.fillRect(lx, ly, 8, 3);
         ctx.fillStyle = "rgba(255,255,255,0.6)";
-        ctx.fillText(it.label, lx + 12, 11);
+        ctx.fillText(it.label, lx + 12, ly + 5);
         lx += 12 + ctx.measureText(it.label).width + 16;
       }
     } else {
@@ -2214,7 +2236,7 @@
     const cv = setupCanvas(canvas);
     if (!cv) return;
     const { ctx, w, h } = cv;
-    // top: 42 leaves a clear band under the HTML chart-title overlay
+    // legendPadTop leaves a clear band under the HTML chart-title overlay
     // (title + italic axes hint, ~36 px tall) so data lines never sit
     // behind the heading text; narrow canvases add room for stacked
     // legend rows. Same logic on every chart below.
@@ -2394,9 +2416,9 @@
     const cv = setupCanvas(canvas);
     if (!cv) return;
     const { ctx, w, h } = cv;
-    // Narrow canvases: the HTML title wraps onto two lines, so reserve a
-    // taller band before the plot begins.
-    const pad = { top: w < 480 ? 58 : 42, bottom: 26, left: 44, right: 14 };
+    // The HTML title overlays the top of the canvas on two lines, and the
+    // old / new ramp legend sits just under it, so reserve the whole band.
+    const pad = { top: 58, bottom: 26, left: 44, right: 14 };
     const cw = w - pad.left - pad.right;
     const ch = h - pad.top - pad.bottom;
     let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
@@ -3310,7 +3332,7 @@
     const cv = setupCanvas(canvas);
     if (!cv || !values.length) return;
     const { ctx, w, h } = cv;
-    const pad = { top: 42, bottom: 28, left: 44, right: 14 };
+    const pad = { top: 58, bottom: 28, left: 44, right: 14 };
     const cw = w - pad.left - pad.right;
     const ch = h - pad.top - pad.bottom;
     const nBins = opts.nBins || 16;
@@ -3394,7 +3416,7 @@
     const cv = setupCanvas(canvas);
     if (!cv) return;
     const { ctx, w, h } = cv;
-    const pad = { top: 42, bottom: 24, left: 40, right: 14 };
+    const pad = { top: 58, bottom: 24, left: 40, right: 14 };
     const cw = w - pad.left - pad.right;
     const ch = h - pad.top - pad.bottom;
     const n = bins.length;
@@ -3767,7 +3789,7 @@
     const cv = setupCanvas(canvas);
     if (!cv) return false;
     const { ctx, w, h } = cv;
-    const pad = { top: 42, bottom: 28, left: 44, right: 14 };
+    const pad = { top: 58, bottom: 28, left: 44, right: 14 };
     const cw = w - pad.left - pad.right;
     const chh = h - pad.top - pad.bottom;
     const vals = rows.map((r) => UNITS.dist(r.rangeKm));
@@ -3898,7 +3920,7 @@
     const cv = setupCanvas(canvas);
     if (!cv) return false;
     const { ctx, w, h } = cv;
-    const pad = { top: 42, bottom: 26, left: 158, right: 60 };
+    const pad = { top: 58, bottom: 26, left: 158, right: 60 };
     const cw = w - pad.left - pad.right;
     const chh = h - pad.top - pad.bottom;
     const xMax = Math.max(...rows.map((r) => r.pctPerH)) * 1.05 || 1;
@@ -4728,6 +4750,9 @@
     };
     // Both `change` (date picker confirm, select choice) and `input`
     // (every keystroke in lat/lon) cover the typical interaction modes.
+    // Switching to today can leave a start time that has already passed.
+    const dateEl0 = document.getElementById("calc-weather-date");
+    if (dateEl0) dateEl0.addEventListener("change", clampStartToNow);
     ["calc-weather-date", "calc-weather-loc", "calc-weather-latlon", "calc-weather-source"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -4754,7 +4779,7 @@
     });
     ["calc-weather-autoend", "calc-weather-start"].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener("change", syncEndTime);
+      if (el) el.addEventListener("change", () => { clampStartToNow(); syncEndTime(); renderForecastCells(); });
     });
     if (calcEls.canvas) {
       calcEls.canvas.addEventListener("mousemove", onCalcChartMove);
@@ -5064,13 +5089,36 @@
     if (routeOpt) routeOpt.disabled = !routeLocked;
     if (isCustom) setTimeout(initWeatherMiniMap, 50);
   }
+  // Planning only looks forward, so today is the earliest date and, on today,
+  // the current hour is the earliest start.
+  function localTodayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function pastCutoffHour() {
+    const dateEl = document.getElementById("calc-weather-date");
+    return (dateEl && dateEl.value === localTodayStr()) ? new Date().getHours() : -1;
+  }
+  function clampStartToNow() {
+    const startEl = document.getElementById("calc-weather-start");
+    const cut = pastCutoffHour();
+    if (!startEl || cut < 0) return;
+    const [h, m] = (startEl.value || "0:00").split(":").map(Number);
+    if ((h || 0) * 60 + (m || 0) < cut * 60) {
+      startEl.value = `${String(cut).padStart(2, "0")}:00`;
+      syncEndTime();
+    }
+  }
   function initWeatherForm() {
     const dateEl = document.getElementById("calc-weather-date");
+    dateEl.min = localTodayStr(); // no past days
     if (!dateEl.value) {
       const d = new Date();
       d.setDate(d.getDate() + 1);
       dateEl.value = d.toISOString().slice(0, 10);
     }
+    if (dateEl.value < dateEl.min) dateEl.value = dateEl.min;
+    clampStartToNow();
     const locSel = document.getElementById("calc-weather-loc");
     const routeOpt = locSel?.querySelector('option[value="route"]');
     if (routeOpt) {
@@ -5152,7 +5200,7 @@
     } else {
       const c = pickRecentCenter();
       if (!c) { status.textContent = "No trip location found, pick custom lat/lon."; if (refreshBtn) refreshBtn.classList.remove("is-loading"); return; }
-      lat = c[0]; lon = c[1]; locLabel = "most-used trip area";
+      lat = c[0]; lon = c[1]; locLabel = "where you usually ride";
     }
     status.textContent = "Fetching forecast…";
     try {
@@ -5303,8 +5351,10 @@
       pendingWeather = { ambientC: avg, headwindMs, label: `${startEl.value}-${endEl.value} avg ${avg.toFixed(1)} °C` };
       document.getElementById("calc-weather-apply").disabled = false;
     }
+    const cutH = pastCutoffHour();
     const cellsHtml = cells.map((c) => {
       const cls = ["wh-cell"];
+      if (c.h < cutH) cls.push("is-past");
       if (c.inRide) cls.push("in-ride");
       if (c.h === sh) cls.push("is-start");
       // Wind mini-line: arrow points where the wind blows TO (met direction
@@ -5312,10 +5362,13 @@
       const windLine = (c.w != null && c.wd != null)
         ? `<div class="wh-wind"><span class="wh-wind-arrow" style="transform:rotate(${Math.round((c.wd + 180) % 360)}deg)">&uarr;</span>${c.w.toFixed(0)}</div>`
         : "";
-      return `<div class="${cls.join(" ")}" data-hour="${c.h}" title="Set start time to ${String(c.h).padStart(2, "0")}:00"><div>${String(c.h).padStart(2, "0")}h</div><div>${UNITS.temp(c.t).toFixed(0)}${UNITS.tempUnit}</div>${windLine}</div>`;
+      const tip = c.h < cutH ? "Already past" : `Set start time to ${String(c.h).padStart(2, "0")}:00`;
+      return `<div class="${cls.join(" ")}" data-hour="${c.h}" title="${tip}"><div>${String(c.h).padStart(2, "0")}h</div><div>${UNITS.temp(c.t).toFixed(0)}${UNITS.tempUnit}</div>${windLine}</div>`;
     }).join("");
     // Wind summary: magnitude of the vector average; when a route gives us a
     // bearing, also say how much of it is head or tail wind.
+    // Two short stats on their own line each, so a long wind clause cannot
+    // wrap into the temperature and make the summary look ragged.
     let windSummary = "";
     if (wN) {
       const mag = Math.hypot(wU / wN, wV / wN);
@@ -5323,13 +5376,21 @@
       if (bearingDeg2 != null) {
         const bR2 = bearingDeg2 * Math.PI / 180;
         const hw = (wU / wN) * Math.sin(bR2) + (wV / wN) * Math.cos(bR2);
-        windSummary = ` · wind ${mag.toFixed(1)} m/s (${hw >= 0 ? "head" : "tail"} ${Math.abs(hw).toFixed(1)})`;
+        windSummary = `<div class="cw-stat"><span>Wind</span><b>${mag.toFixed(1)} m/s</b>` +
+          `<i>${hw >= 0 ? "head" : "tail"} ${Math.abs(hw).toFixed(1)}</i></div>`;
       } else {
-        windSummary = ` · wind ${mag.toFixed(1)} m/s (pick a route to aim it)`;
+        windSummary = `<div class="cw-stat"><span>Wind</span><b>${mag.toFixed(1)} m/s</b>` +
+          `<i>pick a route to aim it</i></div>`;
       }
     }
-    resultBox.innerHTML = `<div>Average over ride window: <b style="color:#fff">${UNITS.temp(avg).toFixed(1)} ${UNITS.tempUnit}</b> (${n} ${n === 1 ? "hour" : "hours"})${windSummary}</div><div class="calc-weather-hours">${cellsHtml}</div>`;
+    resultBox.innerHTML =
+      `<div class="cw-stats">` +
+        `<div class="cw-stat"><span>Ride window</span><b>${UNITS.temp(avg).toFixed(1)} ${UNITS.tempUnit}</b>` +
+        `<i>avg over ${n} ${n === 1 ? "hour" : "hours"}</i></div>` +
+        windSummary +
+      `</div><div class="calc-weather-hours">${cellsHtml}</div>`;
     resultBox.querySelectorAll(".wh-cell").forEach((el) => {
+      if (el.classList.contains("is-past")) return; // no planning in the past
       el.addEventListener("click", () => {
         const h = Number(el.dataset.hour);
         const startEl2 = document.getElementById("calc-weather-start");

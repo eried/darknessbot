@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=70" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=72" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -387,7 +387,11 @@
                     <div class="adv-grid">
                         <label><span>Free-spin GPS speed (km/h)</span>
                             <input type="number" id="anom-gps-thresh" min="0" max="20" step="0.5" value="2"
-                                title="Wheel speed > 5 km/h while GPS is below this counts as a free spin." />
+                                title="GPS below this, while the wheel spins faster than the free-spin wheel speed, counts as a free spin." />
+                        </label>
+                        <label><span>Free-spin wheel speed (km/h)</span>
+                            <input type="number" id="anom-freespin-spd" min="3" max="40" step="1" value="12"
+                                title="Wheel speed the motor must exceed before a GPS standstill counts as a free spin. Walking the wheel or an unlocked GPS sits near 5 to 8 km/h, so a low value flags ordinary ride starts." />
                         </label>
                         <label><span>Impossible accel (m/s²)</span>
                             <input type="number" id="anom-accel-thresh" min="3" max="15" step="0.5" value="6"
@@ -762,9 +766,9 @@
               </label>
               <label>
                 <span>Location</span>
-                <select id="calc-weather-loc">
+                <select id="calc-weather-loc" title="Which point the forecast is fetched for. &quot;Where you usually ride&quot; is the median centre of your trip locations.">
                   <option value="route" disabled>From picked route</option>
-                  <option value="recent" selected>Most-used trip area</option>
+                  <option value="recent" selected>Where you usually ride</option>
                   <option value="custom">Pick on map</option>
                 </select>
               </label>
@@ -797,6 +801,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=99"></script>
+    <script src="static/js/analytics.js?v=102"></script>
 </body>
 </html>

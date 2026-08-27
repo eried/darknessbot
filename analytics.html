@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=57" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=61" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -21,6 +21,12 @@
             <div class="tb-title">
                 <div id="page-name">Wheel Forensics</div>
                 <div id="page-subtitle">&hellip;</div>
+                <button type="button" id="scope-toggle" class="scope-toggle" title="Narrow the analyses to a sub-range of your history or one wheel.">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="3.5" cy="8" r="1.6"/><circle cx="12.5" cy="8" r="1.6"/><line x1="5.1" y1="8" x2="10.9" y2="8"/>
+                    </svg>
+                    <span id="scope-toggle-text">Scope</span>
+                </button>
             </div>
 
             <div class="tb-regions">
@@ -69,19 +75,13 @@
                             <span>Norm 20&nbsp;&deg;C <span class="info-icon" title="Subtracts the temperature effect from range so a cold month doesn't look like battery aging. Needs weather data loaded and at least 10 trips with both battery and ambient temp.">i</span></span>
                         </label>
                     </div>
-                    <button type="button" id="scope-toggle" class="scope-toggle" title="Narrow the analyses to a sub-range of your history or one wheel.">
-                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="3.5" cy="8" r="1.6"/><circle cx="12.5" cy="8" r="1.6"/><line x1="5.1" y1="8" x2="10.9" y2="8"/>
-                        </svg>
-                        <span id="scope-toggle-text">Scope</span>
-                    </button>
                 </div>
 
                 <!-- Weather region. -->
                 <div class="tb-region tb-weather">
                     <label class="tb-field tb-weather-src">
-                        <span>Source <span class="info-icon" title="Historical archive used when fetching. All keyless. ERA5 goes back decades (lags ~5 days), ERA5-Land is higher resolution over land, NASA POWER is an independent archive (lags about a week). Trips already loaded keep their values; the source applies to the next fetch.">i</span></span>
-                        <select id="weather-source-select">
+                        <span>Source</span>
+                        <select id="weather-source-select" title="Historical archive used when fetching. All keyless. ERA5 goes back decades (lags ~5 days), ERA5-Land is higher resolution over land, NASA POWER is an independent archive (lags about a week). Trips already loaded keep their values; the source applies to the next fetch.">
                             <option value="era5" selected>Open-Meteo ERA5</option>
                             <option value="era5_land">Open-Meteo ERA5-Land</option>
                             <option value="nasa_power">NASA POWER</option>
@@ -546,23 +546,36 @@
         <header class="calc-header">
           <span class="calc-tag">PLAN</span>
           <h3>Range calculator</h3>
+          <button type="button" id="calc-model-chip" class="calc-model-chip hidden" title="Model source. Click to change."></button>
+          <button type="button" id="calc-dna-import" class="calc-hicon" title="Choose the model: your trips or a saved Wheel DNA">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+          </button>
           <button type="button" id="calc-dna-export" class="calc-hicon" title="Export this wheel's range model (Wheel DNA) as .json">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
-          </button>
-          <button type="button" id="calc-dna-import" class="calc-hicon" title="Import a Wheel DNA .json (plan on another wheel's model)">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
           </button>
           <input type="file" id="calc-dna-file" class="hidden" accept=".json,application/json" />
           <button type="button" class="calc-close" data-calc-close aria-label="Close">&times;</button>
         </header>
+        <div id="calc-model-dialog" class="hidden">
+          <div class="cmd-backdrop" data-cmd-close></div>
+          <div class="cmd-panel">
+            <div class="cmd-title">Model source</div>
+            <button type="button" class="cmd-opt" id="cmd-trips">
+              <span class="cmd-name">Your trips</span>
+              <span class="cmd-sub" id="cmd-trips-sub">&hellip;</span>
+            </button>
+            <button type="button" class="cmd-opt" id="cmd-dna">
+              <span class="cmd-name">Saved Wheel DNA</span>
+              <span class="cmd-sub" id="cmd-dna-sub">Import a .dna.json&hellip;</span>
+            </button>
+            <div class="cmd-actions hidden" id="cmd-dna-actions">
+              <button type="button" class="cmd-link" id="cmd-dna-replace">Replace file&hellip;</button>
+              <button type="button" class="cmd-link cmd-danger" id="cmd-dna-forget">Forget</button>
+            </div>
+          </div>
+        </div>
         <div class="calc-body">
           <div class="calc-inputs">
-            <div class="calc-dna-row hidden" id="calc-dna-row">
-              <span class="calc-dna-label">Model</span>
-              <button type="button" class="calc-dna-opt on" id="calc-dna-trips">Your trips</button>
-              <button type="button" class="calc-dna-opt" id="calc-dna-imported"></button>
-              <button type="button" class="calc-dna-clear" id="calc-dna-clear" title="Forget the imported Wheel DNA">&times;</button>
-            </div>
             <label class="calc-row">
               <span class="calc-name">Remaining battery</span>
               <input type="range" id="calc-batt" min="5" max="100" step="1" value="100" />
@@ -630,7 +643,7 @@
             </div>
             <label class="calc-check">
               <input type="checkbox" id="calc-roundtrip" />
-              <span>Round trip <small>(same distance back, climb reversed)</small></span>
+              <span>Round trip <small>(same distance back, climb and wind reversed)</small></span>
             </label>
           </div>
           <div class="calc-results">
@@ -678,10 +691,9 @@
           </div>
           <p class="calc-foot">
             Bands are <b class="calc-pess">pessimistic</b> &middot; <b class="calc-neut">neutral</b> &middot; <b class="calc-opt">optimistic</b>,
-            from the multivariate range model fitted to your history: speed and speed&sup2;, temperature with an extra
-            cold penalty below 10&nbsp;&deg;C, climb, headwind and pack age, each term included once your data supports it.
+            from the range model fitted to your history: speed and speed&sup2;, temperature with an extra cold penalty
+            below 10&nbsp;&deg;C, climb, headwind and pack age, each term included once your data supports it.
             Speeds beyond your usual trip averages follow your measured in-ride cost-of-speed curve.
-            Pessimistic / optimistic come from the model&rsquo;s residual standard error.
           </p>
         </div>
         <div class="calc-subview hidden" id="calc-mapview">
@@ -775,6 +787,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=86"></script>
+    <script src="static/js/analytics.js?v=89"></script>
 </body>
 </html>

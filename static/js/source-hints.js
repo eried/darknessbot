@@ -1,7 +1,7 @@
 // "How to export from X" modal shown on the upload screen for euc.world and
 // DarknessBot. Dropbox is handled by the single Sync dialog that lives in
-// app.js (window.eucViewerOpenDropbox), so the whole app — upload screen and
-// viewer alike — shares one Dropbox UI instead of two parallel dialogs.
+// app.js (window.eucViewerOpenDropbox), so the whole app, upload screen and
+// viewer alike, shares one Dropbox UI instead of two parallel dialogs.
 (function () {
   "use strict";
 
@@ -57,7 +57,7 @@
     return `<div class="${cls}" role="dialog" aria-modal="true">${bodyHtml}</div>`;
   }
 
-  // Bookmarklet source — kept short. The real exporter is fetched at runtime
+  // Bookmarklet source, kept short. The real exporter is fetched at runtime
   // so iterating on the script doesn't force users to re-create their bookmark.
   function buildBookmarkletHref(scriptUrl) {
     const code = `(function(){var s=document.createElement('script');s.src=${JSON.stringify(scriptUrl)}+'?t='+Date.now();s.onerror=function(){alert('Could not load the exporter. Your browser may be blocking it.');};document.body.appendChild(s);})();`;

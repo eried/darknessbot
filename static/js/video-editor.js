@@ -152,7 +152,7 @@
     // (SEC) and NO row is dropped. The points array is tempting for its
     // full resolution, but the parser drops no-GPS rows from it, so a
     // wheel-off / no-GPS stretch that stays in the timeseries is missing
-    // from points — mapping points onto time then shifted everything after
+    // from points; mapping points onto time then shifted everything after
     // the gap (the reported ~20-min offset). Drive values off ts only, the
     // same source the inspector trusts.
     const ts = t.timeseries || [];
@@ -769,7 +769,7 @@
     if (!S) return 0;
     // Without footage the playhead scrubs the WHOLE trip (offset into the
     // render clock), exactly like the video case spans the whole clip. The
-    // trim only bounds what gets exported — it must not cage the playhead.
+    // trim only bounds what gets exported; it must not cage the playhead.
     return Math.max(0.1, Math.max(0, cfg.teleOffset) + S.dur);
   }
 
@@ -806,7 +806,7 @@
     if (hasVideo) videoEl.currentTime = curT;
     updatePlayhead(); updateTimeLabel(); requestDraw();
   }
-  // In / Out set the TRIP TRIM edges at the playhead — the same trim the
+  // In / Out set the TRIP TRIM edges at the playhead, the same trim the
   // handles drag, so there is one range, not a second marker. The trim is
   // telemetry time (tau = playhead - offset).
   function setTrimIn(t) {
@@ -839,7 +839,7 @@
     if (e.target.closest("input,select,textarea")) return;
     const k = e.key.toLowerCase();
     // Space always toggles play/pause, even when a transport button still
-    // holds focus — clicking Out must not turn the next Space into another
+    // holds focus; clicking Out must not turn the next Space into another
     // Out press. preventDefault swallows the focused button's activation.
     if (e.key === " ") { e.preventDefault(); setPlaying(!playing); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); setPlaying(false); setPlayhead(curT - (e.shiftKey ? 1 : FRAME)); }
@@ -1364,7 +1364,7 @@
       setStatus("ms-sync", "pick the full source recording (.lrv)");
       curT = 0;
       layoutTimeline(); drawTeleGraph(); buildThumbs(); requestDraw();
-      // A short clip on a long ride is unusable at fit zoom — frame it.
+      // A short clip on a long ride is unusable at fit zoom; frame it.
       frameVideo();
       toast(`Video loaded: ${(videoEl.duration || 0) > 0 ? fmtT(videoEl.duration) : "?"} at ${videoEl.videoWidth}x${videoEl.videoHeight}`);
       detectVideoFps().then((f) => {
@@ -1717,7 +1717,7 @@
   // The Render options depend on whether there's footage. With a video:
   // whole clip / trim on the footage / trim with chroma tails. Without
   // one, the output is a chroma-background render of the telemetry, so the
-  // choice is just how much of it — the trim (default) or the whole trip.
+  // choice is just how much of it: the trim (default) or the whole trip.
   function buildRangeOptions() {
     const sel = $("xp-range");
     const s1 = cfg.trimEnd == null ? S.dur : cfg.trimEnd;
@@ -1838,7 +1838,7 @@
 
     // Audio: keep the original. Decoding needs the whole file in memory,
     // so guard only the genuinely huge cases (a couple of GB / hours of
-    // 4K), which a browser tab can't hold — normal ride clips, long ones
+    // 4K), which a browser tab can't hold; normal ride clips, long ones
     // included, keep their sound. The reason is surfaced when skipped.
     let audioBuf = null;
     let audioSkip = "";

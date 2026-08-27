@@ -1,7 +1,7 @@
 (async function () {
   "use strict";
 
-  // Imperial unit toggle — drives display labels and converters everywhere
+  // Imperial unit toggle: drives display labels and converters everywhere
   // values are shown. Timezone-based: imperial only when the OS timezone is
   // in the US, US territories, Liberia or Myanmar. navigator.language is
   // unreliable because English Windows defaults to en-US worldwide.
@@ -210,7 +210,7 @@
     });
     if (typeof renderAll === "function") renderAll();
   }
-  // `renderAll` is a function declaration further down — it's hoisted into
+  // `renderAll` is a function declaration further down; it's hoisted into
   // this scope already, so applyTab/applyLayout above can reference it.
   (function initLayoutControls() {
     let saved = "tabs";
@@ -234,14 +234,14 @@
     });
   })();
 
-  // ---------- Load tracks (IndexedDB first — see CLAUDE.md) ----------
+  // ---------- Load tracks (IndexedDB first, see CLAUDE.md) ----------
   const DB_NAME = "eucplanet-trip-viewer";
   const RECENT_STORE_NAME = "recentFiles";
   const SESSION_STORE_NAME = "currentSession";
   const WEATHER_STORE_NAME = "weatherCache";
   const SESSION_KEY = "tracks";
 
-  // Same v3 schema as openRecentDb() in app.js — whichever page opens the DB
+  // Same v3 schema as openRecentDb() in app.js; whichever page opens the DB
   // first creates the weatherCache store; the upgrade blocks must match.
   let dbPromise = null;
   function openDb() {
@@ -437,7 +437,7 @@
       if (!isNaN(d.getTime())) return d;
     }
     if (t.date) {
-      // "DD.MM.YYYY" filename-derived date — same fallback app.js sorting uses.
+      // "DD.MM.YYYY" filename-derived date, same fallback app.js sorting uses.
       const parts = t.date.split(".");
       if (parts.length === 3) {
         const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
@@ -451,7 +451,7 @@
     if (t.stats && t.stats.distanceKm > 0) return t.stats.distanceKm;
     const ts = t.timeseries;
     if (!Array.isArray(ts) || ts.length < 2) return 0;
-    // Mileage odometer column if present, else integrate speed over time —
+    // Mileage odometer column if present, else integrate speed over time;
     // the same fallbacks loadTracks() in app.js applies for legacy tracks.
     if (ts[0].length > MILEAGE) {
       let last = 0;
@@ -467,7 +467,7 @@
     return Math.round(running * 100) / 100;
   }
 
-  // Some EUC loggers keep writing samples after the wheel powers off — the
+  // Some EUC loggers keep writing samples after the wheel powers off; the
   // voltage column snaps to a constant low value (e.g. 13.1 V) and the
   // battery % freezes at whatever it last saw, while real samples sit safely
   // above 60 V for any pack still in use. Find the last "alive" index so
@@ -516,7 +516,7 @@
       const g = ts[i][GPSSPD];
       const prevG = ts[i - 1][GPSSPD];
       // Free spin detection requires GPS data to be present (>0 on either
-      // side of the window — otherwise we'd flag wheels parked indoors).
+      // side of the window; otherwise we'd flag wheels parked indoors).
       const hasGps = (typeof g === "number" && g > 0.3) || (typeof prevG === "number" && prevG > 0.3);
       if (hasGps && w > 5 && typeof g === "number" && g < gpsThresh) {
         flags[i] = true;
@@ -531,7 +531,7 @@
       // Phantom-speed check: a wheel reading 25+ km/h while the motor was
       // completely idle is physics-impossible. A real EUC at that speed
       // pulls amps. Loggers entering shutdown often emit phantom speed
-      // values with current = 0 / power = 0 — this catches them even
+      // values with current = 0 / power = 0; this catches them even
       // when the GPS column was already corrupted (so the regular
       // free-spin check would have missed them).
       if (w >= 25) {
@@ -594,7 +594,7 @@
         if (cur >= motorActiveA || pwr >= motorActiveW) preWorked++;
       }
       // Logger-glitch: nothing in the surrounding ±8 sample window was
-      // actually driving the wheel — current and power were both flat.
+      // actually driving the wheel: current and power were both flat.
       // This is a cascade of phantom readings, not a rider event.
       let surroundingWorked = false;
       for (let k = Math.max(0, startI - 8); k <= Math.min(ts.length - 1, endI + 8); k++) {
@@ -925,7 +925,7 @@
       if ((row[VOLT] || 0) !== 0) hasVolt = true;
       if ((row[CURRENT] || 0) !== 0) hasCurrent = true;
     }
-    // Detect "stuck current sensor" — runs of 8+ consecutive identical
+    // Detect "stuck current sensor": runs of 8+ consecutive identical
     // non-zero current readings while the wheel is moving. Real motor
     // current varies sample-to-sample from balance pulses + road texture;
     // a flat-line stretch like that is the logger freezing, not real regen.
@@ -958,8 +958,8 @@
       let wh = 0, drive = 0, regen = 0;
       for (let i = 1; i < ts.length; i++) {
         const dtSec = Math.max(0, ts[i][SEC] - ts[i - 1][SEC]);
-        if (dtSec === 0 || dtSec > 300) continue; // gap in the log — skip
-        if (stuck.has(i) || stuck.has(i - 1)) continue; // sensor frozen — discard
+        if (dtSec === 0 || dtSec > 300) continue; // gap in the log, skip
+        if (stuck.has(i) || stuck.has(i - 1)) continue; // sensor frozen, discard
         const pNow = hasPower ? (ts[i][POWER] || 0) : (ts[i][VOLT] || 0) * (ts[i][CURRENT] || 0);
         const pPrev = hasPower ? (ts[i - 1][POWER] || 0) : (ts[i - 1][VOLT] || 0) * (ts[i - 1][CURRENT] || 0);
         wh += ((pNow + pPrev) / 2) * dtSec / 3600;
@@ -1032,7 +1032,7 @@
     // Internal-resistance proxy via the delta method: regress dV vs dI over
     // short timesteps so SoC drift across the trip cancels out (each pair only
     // spans ~1-2 seconds). Only sample pairs with a meaningful load step
-    // contribute — small noise around steady cruising adds variance without
+    // contribute; small noise around steady cruising adds variance without
     // information. -slope is the effective IR (positive = ohms).
     if (hasVolt && hasCurrent) {
       const dXs = [], dYs = [];
@@ -1338,7 +1338,7 @@
       }
     }
 
-    // GPS centroid rounded to 0.1° (~11 km) — coarse on purpose, both for
+    // GPS centroid rounded to 0.1° (~11 km); coarse on purpose, both for
     // weather-cache hits and so precise locations never leave the browser.
     let latSum = 0, lonSum = 0, gpsCnt = 0;
     let fLat = null, fLon = null, lLat = null, lLon = null;
@@ -1647,7 +1647,7 @@
     // Skip the implausible (driver was wearing a fresh pack from another wheel?)
     if (gain > 100) continue;
     charges.push({
-      // The charge happened between prev and cur — attribute it to cur's date.
+      // The charge happened between prev and cur; attribute it to cur's date.
       date: cur.date,
       from: prev.battEnd,
       to: cur.battStart,
@@ -1764,7 +1764,7 @@
   }
 
   // Per-bin robust summary of one metric: distance-weighted median + IQR.
-  // `minN` drops bins that don't have enough samples to be trustworthy — single
+  // `minN` drops bins that don't have enough samples to be trustworthy; single
   // unusual trips otherwise create huge whipsaw spikes in the trend.
   function binStats(bins, getter, minN) {
     if (minN == null) minN = 1;
@@ -1951,7 +1951,7 @@
   //   - obtainable  = trips with GPS + date AND old enough for the archive
   //   - unobtainable= trips after the ~6-day ERA5 cutoff or with no GPS
   // The button only stays enabled when there are still OBTAINABLE missing
-  // trips — so a recent-rides-only mismatch doesn't make the button spin
+  // trips, so a recent-rides-only mismatch doesn't make the button spin
   // forever after every reload.
   // ERA5 archive lag is ~5 days; we keep a 6-day safety margin to match
   // the same cutoff fetchWeather() applies when picking the end_date.
@@ -2019,7 +2019,7 @@
       weatherBtn.textContent = "Add weather for " + missing + " more";
       weatherBtn.disabled = false;
       const extras = [];
-      if (tooRecent) extras.push(tooRecent + " from the last few days — Open-Meteo archive lags ~5 days");
+      if (tooRecent) extras.push(tooRecent + " from the last few days; Open-Meteo archive lags ~5 days");
       if (noGps) extras.push(noGps + " without GPS");
       if (failedClusters) extras.push(failedClusters + " location" + (failedClusters > 1 ? "s" : "") + " failed to fetch");
       setWeatherStatus(covered + " of " + dated.length + " trips ready", extras);
@@ -2028,7 +2028,7 @@
       weatherBtn.title = "Weather added for " + covered + " of " + dated.length + " trips";
       weatherBtn.disabled = true;
       const extras = [];
-      if (tooRecent) extras.push(tooRecent + " from the last few days — Open-Meteo archive lags ~5 days");
+      if (tooRecent) extras.push(tooRecent + " from the last few days; Open-Meteo archive lags ~5 days");
       if (noGps) extras.push(noGps + " without GPS");
       setWeatherStatus("", extras);
     }
@@ -2302,7 +2302,7 @@
       }
     }
 
-    // X labels — thin to at most ~8.
+    // X labels: thin to at most ~8.
     ctx.fillStyle = AXIS_COLOR;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -2445,7 +2445,7 @@
       ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + ch); ctx.stroke();
     }
     ctx.strokeStyle = GRID_COLOR;
-    // The x-axis title sits on the same line at the right edge — skip tick
+    // The x-axis title sits on the same line at the right edge; skip tick
     // labels that would collide with it.
     const xTitleW = ctx.measureText(opts.xLabel).width;
     for (const tv of xMajor) {
@@ -3012,7 +3012,7 @@
 
     // Temperature sensitivity. Same source the Range tab uses (multivariate
     // when available, univariate fallback) so both places quote one number,
-    // and bounded to the ambient range actually ridden — the slope says
+    // and bounded to the ambient range actually ridden; the slope says
     // nothing about temperatures outside it.
     const tempSlopeKm = multiFit ? multiFit.tempSlope : (tempFit ? tempFit.slope : null);
     if (tempSlopeKm != null) {
@@ -3031,7 +3031,7 @@
               (multiFit ? ` (speed and climb factored out).` : `.`),
       });
     }
-    // Speed sensitivity (multivariate slope — isolated effect). A positive
+    // Speed sensitivity (multivariate slope, isolated effect). A positive
     // slope is trip mix, not physics: faster trip averages mean less time
     // in the expensive crawl zone. Bound the claim to the trip averages the
     // fit actually saw and point at the in-ride curve for what lies beyond.
@@ -3087,7 +3087,7 @@
     }
     // Model sanity check at the user's own MEDIAN conditions, with the
     // residual band. The old version predicted an idealized "25 km/h,
-    // 20 °C, flat" ride — every factor more favorable than any real trip,
+    // 20 °C, flat" ride: every factor more favorable than any real trip,
     // so the number always beat the Range chart and read as nonsense.
     // Predicting at median conditions must land near the observed median;
     // showing both makes the model audit itself.
@@ -3114,7 +3114,7 @@
           html: `Range model check: at your median conditions (<i>${conds}</i>) it predicts ` +
                 `<b>${UNITS.dist(predKm).toFixed(0)} ± ${UNITS.dist(sigma).toFixed(0)} ${UNITS.distUnit}</b>, ` +
                 `and your trips actually delivered a median of <b>${UNITS.dist(obsMed).toFixed(0)} ${UNITS.distUnit}</b>` +
-                (agree ? `.` : ` — outside the band, so treat the model's slopes with care.`) + tag,
+                (agree ? `.` : `; outside the band, so treat the model's slopes with care.`) + tag,
         });
       }
     }
@@ -3503,7 +3503,7 @@
       ctx.moveTo(x, yAt(c.from));
       ctx.lineTo(x, yAt(c.to));
       ctx.stroke();
-      // Endpoint dots — small at start, larger at end so it reads as
+      // Endpoint dots: small at start, larger at end so it reads as
       // "charged FROM here UP TO there".
       ctx.fillStyle = ctx.strokeStyle;
       ctx.beginPath(); ctx.arc(x, yAt(c.from), 1.6, 0, Math.PI * 2); ctx.fill();
@@ -3559,7 +3559,7 @@
     if (!canvas._scatterMap) return;
     const { xAt, yAt, xMin, xMax } = canvas._scatterMap;
     // The context is still carrying setupCanvas's dpr scale from the
-    // drawScatter call, and xAt/yAt are CSS-pixel mappers — draw directly.
+    // drawScatter call, and xAt/yAt are CSS-pixel mappers; draw directly.
     // (An extra ctx.scale(dpr, dpr) here once made everything dpr²: fine at
     // dpr 1, giant legend + offscreen fit lines on phones.)
     const ctx = canvas.getContext("2d");
@@ -3630,7 +3630,7 @@
       ctx.restore();
     }
   }
-  // Range vs ambient — only shown when weather is loaded.
+  // Range vs ambient, only shown when weather is loaded.
   function drawRangeTempScatter(canvas) {
     const pts = [];
     for (const m of dated) {
@@ -4105,9 +4105,67 @@
   function calcClimbM(c)  { return UNITS.imperial ? c / 3.28084  : c; }
   function calcSpeedKmh(s){ return UNITS.imperial ? s / 0.621371 : s; }
   function calcTempC(t)   { return UNITS.imperial ? (t - 32) * 5 / 9 : t; }
+  // Per-leg conditions. With a locked forecast, each leg samples the hourly
+  // grid over its own time window (quarter-hour steps, hours clamped to the
+  // fetched day) and projects the vector-averaged wind on that leg's bearing;
+  // the return leg uses the reversed bearing and the later window. Without a
+  // lock the sliders rule and the return leg simply flips the headwind sign.
+  function forecastLegConditions(timeH, tFallback, wFallback) {
+    const lock = weatherLocked;
+    if (!lock || !lock.cells || !lock.cells.length || lock.startMin == null) {
+      return { tA: tFallback, wA: wFallback, tB: tFallback, wB: -wFallback };
+    }
+    const durMin = Math.max(1, timeH * 60);
+    const byHour = {};
+    let hMin = 24, hMax = -1;
+    for (const c of lock.cells) {
+      byHour[c.h] = c;
+      if (c.h < hMin) hMin = c.h;
+      if (c.h > hMax) hMax = c.h;
+    }
+    const sample = (fromMin, toMin, bearingDeg) => {
+      let tSum = 0, n = 0, wU = 0, wV = 0, wN = 0;
+      for (let m = fromMin; m < toMin; m += 15) {
+        let h = Math.floor(m / 60);
+        if (h < hMin) h = hMin;
+        if (h > hMax) h = hMax;
+        const c = byHour[h];
+        if (!c) continue;
+        tSum += c.t; n++;
+        if (c.w != null && c.wd != null) {
+          const th = c.wd * Math.PI / 180;
+          wU += c.w * Math.sin(th); wV += c.w * Math.cos(th); wN++;
+        }
+      }
+      let head = null;
+      if (bearingDeg != null && wN) {
+        const bR = bearingDeg * Math.PI / 180;
+        head = (wU / wN) * Math.sin(bR) + (wV / wN) * Math.cos(bR);
+      }
+      return { t: n ? tSum / n : null, w: head };
+    };
+    const a = sample(lock.startMin, lock.startMin + durMin, lock.bearingDeg);
+    const backBearing = lock.bearingDeg != null ? (lock.bearingDeg + 180) % 360 : null;
+    const b = sample(lock.startMin + durMin, lock.startMin + 2 * durMin, backBearing);
+    return {
+      tA: a.t != null ? a.t : tFallback,
+      wA: a.w != null ? a.w : wFallback,
+      tB: b.t != null ? b.t : tFallback,
+      wB: b.w != null ? b.w : (a.w != null ? -a.w : -wFallback),
+    };
+  }
   function updateCalculator(srcEvt) {
     const fitA = activeFit();
-    if (!calcEls.modal || !fitA) return;
+    if (!calcEls.modal) return;
+    if (!fitA) {
+      // No model at all; the modal still opens so Import DNA stays reachable.
+      calcEls.verdict.className = "calc-verdict";
+      calcEls.verdict.textContent = "No range model yet. Load a saved Wheel DNA (arrow icon in the title bar), or add weather data so your trips can train one.";
+      calcEls.battUse.textContent = "—";
+      calcEls.battArr.textContent = "—";
+      calcEls.time.textContent = "—";
+      return;
+    }
     const B = Number(calcEls.batt.value);
     let dDisp = Number(calcEls.dist.value);
     const sDisp = Number(calcEls.speed.value);
@@ -4134,7 +4192,7 @@
     const maxOptKm = Math.max(2, (B / 100) * Math.max(0.5, rangeOptKm));
     const newMaxDisp = Math.max(5, Math.ceil(UNITS.dist(maxOptKm) * 1.15));
     const srcId = srcEvt && srcEvt.target && srcEvt.target.id;
-    // Don't move the ceiling while the user is dragging the distance slider —
+    // Don't move the ceiling while the user is dragging the distance slider;
     // that would force the thumb to jump under their finger. Also leave the
     // slider alone when a route lock pinned it to a real-world distance.
     if (srcId !== "calc-dist" && !routeLocked) {
@@ -4158,7 +4216,9 @@
     if (calcEls.windOut) calcEls.windOut.textContent = `${wDisp > 0 ? "+" : ""}${wDisp} ${UNITS.imperial ? "mph" : "m/s"}`;
 
     const sigma = calcModelSigmaKm();
-    const legA = calcLegBatt(distKm, sKmh, tC, climbMperKm, sigma, windMs);
+    const timeH = sKmh > 0 ? distKm / sKmh : 0;
+    const legCond = forecastLegConditions(timeH, tC, windMs);
+    const legA = calcLegBatt(distKm, sKmh, legCond.tA, climbMperKm, sigma, legCond.wA);
     if (!legA) { calcEls.verdict.textContent = "Model not ready."; return; }
     const fmtDur = (h) => {
       if (!isFinite(h) || h <= 0) return "—";
@@ -4167,7 +4227,6 @@
       const mm = totalMin % 60;
       return hh > 0 ? `${hh}h ${String(mm).padStart(2, "0")}m` : `${mm} min`;
     };
-    const timeH = sKmh > 0 ? distKm / sKmh : 0;
     calcEls.time.textContent = fmtDur(timeH);
     calcEls.battUse.innerHTML = calcFmtBand(legA.battPess, legA.battNeut, legA.battOpt, " %");
     const arrPess = B - legA.battPess;
@@ -4177,8 +4236,9 @@
 
     let totalPess = legA.battPess, totalNeut = legA.battNeut, totalOpt = legA.battOpt;
     if (calcEls.roundtrip.checked) {
-      // Return leg: climb reverses and so does the wind.
-      const legB = calcLegBatt(distKm, sKmh, tC, -climbMperKm, sigma, -windMs);
+      // Return leg: reversed climb; temperature and wind come from the return
+      // window and bearing when a forecast is locked, else the wind sign flips.
+      const legB = calcLegBatt(distKm, sKmh, legCond.tB, -climbMperKm, sigma, legCond.wB);
       calcEls.legBack.classList.remove("hidden");
       if (legB) {
         calcEls.timeTotal.textContent = fmtDur(timeH * 2);
@@ -4195,7 +4255,7 @@
     const arrTotalPess = B - totalPess;
     let cls = "", msg = "";
     if (arrTotalPess >= 25) {
-      msg = `You'll make it with margin to spare &mdash; <b>${arrTotalPess.toFixed(0)}%</b> left in the pessimistic case.`;
+      msg = `You'll make it with margin to spare: <b>${arrTotalPess.toFixed(0)}%</b> left in the pessimistic case.`;
     } else if (arrTotalPess >= 10) {
       cls = "warn";
       msg = `Tight: pessimistic arrival is only <b>${arrTotalPess.toFixed(0)}%</b>. Slower speed or a flatter route helps.`;
@@ -4204,7 +4264,7 @@
       msg = `Very thin margin: pessimistic arrival is <b>${arrTotalPess.toFixed(0)}%</b>.`;
     } else {
       cls = "bad";
-      msg = `Won't make it in the pessimistic case &mdash; short by <b>${Math.abs(arrTotalPess).toFixed(0)}%</b>. ` +
+      msg = `Won't make it in the pessimistic case: short by <b>${Math.abs(arrTotalPess).toFixed(0)}%</b>. ` +
             `Neutral needs <b>${totalNeut.toFixed(0)}%</b> vs your <b>${B}%</b> on hand.`;
     }
     calcEls.verdict.className = "calc-verdict" + (cls ? " " + cls : "");
@@ -4833,7 +4893,7 @@
       const eJ = await eR.json();
       const elevs = Array.isArray(eJ.elevation) ? eJ.elevation : [];
       // Compute cumulative km along the sampled polyline + ascent / descent.
-      // Defensive against null/undefined entries — Open-Meteo can return
+      // Defensive against null/undefined entries; Open-Meteo can return
       // nulls over water or for invalid points, which would poison the sum
       // with NaN. We track the last valid altitude and skip gaps.
       let asc = 0, des = 0;
@@ -5234,9 +5294,28 @@
       const cls = ["wh-cell"];
       if (c.inRide) cls.push("in-ride");
       if (c.h === sh) cls.push("is-start");
-      return `<div class="${cls.join(" ")}" data-hour="${c.h}" title="Set start time to ${String(c.h).padStart(2, "0")}:00"><div>${String(c.h).padStart(2, "0")}h</div><div>${UNITS.temp(c.t).toFixed(0)}${UNITS.tempUnit}</div></div>`;
+      // Wind mini-line: arrow points where the wind blows TO (met direction
+      // is where it comes from, so rotate 180), value in m/s.
+      const windLine = (c.w != null && c.wd != null)
+        ? `<div class="wh-wind"><span class="wh-wind-arrow" style="transform:rotate(${Math.round((c.wd + 180) % 360)}deg)">&uarr;</span>${c.w.toFixed(0)}</div>`
+        : "";
+      return `<div class="${cls.join(" ")}" data-hour="${c.h}" title="Set start time to ${String(c.h).padStart(2, "0")}:00"><div>${String(c.h).padStart(2, "0")}h</div><div>${UNITS.temp(c.t).toFixed(0)}${UNITS.tempUnit}</div>${windLine}</div>`;
     }).join("");
-    resultBox.innerHTML = `<div>Average over ride window: <b style="color:#fff">${UNITS.temp(avg).toFixed(1)} ${UNITS.tempUnit}</b> (${n} ${n === 1 ? "hour" : "hours"})</div><div class="calc-weather-hours">${cellsHtml}</div>`;
+    // Wind summary: magnitude of the vector average; when a route gives us a
+    // bearing, also say how much of it is head or tail wind.
+    let windSummary = "";
+    if (wN) {
+      const mag = Math.hypot(wU / wN, wV / wN);
+      const bearingDeg2 = routeBearingDeg();
+      if (bearingDeg2 != null) {
+        const bR2 = bearingDeg2 * Math.PI / 180;
+        const hw = (wU / wN) * Math.sin(bR2) + (wV / wN) * Math.cos(bR2);
+        windSummary = ` · wind ${mag.toFixed(1)} m/s (${hw >= 0 ? "head" : "tail"} ${Math.abs(hw).toFixed(1)})`;
+      } else {
+        windSummary = ` · wind ${mag.toFixed(1)} m/s (pick a route to aim it)`;
+      }
+    }
+    resultBox.innerHTML = `<div>Average over ride window: <b style="color:#fff">${UNITS.temp(avg).toFixed(1)} ${UNITS.tempUnit}</b> (${n} ${n === 1 ? "hour" : "hours"})${windSummary}</div><div class="calc-weather-hours">${cellsHtml}</div>`;
     resultBox.querySelectorAll(".wh-cell").forEach((el) => {
       el.addEventListener("click", () => {
         const h = Number(el.dataset.hour);
@@ -5251,6 +5330,14 @@
   function applyWeather() {
     if (!pendingWeather) return;
     weatherLocked = { ...pendingWeather };
+    // Keep the hourly grid, start time and route bearing so the calculator
+    // can re-derive each leg's temperature and headwind from the actual ride
+    // windows (the return leg of a round trip happens later and the other way).
+    const startEl0 = document.getElementById("calc-weather-start");
+    const parts = (startEl0 && startEl0.value ? startEl0.value : "12:00").split(":").map(Number);
+    weatherLocked.startMin = (parts[0] || 0) * 60 + (parts[1] || 0);
+    weatherLocked.cells = lastForecastCells ? lastForecastCells.slice() : null;
+    weatherLocked.bearingDeg = routeBearingDeg();
     const tDisp = Math.round(UNITS.temp(weatherLocked.ambientC));
     calcEls.temp.min = String(Math.min(Number(calcEls.temp.min), tDisp - 5));
     calcEls.temp.max = String(Math.max(Number(calcEls.temp.max), tDisp + 5));
@@ -5288,13 +5375,13 @@
         : `Plan a ride with the range model fitted from ${fit.n} of your rides.`;
       wireCalculator();
     } else {
-      // Keep the button visible so the user knows the feature exists, but
-      // disable it and explain the *actual* blocker. The fit needs ambient
-      // temperature, which only exists once weather is loaded, so lead with
-      // that instead of a bare trip count that looks like "just ride more"
-      // (and never changes when you pick a wheel that lacks weather).
+      // No trips-based model, but the calculator still opens: the Model row
+      // inside offers "Import DNA", so planning on another wheel's file works
+      // with zero usable trips. The title explains what a trips model needs
+      // (ambient temperature is the usual blocker, so weather leads).
       calcEls.btn.classList.remove("hidden");
-      calcEls.btn.setAttribute("disabled", "");
+      calcEls.btn.removeAttribute("disabled");
+      wireCalculator();
       const needed = 20;
       const hasRangeClimb = (m) => m.estRangeKm != null && m.avgMovingSpeed != null
         && m.avgMovingSpeed > 5 && m.climbM != null && m.distKm >= 2;
@@ -5302,11 +5389,10 @@
       const have = dated.filter((m) => hasRangeClimb(m) && m.ambientC != null).length;
       const anyAmbient = dated.some((m) => m.ambientC != null);
       if (!anyAmbient) {
-        calcEls.btn.title = `Range calculator needs weather. Click "Add weather data" in the top bar so trips get an ambient temperature — then it unlocks once ${needed} rides have range + speed + climb + ambient (this scope has ${withoutAmbient} with range + speed + climb so far).`;
+        calcEls.btn.title = `No trips model yet: click "Add weather data" so rides get an ambient temperature, it unlocks at ${needed} rides with range + speed + climb + ambient (this scope has ${withoutAmbient} with range + speed + climb). You can also import a Wheel DNA .json inside.`;
       } else {
-        calcEls.btn.title = `Range calculator unavailable: ${have} of the ${needed} rides it needs have range + speed + ambient + climb data in this scope.` + (have < needed ? ` Need ${needed - have} more (add weather to trips missing ambient, or widen the scope).` : "");
+        calcEls.btn.title = `No trips model yet: ${have} of the ${needed} rides it needs have range + speed + ambient + climb in this scope. You can also import a Wheel DNA .json inside.`;
       }
-      if (calcEls.modal) calcEls.modal.classList.add("hidden");
     }
   }
 
@@ -5336,37 +5422,35 @@
     };
   }
   function syncDnaUi() {
+    // Model-source state: a chip in the calc title bar shows when an imported
+    // DNA drives the model; the load icon opens the chooser dialog whose two
+    // options (your trips / saved DNA) this keeps up to date.
     const expBtn = document.getElementById("calc-dna-export");
     if (expBtn) expBtn.disabled = !multiFit;
-    const row = document.getElementById("calc-dna-row");
-    if (!row) return;
-    // Row always shows so the feature is discoverable; with nothing imported
-    // the second chip is a dashed "Import DNA" that opens the file picker.
-    row.classList.remove("hidden");
-    const tripsBtn = document.getElementById("calc-dna-trips");
-    const impBtn = document.getElementById("calc-dna-imported");
-    const clearBtn = document.getElementById("calc-dna-clear");
-    if (!importedDna) {
-      dnaActive = false;
-      tripsBtn.disabled = false;
-      tripsBtn.classList.add("on");
-      tripsBtn.title = "Model fitted from your own trips";
-      impBtn.classList.remove("on");
-      impBtn.classList.add("ghost");
-      impBtn.textContent = "Import DNA…";
-      impBtn.title = "Import another wheel's exported Wheel DNA .json to plan on its model";
-      if (clearBtn) clearBtn.classList.add("hidden");
-      return;
+    if (!importedDna) dnaActive = false;
+    else if (!multiFit) dnaActive = true; // nothing to fall back to
+    const chip = document.getElementById("calc-model-chip");
+    if (chip) {
+      const showChip = dnaActive && importedDna;
+      chip.classList.toggle("hidden", !showChip);
+      if (showChip) chip.textContent = "\u{1F9EC} " + (importedDna.wheel || "Imported");
     }
-    if (!multiFit) dnaActive = true; // nothing to fall back to
+    const tripsBtn = document.getElementById("cmd-trips");
+    if (!tripsBtn) return;
+    const tripsSub = document.getElementById("cmd-trips-sub");
+    const dnaBtn = document.getElementById("cmd-dna");
+    const dnaSub = document.getElementById("cmd-dna-sub");
+    const acts = document.getElementById("cmd-dna-actions");
     tripsBtn.disabled = !multiFit;
-    tripsBtn.title = multiFit ? "Use the model fitted from your own trips" : "Not enough usable trips in this scope for a trips-based model";
-    tripsBtn.classList.toggle("on", !dnaActive);
-    impBtn.classList.remove("ghost");
-    impBtn.classList.toggle("on", dnaActive);
-    impBtn.textContent = "\u{1F9EC} " + (importedDna.wheel || "Imported");
-    impBtn.title = `Wheel DNA: ${importedDna.wheel || "?"} · ${importedDna.totalKm != null ? importedDna.totalKm : "?"} km · ${importedDna.trips != null ? importedDna.trips : "?"} trips · exported ${importedDna.generated || "?"}`;
-    if (clearBtn) clearBtn.classList.remove("hidden");
+    tripsBtn.classList.toggle("on", !!multiFit && !dnaActive);
+    tripsSub.textContent = multiFit
+      ? `Fitted from ${multiFit.n} of your rides${!dnaActive ? " · active" : ""}`
+      : "Not enough usable rides in this scope yet";
+    dnaBtn.classList.toggle("on", !!importedDna && dnaActive);
+    dnaSub.textContent = importedDna
+      ? `\u{1F9EC} ${importedDna.wheel || "?"} · ${importedDna.totalKm != null ? importedDna.totalKm : "?"} km · ${importedDna.generated || "?"}${dnaActive ? " · active" : ""}`
+      : "Import a saved .dna.json…";
+    if (acts) acts.classList.toggle("hidden", !importedDna);
   }
   function persistDna() {
     try {
@@ -5398,8 +5482,16 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     });
-    if (impBtn && fileEl) {
-      impBtn.addEventListener("click", () => fileEl.click());
+    // The load icon (and the header chip) open a small chooser: your trips
+    // vs a saved Wheel DNA. Importing a file happens from inside it.
+    const dlg = document.getElementById("calc-model-dialog");
+    const openDlg = () => { syncDnaUi(); if (dlg) dlg.classList.remove("hidden"); };
+    const closeDlg = () => { if (dlg) dlg.classList.add("hidden"); };
+    if (impBtn) impBtn.addEventListener("click", openDlg);
+    const chip = document.getElementById("calc-model-chip");
+    if (chip) chip.addEventListener("click", openDlg);
+    if (dlg) dlg.querySelectorAll("[data-cmd-close]").forEach((el) => el.addEventListener("click", closeDlg));
+    if (fileEl) {
       fileEl.addEventListener("change", () => {
         const f = fileEl.files && fileEl.files[0];
         fileEl.value = "";
@@ -5417,6 +5509,7 @@
             refreshCalcButton();
             calcSetSliderRanges();
             updateCalculator();
+            closeDlg();
           } catch (_) { alert("That doesn't look like a Wheel DNA file."); }
         };
         rd.readAsText(f);
@@ -5429,18 +5522,23 @@
       calcSetSliderRanges();
       updateCalculator();
     };
-    const tripsBtn = document.getElementById("calc-dna-trips");
-    const impSel = document.getElementById("calc-dna-imported");
-    const clearBtn = document.getElementById("calc-dna-clear");
-    if (tripsBtn) tripsBtn.addEventListener("click", () => setActive(false));
-    if (impSel) impSel.addEventListener("click", () => {
-      // No DNA yet: the chip doubles as the import entry point.
-      if (!importedDna) { if (fileEl) fileEl.click(); return; }
-      setActive(true);
-    });
-    if (clearBtn) clearBtn.addEventListener("click", () => {
-      importedDna = null;
+    const tripsOpt = document.getElementById("cmd-trips");
+    const dnaOpt = document.getElementById("cmd-dna");
+    const replaceBtn = document.getElementById("cmd-dna-replace");
+    const forgetBtn = document.getElementById("cmd-dna-forget");
+    if (tripsOpt) tripsOpt.addEventListener("click", () => {
+      if (!multiFit) return;
       setActive(false);
+      closeDlg();
+    });
+    if (dnaOpt) dnaOpt.addEventListener("click", () => {
+      if (importedDna) { setActive(true); closeDlg(); return; }
+      if (fileEl) fileEl.click();
+    });
+    if (replaceBtn) replaceBtn.addEventListener("click", () => { if (fileEl) fileEl.click(); });
+    if (forgetBtn) forgetBtn.addEventListener("click", () => {
+      importedDna = null;
+      setActive(false); // syncDnaUi refreshes the dialog rows, stays open
     });
   })();
 
@@ -5545,7 +5643,7 @@
         // Range vs avg riding speed. The chart's dashed yellow line is the
         // univariate fit (what the eye sees), but the takeaway reports the
         // multivariate slope (the conditional effect, holding temp+climb
-        // constant) — that's the one with the right sign and magnitude.
+        // constant); that's the one with the right sign and magnitude.
         drawRangeSpeedScatter(document.getElementById("chart-range-speed"));
         const speedCostRows = computeSpeedCostRows();
         const speedSlopeKm = multiFit ? multiFit.speedSlope : (speedFit ? speedFit.slope : null);
@@ -6217,7 +6315,7 @@
           }
           // Find a peak-regen trip to make the chart memorable. The trip name
           // itself becomes the link so the line still reads like a report
-          // sentence — no "view →" suffix.
+          // sentence, no "view →" suffix.
           const sortedByPct = tripsWithRegen.slice().sort((a, b) => b.regenPct - a.regenPct);
           const topTrip = sortedByPct[0];
           if (topTrip && topTrip.regenPct >= 10) {
@@ -6449,7 +6547,7 @@
           stats: irStats,
           color: COLORS.ohmIR, label: "Effective IR", unit: "mΩ", band: true, dp: 0,
         }];
-        // Let the y-axis fit the actual data range — IR sits around 180 mΩ,
+        // Let the y-axis fit the actual data range; IR sits around 180 mΩ,
         // forcing the axis to zero compressed the variation into the top sliver.
         drawTrendChart(document.getElementById("chart-health"), bins, series, { rolling });
         meta.textContent = usable + " trips";

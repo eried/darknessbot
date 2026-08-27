@@ -1,7 +1,7 @@
 (async function () {
   "use strict";
 
-  // Imperial unit toggle — drives display labels and converters everywhere
+  // Imperial unit toggle: drives display labels and converters everywhere
   // values are shown. Timezone-based: imperial only when the OS timezone is
   // in the US, US territories, Liberia or Myanmar. navigator.language is
   // unreliable because English Windows defaults to en-US worldwide.
@@ -120,12 +120,12 @@
   // Timeseries layout: [sec, speed, voltage, temp, battery, altitude, lat, lon, mileageKm,
   //                     pwm, current, power, gpsSpeed, gForce, gForceX, gForceY,
   //                     torque, phaseCurrent]
-  // Indices 12-17 are absent on legacy cached tracks — always guard for undefined.
+  // Indices 12-17 are absent on legacy cached tracks; always guard for undefined.
   const SEC = 0, SPD = 1, VOLT = 2, TEMP = 3, BATT = 4, ALT = 5, LAT = 6, LON = 7, MILEAGE = 8;
   const PWM = 9, CURRENT = 10, POWER = 11;
   const GPSSPD = 12, GFORCE = 13, GFORCEX = 14, GFORCEY = 15;
   const TORQUE = 16, PHASE = 17; // EUC Planet 0.19+; 0/absent on wheels that don't report
-  // Derived (computed below) — spare columns for the "… avg" extra graphs and
+  // Derived (computed below): spare columns for the "… avg" extra graphs and
   // the synthesized state-of-charge series.
   const SPEEDAVG = 18, BATTERYAVG = 19, CURRENTAVG = 20, PWMAVG = 21, SOC = 22;
   // Points layout: [lat, lon, speed, alt, volt, temp, battery, pwm, current, power, gpsSpeed]
@@ -219,7 +219,7 @@
 
   // The zoom window IS the playback section. viewT0/viewT1 are seconds
   // from trip start. When viewT0 > 0 or viewT1 < duration we say the trip
-  // is "zoomed" — Play snaps the playhead into the window and loopOn
+  // is "zoomed": Play snaps the playhead into the window and loopOn
   // wraps it back to viewT0 when it crosses viewT1.
   let viewT0 = 0;
   let viewT1 = duration;
@@ -549,7 +549,7 @@
     const f = t * n - seg, a = stops[seg], b = stops[seg + 1];
     return "rgb(" + Math.round(a[0] + (b[0] - a[0]) * f) + "," + Math.round(a[1] + (b[1] - a[1]) * f) + "," + Math.round(a[2] + (b[2] - a[2]) * f) + ")";
   }
-  // Palette selector — shared with the viewer via dbb_trace_palette. "default"
+  // Palette selector, shared with the viewer via dbb_trace_palette. "default"
   // keeps each metric's own ramp; "reverse" flips it; the rest replace every
   // metric with one shared ramp (legacy = the original blue→green→red rainbow).
   const PALETTE_SINGLE = {
@@ -653,8 +653,8 @@
   // restart begins at velocity zero, so pan/zoom visibly "pumped" four
   // times a second. A continuous glide has no restarts to feel.
   const PAN_TAU = 2.0;        // s to settle on the rider
-  const BEARING_TAU = 15;     // s — heading turns like a slow drone shot
-  const ZOOM_TAU = 9.0;       // s — zoom drifts very lazily
+  const BEARING_TAU = 15;     // s; heading turns like a slow drone shot
+  const ZOOM_TAU = 9.0;       // s; zoom drifts very lazily
   const ZOOM_DEADBAND = 0.45; // ignore sub-half-level zoom wishes: fewer
                               // tile-level crossings, less res-flickering
   let camLastMs = 0;
@@ -670,7 +670,7 @@
     if (followPan) {
       const c = map.getCenter();
       const dLng = markerPos[0] - c.lng, dLat = markerPos[1] - c.lat;
-      // A scrub across the trip shouldn't glide across town — snap far jumps.
+      // A scrub across the trip shouldn't glide across town; snap far jumps.
       if (Math.abs(dLng) > 0.05 || Math.abs(dLat) > 0.03) cam.center = markerPos;
       else {
         const a = k(PAN_TAU);
@@ -875,7 +875,7 @@
         }
       }
     }
-    // Modest pool — HTTP/2 multiplexes per host, and playback shouldn't
+    // Modest pool: HTTP/2 multiplexes per host, and playback shouldn't
     // starve behind its own prefetch.
     let qi = 0;
     const next = () => {
@@ -915,7 +915,7 @@
 
   // Builds a line-gradient expression for coords[0..endIdx]. Each vertex's
   // colour is pinned to its true distance fraction along the line, so the
-  // palette stays locked to the ground as the trail grows — no crawling.
+  // palette stays locked to the ground as the trail grows; no crawling.
   function buildTraceGradient(mode, endIdx, stats) {
     const mask = THRESHOLD_MODES[mode];
     const cfg = COLOR_MODES[mode];
@@ -940,7 +940,7 @@
     };
     const expr = ["interpolate", ["linear"], ["line-progress"]];
     // Downsample against the FULL route length, not the growing traveled
-    // length — a constant step keeps the same vertices carrying colour stops
+    // length; a constant step keeps the same vertices carrying colour stops
     // every frame, so the drawn trail's colours don't re-sample as it grows.
     const step = Math.max(1, Math.floor(coords.length / 150));
     let lastP = -1;
@@ -1015,9 +1015,9 @@
   // Applies the current Trace color + Trace mode pair to the two line layers.
   // Sets up the static parts only; the moving trail is filled by
   // updateTraceGradient() (here and once per playback frame).
-  //   trail-fixed   — trail behind the marker, colour scale from the whole trip
-  //   trail-dynamic — trail behind the marker, scale = min/max of trail so far
-  //   whole         — entire route at once, colour scale from the whole trip
+  //   trail-fixed:   trail behind the marker, colour scale from the whole trip
+  //   trail-dynamic: trail behind the marker, scale = min/max of trail so far
+  //   whole:         entire route at once, colour scale from the whole trip
   function applyTrace() {
     if (!map || !map.getLayer("track-line") || !map.getLayer("traveled-line")) return;
     const mode = currentColorMode;
@@ -1040,7 +1040,7 @@
       return;
     }
     map.setLayoutProperty("track-line", "visibility", "visible");
-    // Stopped reads thicker — but only the coloured line (track-line when the
+    // Stopped reads thicker, but only the coloured line (track-line when the
     // whole route is shown, traveled-line for the reveal trail), never the
     // faint full-route ghost.
     const thick = mode === "still";
@@ -1107,8 +1107,8 @@
     }
   }
 
-  // Greys out trace-colour options that have no chart — i.e. metrics this trip
-  // carries no data for — so the colour picker matches the charts shown.
+  // Greys out trace-colour options that have no chart, i.e. metrics this trip
+  // carries no data for, so the colour picker matches the charts shown.
   // Falls back to Solid if the active colour becomes unavailable.
   function syncColorSelectOptions() {
     const sel = document.getElementById("color-select");
@@ -1118,7 +1118,7 @@
       if (key === "solid") { opt.disabled = false; continue; }
       // Movement modes ride on wheel speed, which always drives playback.
       if (key === "moving" || key === "still" || key === "mix") { opt.disabled = false; continue; }
-      // GPS speed has no chart block — it lives on the speed chart. Toggle it
+      // GPS speed has no chart block; it lives on the speed chart. Toggle it
       // by whether the trip carries the column.
       if (key === "gpsspeed") { opt.disabled = !hasGpsSpeed; continue; }
       // Torque / phase stay selectable even without data (they colour flat),
@@ -1127,7 +1127,7 @@
       const block = document.querySelector(`.chart-block[data-key="${key}"]`);
       opt.disabled = !block || block.classList.contains("hidden");
     }
-    // "Speed" trace is the wheel's dial speed — name it "Wheel speed" when GPS
+    // "Speed" trace is the wheel's dial speed; name it "Wheel speed" when GPS
     // speed is also available so the two metrics read distinctly.
     const speedOpt = sel.querySelector('option[value="speed"]');
     if (speedOpt) speedOpt.textContent = hasGpsSpeed ? "Wheel speed" : "Speed";
@@ -1172,7 +1172,7 @@
       bearing: 0,
       maxPitch: 85,
       // Default 300ms tile crossfade keeps blending low-res parents into
-      // sharp children while the follow camera moves — a visible res
+      // sharp children while the follow camera moves, a visible res
       // "flicker". A short fade makes the swap barely perceptible.
       fadeDuration: 100,
       // Keep far more decoded tiles in memory than the dynamic default so
@@ -1381,8 +1381,8 @@
   // the 0 A baseline, green below it for regen). dp = decimal places shown.
   const REGEN_COLOR = "#00e676";
   // unitKind selects the UNITS converter used when displaying min/value/max.
-  // Internal chart drawing always uses raw metric values — only the readout
-  // changes — so axis scaling is independent of the locale. The unit string
+  // Internal chart drawing always uses raw metric values; only the readout
+  // changes, so axis scaling is independent of the locale. The unit string
   // is appended to the live value (min/max stay unit-less for compactness).
   const CHART_CONFIG = {
     speed:    { color: "#00e5ff", idx: SPD,     label: "Speed",    dp: 1, unitKind: "speed" },
@@ -1537,7 +1537,7 @@
   // ---------- Custom combined chart ----------
   // Build-your-own graph: overlay any set of metrics on one canvas. Scales
   // differ wildly (km/h vs W vs %), so each series is normalised to its own
-  // visible range — the shapes line up, the header legend carries the real
+  // visible range: the shapes line up, the header legend carries the real
   // values. Selection persists per browser.
   function unitFor(a) {
     if (a.unitKind === "speed") return UNITS.speedUnit;
@@ -1545,7 +1545,7 @@
     if (a.unitKind === "alt") return UNITS.altUnit;
     return a.unit || "";
   }
-  // Metrics that can be overlaid on a combined graph — every raw and derived
+  // Metrics that can be overlaid on a combined graph: every raw and derived
   // series that the trip actually carries.
   const CUSTOM_AVAIL = [];
   Object.keys(CHART_CONFIG).forEach((k) => {
@@ -1812,7 +1812,7 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (pts.length >= 2) {
-      // Precompute midpoints between consecutive vertices — each curve segment
+      // Precompute midpoints between consecutive vertices; each curve segment
       // goes from one midpoint to the next, passing through the data point as
       // the quadratic control. End-caps anchor to the first/last data points.
       const mid = [];
@@ -2257,7 +2257,7 @@
 
   // Hold the play button to restart from the start of the current
   // section (or the start of the trip when not zoomed). Quick click is
-  // the normal play/pause toggle — the timer drops the long-press
+  // the normal play/pause toggle; the timer drops the long-press
   // gesture if the user releases before HOLD_MS.
   const HOLD_MS = 350;
   let holdTimer = null;
@@ -2434,7 +2434,7 @@
       scrub.value = duration > 0 ? (currentTime / duration) * 1000 : 0;
     }
     updateTimeMarker();
-    // Re-evaluate handle priority — when the playhead moves into the same
+    // Re-evaluate handle priority: when the playhead moves into the same
     // pixel as a section edge handle, the handle becomes non-interactive
     // so click+drag from there scrubs the playhead instead.
     if (typeof updateHandlePriority === "function") updateHandlePriority();
@@ -2455,7 +2455,7 @@
       if (c.extra) {
         const gps = sampleAt(c.extra.idx);
         c.elGpsVal.innerHTML = fmtFixed(convertByKind(kind, gps), dp) + unitSpan;
-        // The difference is shown in display units too — both lines are on the
+        // The difference is shown in display units too; both lines are on the
         // same axis so the delta is meaningful either way.
         const diff = convertByKind(kind, val) - convertByKind(kind, gps);
         c.elDiff.textContent = "Δ " + (diff >= 0 ? "+" : "−") + Math.abs(diff).toFixed(dp) + " " + unit;
@@ -2487,7 +2487,7 @@
 
         // Trail geometry + gradient depend ONLY on currentRouteIdx. While the
         // marker glides between two coords at the same index, rebuilding them
-        // is wasted work — and on a long dense trip that per-frame setData +
+        // is wasted work, and on a long dense trip that per-frame setData +
         // line-gradient is exactly what drops the frame rate and makes the
         // gauges feel sluggish. Only rebuild when the index actually advances.
         if (currentRouteIdx !== lastTrailRouteIdx) {
@@ -2587,7 +2587,7 @@
     const zoomed = isZoomed() || anyHandleDragging;
     if (zoomed) {
       zoomIndicator.classList.remove("hidden");
-      // Just the section endpoints — the full trip duration is already
+      // Just the section endpoints; the full trip duration is already
       // implied by the un-highlighted scrub bar around the section.
       zoomRangeEl.textContent = fmtMs(viewT0) + " → " + fmtMs(viewT1);
       const aPct = (viewT0 / duration) * 100;
@@ -2829,8 +2829,8 @@
   })();
 
   // ---------- Chart layout: reorder / hide / extras / combined graphs ----------
-  // Everything the user arranges — order, which graphs show, and the set of
-  // combined graphs (each with its own name + metrics) — lives in one object,
+  // Everything the user arranges: order, which graphs show, and the set of
+  // combined graphs (each with its own name + metrics). It all lives in one object,
   // persisted per browser and export/importable as JSON. The customize dialog
   // is the only editor; the graphs themselves just render.
   (function chartLayoutManager() {
@@ -2873,7 +2873,7 @@
       } catch (_) {}
       // Append static charts the saved layout predates. A newly added
       // default-hidden chart (e.g. Battery envelope) must also join `hidden`,
-      // or existing users would see it enabled — new charts stay opt-in.
+      // or existing users would see it enabled; new charts stay opt-in.
       STATIC_ORDER.forEach((k) => {
         if (!layout.order.includes(k)) {
           layout.order.push(k);
@@ -2916,7 +2916,7 @@
       emptyEl.classList.toggle("hidden", collapsed || visible > 0);
     }
 
-    // Collapse-all state setter — the sole source of truth is the class on
+    // Collapse-all state setter: the sole source of truth is the class on
     // #charts, so a customize edit can reveal the panel and stay in sync.
     function setChartsCollapsed(collapsed) {
       chartsRoot.classList.toggle("charts-collapsed", collapsed);
@@ -2971,7 +2971,7 @@
         if (isCombined(k)) name.append(makeEl("span", "cd-tag", "combined"));
         row.append(grip, sw, name);
         if (isCombined(k)) {
-          // Per-row "Edit" is hidden for now — the graphs are simple enough
+          // Per-row "Edit" is hidden for now; the graphs are simple enough
           // that delete + recreate covers it. The editor stays fully wired
           // (reached via "+ New graph"), so restoring is just uncommenting
           // these two lines and re-adding `edit` to row.append below.
@@ -3189,7 +3189,7 @@
     apply();
   })();
 
-  // Loop toggle. Reset-zoom is now the pill click — one less button.
+  // Loop toggle. Reset-zoom is now the pill click; one less button.
   loopBtn.addEventListener("click", () => {
     loopOn = !loopOn;
     refreshSectionUi();
@@ -3268,7 +3268,7 @@
     });
     window.addEventListener("mousemove", (e) => {
       if (!dragging) return;
-      // Sidebar is on the right edge — dragging left widens it.
+      // Sidebar is on the right edge; dragging left widens it.
       applyW(startW + (startX - e.clientX));
     });
     window.addEventListener("mouseup", () => {

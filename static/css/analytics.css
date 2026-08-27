@@ -37,7 +37,7 @@ body::before {
 /* ---------- Top bar ---------- */
 /* Scrolls away with the page: only the tab bar stays pinned. (It used to
    be sticky with a higher z-index than the tab bar, which meant the tab
-   bar pinned invisibly underneath it — on phones the stacked controls
+   bar pinned invisibly underneath it; on phones the stacked controls
    are ~400 px tall and swallowed half the screen.) */
 #topbar {
     display: flex;
@@ -152,17 +152,27 @@ body::before {
 .print-btn.print-btn-icon { padding: 6px; }
 .print-btn.print-btn-icon svg { display: block; }
 
-/* Scope sits as a full-width bar under the params rows and carries the trip
-   count ("Scope (161 trips)" / "Scoped (23 of 161)"). */
-.tb-params > .scope-toggle { justify-content: center; }
+/* Scope lives in the title block, under the km + date subtitle, and carries
+   the trip count ("Scope (161 trips)" / "Scoped (23 of 161)"). */
+.tb-title .scope-toggle {
+    margin-top: 8px;
+    align-self: flex-start;
+    justify-content: center;
+}
 
 /* Stable weather card: the button label changes while fetching ("Fetching
    2/5", "Add weather for 12 more") and sub-buttons appear when loaded, so
    reserve enough room that neither resizes the card or shifts neighbours. */
 .tb-weather { min-width: 240px; }
-.tb-weather #weather-btn { min-width: 172px; text-align: center; }
+/* Capsule spans the card and the button fills it, so the Source combo above
+   and the weather button below share the same left and right edges. */
+.tb-weather .weather-capsule { width: 100%; }
+.tb-weather #weather-btn { flex: 1 1 auto; min-width: 0; text-align: center; }
 .tb-weather #weather-status { display: block; min-height: 0.95rem; }
-.tb-weather-src select { max-width: 100%; }
+/* Source combo matches the weather button width below so the card reads as
+   one aligned column. */
+.tb-weather-src { width: 100%; }
+.tb-weather-src select { width: 100%; min-width: 172px; max-width: 100%; box-sizing: border-box; }
 
 .weather-capsule {
     display: inline-flex;
@@ -365,17 +375,18 @@ body[data-layout="single"] .layout-toggle-btn .layout-icon-tabs { display: block
     font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
     font-variant-numeric: tabular-nums;
 }
+/* Same look as the Customize dialogs' Reset button. */
 .dr-reset {
     margin-left: auto;
-    background: transparent;
-    color: #888;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    padding: 3px 10px;
-    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: #cdd;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 5px 13px;
+    font-size: 0.75rem;
     cursor: pointer;
 }
-.dr-reset:hover { color: #fff; border-color: #b388ff; }
+.dr-reset:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
 .dr-track {
     position: relative;
     height: 22px;
@@ -1258,11 +1269,11 @@ body.weather-loaded .forensic-tag.weather-tag {
 }
 .calc-close:hover { color: #fff; border-color: #69f0ae; }
 
-/* Wheel DNA: subtle export / import icons in the calculator title bar
-   (mirrors the Customize dialogs' title-bar icons). */
+/* Wheel DNA: subtle load / save icons in the calculator title bar (same
+   icons and order as the Customize dialogs). */
 #calc-modal .calc-close { margin-left: 6px; }
 .calc-hicon {
-    margin-left: auto;
+    margin-left: 2px;
     background: transparent;
     border: none;
     color: #789;
@@ -1275,27 +1286,19 @@ body.weather-loaded .forensic-tag.weather-tag {
     justify-content: center;
     padding: 0;
 }
-.calc-hicon + .calc-hicon { margin-left: 2px; }
+/* Whichever of (model chip | first icon) is visible takes the auto push. */
+.calc-model-chip { margin-left: auto; }
+.calc-model-chip.hidden + .calc-hicon { margin-left: auto; }
 .calc-hicon svg { width: 15px; height: 15px; }
 .calc-hicon:hover:not(:disabled) { color: #bfeef7; background: rgba(255, 255, 255, 0.06); }
 .calc-hicon:disabled { opacity: 0.35; cursor: default; }
 
-/* Model source row: which brain drives the calculator (your trips vs an
-   imported Wheel DNA). Hidden until a DNA is imported. */
-.calc-dna-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.72rem;
-    color: #889;
-}
-.calc-dna-row.hidden { display: none; }
-.calc-dna-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.62rem; color: #778; }
-.calc-dna-opt {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #9ab;
-    font-size: 0.72rem;
+/* Small pill in the title bar showing the active imported DNA. */
+.calc-model-chip {
+    background: rgba(105, 240, 174, 0.1);
+    border: 1px solid rgba(105, 240, 174, 0.45);
+    color: #bff5d8;
+    font-size: 0.7rem;
     padding: 3px 10px;
     border-radius: 999px;
     cursor: pointer;
@@ -1304,23 +1307,55 @@ body.weather-loaded .forensic-tag.weather-tag {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.calc-dna-opt.on { color: #dff; background: rgba(105, 240, 174, 0.12); border-color: rgba(105, 240, 174, 0.5); }
-.calc-dna-opt.ghost { border-style: dashed; color: #789; background: transparent; }
-.calc-dna-opt.ghost:hover { color: #bfeef7; border-color: rgba(0, 229, 255, 0.4); }
-.calc-dna-opt:disabled { opacity: 0.4; cursor: default; }
-.calc-dna-clear.hidden { display: none; }
-.calc-dna-clear {
-    background: none;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #8a929a;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    cursor: pointer;
-    line-height: 1;
-    padding: 0;
+.calc-model-chip.hidden { display: none; }
+
+/* Model-source chooser: a small pre-dialog behind the load icon. */
+#calc-model-dialog { position: absolute; inset: 0; z-index: 30; }
+#calc-model-dialog.hidden { display: none; }
+.cmd-backdrop { position: absolute; inset: 0; background: rgba(5, 8, 12, 0.55); }
+.cmd-panel {
+    position: absolute;
+    top: 52px;
+    right: 14px;
+    width: min(340px, calc(100% - 28px));
+    background: linear-gradient(180deg, #131822, #0c0f15);
+    border: 1px solid rgba(105, 240, 174, 0.3);
+    border-radius: 8px;
+    box-shadow: 0 18px 44px -8px rgba(0, 0, 0, 0.7);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
-.calc-dna-clear:hover { color: #ff6b6b; border-color: rgba(255, 90, 90, 0.4); }
+.cmd-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8fa7b0; }
+.cmd-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+    padding: 9px 11px;
+    cursor: pointer;
+}
+.cmd-opt:hover:not(:disabled) { border-color: rgba(105, 240, 174, 0.4); }
+.cmd-opt.on { background: rgba(105, 240, 174, 0.1); border-color: rgba(105, 240, 174, 0.55); }
+.cmd-opt:disabled { opacity: 0.45; cursor: default; }
+.cmd-name { font-size: 0.82rem; color: #e8f6ee; font-weight: 600; }
+.cmd-sub { font-size: 0.7rem; color: #8a97a0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.cmd-actions.hidden { display: none; }
+.cmd-link { background: none; border: none; color: #7a8a99; font-size: 0.7rem; cursor: pointer; padding: 2px; text-decoration: underline; }
+.cmd-link:hover { color: #bfeef7; }
+.cmd-link.cmd-danger:hover { color: #ff6b6b; }
+
+/* Wind mini-line in the forecast hour cells: rotated arrow + m/s. */
+.wh-wind { font-size: 0.6rem; color: #8fa7b0; display: flex; align-items: center; justify-content: center; gap: 2px; }
+.wh-wind-arrow { display: inline-block; font-size: 0.62rem; line-height: 1; }
+
+/* (The old inline Model row was replaced by the model-source chooser.) */
 
 .calc-body {
     padding: 16px;
@@ -1885,7 +1920,7 @@ body.weather-loaded .forensic-tag.weather-tag {
     .calc-panel { max-height: calc(100vh - 16px); }
 }
 @media (max-width: 1100px) {
-    /* On medium widths the Plan button stays text-visible — only the
+    /* On medium widths the Plan button stays text-visible; only the
        Print button label hides via .print-btn span (existing rules). */
 }
 /* The range-calc label now has room inside the output card at every width,

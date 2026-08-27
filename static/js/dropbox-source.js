@@ -1,4 +1,4 @@
-// Dropbox source — PKCE OAuth + listing CSV trips from the app folder.
+// Dropbox source: PKCE OAuth + listing CSV trips from the app folder.
 // Static-site safe: no client secret embedded. The Dropbox app must be a
 // "Scoped App (App Folder)" with redirect URIs that include this page.
 (function () {
@@ -140,7 +140,7 @@
     if (res.status === 401) {
       const text = await res.text();
       // A missing scope (e.g. files.content.write not granted yet) also comes
-      // back as 401 — don't sign the user out over it, just surface it so the
+      // back as 401; don't sign the user out over it, just surface it so the
       // caller can prompt a reconnect rather than a full re-auth from scratch.
       if (/missing_scope/.test(text)) throw new Error("missing_scope: " + text);
       signOut();
@@ -203,7 +203,7 @@
   // get_temporary_upload_link (api.dropboxapi.com, CORS-clean) returns a
   // presigned URL we POST the bytes straight to, so no Dropbox-API-Arg header
   // on content.dropboxapi.com (which some browsers/extensions block).
-  // Needs the files.content.write scope — surfaces "missing_scope" if absent.
+  // Needs the files.content.write scope; surfaces "missing_scope" if absent.
   async function uploadFile(path, blob, mode) {
     const m = mode || "add";
     const commit_info = { path, mode: m, autorename: m !== "overwrite", mute: true };
@@ -223,7 +223,7 @@
   // won't create the destination folder, so ensure the parent first (an
   // existing folder answers 409, which we ignore). autorename guards against
   // ever overwriting an already-archived file that shares the name.
-  // Needs the files.content.write scope — same as uploadFile.
+  // Needs the files.content.write scope, same as uploadFile.
   async function moveFile(fromPath, toPath) {
     const parent = toPath.replace(/\/[^/]*$/, "");
     if (parent) { try { await rpc("/2/files/create_folder_v2", { path: parent }); } catch (_) {} }

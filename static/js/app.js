@@ -1,10 +1,10 @@
 document.addEventListener("DOMContentLoaded", function () {
-  // Imperial unit toggle — drives display labels and converters everywhere
+  // Imperial unit toggle: drives display labels and converters everywhere
   // values are shown. Resolution order: ?units= URL param, then localStorage
   // (the cogwheel toggle persists here), then timezone-based inference.
   //
   // We deliberately do NOT use navigator.language any more: English Windows
-  // installations everywhere — including all of Europe — send en-US by
+  // installations everywhere, including all of Europe, send en-US by
   // default, so language was misclassifying metric users as imperial.
   // Timezone is OS-set from the user's actual location and is the strongest
   // signal we can get without geolocation. Imperial is opt-in: it only
@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", function () {
   })();
 
   // Wire up the cogwheel's Metric/Imperial toggle. Persists to localStorage
-  // and reloads — UNITS is captured into countless render closures, so a
+  // and reloads: UNITS is captured into countless render closures, so a
   // hot-swap would mean re-rendering everything; reload is simpler & cleaner.
   (function setupUnitsToggle() {
     const current = UNITS.imperial ? "imperial" : "metric";
@@ -80,7 +80,7 @@ document.addEventListener("DOMContentLoaded", function () {
   })();
 
   // Graph resolution picker. Resolution is baked in at parse time and the
-  // raw samples are discarded, so an already-loaded trip can't be upscaled —
+  // raw samples are discarded, so an already-loaded trip can't be upscaled;
   // switching clears the current session and the user re-imports at the new
   // resolution. With nothing loaded, it just takes effect on the next load.
   (function setupGraphResToggle() {
@@ -235,7 +235,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     return t.date || t.name || "Trip";
   }
-  // The date/time label on its own, ignoring any custom name — used as the
+  // The date/time label on its own, ignoring any custom name, used as the
   // rename field's placeholder so blanking it shows what you'll fall back to.
   function tripDateLabel(t) {
     const iso = t.dateStart || "";
@@ -367,8 +367,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // transparent (undrawn) outside it. Wheel speed (km/h) drives the mask;
   // the mask returns null for segments that should not be painted.
   const RED_RAMP = [[255, 45, 45], [90, 0, 0]]; // bright → dark red
-  const MOVE_TH = 5;   // km/h — moving / still boundary
-  const MOVE_MAX = 50; // km/h — top of the moving ramp
+  const MOVE_TH = 5;   // km/h: moving / still boundary
+  const MOVE_MAX = 50; // km/h: top of the moving ramp
   function movingMask(kmh) {
     if (!(kmh >= MOVE_TH)) return null;                          // still / no data
     return Math.min(1, (kmh - MOVE_TH) / (MOVE_MAX - MOVE_TH));  // bright at TH → dark toward MAX
@@ -386,14 +386,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Mix mode: a trip-structure view. Colour follows wheel speed through the
-  // palette; the band sets the style — stops (<4 km/h) thick + solid, walk
+  // palette; the band sets the style: stops (<4 km/h) thick + solid, walk
   // (4–8) dashed and fading toward 8 (the mount/dismount points), riding (>8) a
   // faint dashed ghost. MIX_COLOR_MAX spreads the palette over the low/mid
   // speeds so stops and walk actually vary. Returns {color, alpha, width, dash}.
   const MIX_STOP = 4, MIX_WALK = 8, MIX_COLOR_MAX = 15;
   function makeMixSegStyle() {
     // Reversed speed ramp: Mix emphasises stops, so the stopped/slow parts take
-    // the hot end and riding fades to the cold end — matching Stopped mode
+    // the hot end and riding fades to the cold end, matching Stopped mode
     // (where a dead stop is also the hot colour) instead of contradicting it.
     const stops = stopsFor("speed").slice().reverse();
     return (kmh) => {
@@ -651,13 +651,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // All-tracks heat: nothing selected, every visible track coloured by
       // the metric on a shared scale. Segments are clustered into colour
-      // buckets and stroked as batched Path2Ds — ~32 strokes per pass
+      // buckets and stroked as batched Path2Ds, ~32 strokes per pass
       // instead of one per segment (~140k for a 300-trip library).
       if (this._paintData && this._paintData.all) {
         const pd = this._paintData;
         if (pd.segStyle) {
           // Per-segment styled draw (Mix) across every visible track. No
-          // bucket batching — each segment sets its own colour/width/dash.
+          // bucket batching; each segment sets its own colour/width/dash.
           ctx.lineJoin = "round";
           ctx.lineCap = "round";
           ctx.globalCompositeOperation = "source-over";
@@ -690,7 +690,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const BUCKETS = 32;
         const buckets = new Array(BUCKETS).fill(null);
         // Threshold modes (moving / still) leave gaps where the mask is null,
-        // so a whole-path casing under them would fill those gaps — skip it.
+        // so a whole-path casing under them would fill those gaps; skip it.
         const casingPath = (heatCasing && !pd.mask) ? new Path2D() : null;
         const flatTracks = [];
         for (let t = 0; t < this._latLngs.length; t++) {
@@ -892,7 +892,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // wheel-speed option "Wheel speed" when GPS speed is also there. With a
   // trip selected only that trip counts; with nothing selected any trip in
   // the library counts, since the colour then paints every visible track.
-  // Library-wide metric availability, cached per allTracks identity — the
+  // Library-wide metric availability, cached per allTracks identity: the
   // unselected state needs it on every updateGlow, and rescanning ~140k
   // points for each absent metric was part of the per-click hang.
   let libAvailCache = { for: null, byIdx: null };
@@ -1009,7 +1009,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // Trace color paints the selected track — or, with nothing selected,
+    // Trace color paints the selected track, or with nothing selected,
     // every visible track on a shared global scale so trips compare.
     const metric = traceColor !== "solid" ? PAINT_METRICS[traceColor] : null;
     const track = selectedIdx >= 0 ? allTracks[selectedIdx] : null;
@@ -1026,7 +1026,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // pd.pointIdx); here we only need the range and an absent-flag per
       // trip. A Dropbox-loaded library holds full-resolution tracks
       // (~1.4M points total), so the scan result is cached per
-      // (metric, library, visible-set) — selection toggles and repeat
+      // (metric, library, visible-set); selection toggles and repeat
       // draws reuse it, and only checkbox changes rescan.
       let sig = traceColor + "|" + (trackVisible ? trackVisible.size : -1);
       if (trackVisible) {
@@ -1141,11 +1141,11 @@ document.addEventListener("DOMContentLoaded", function () {
     traceStyleUser = null;
     try { localStorage.removeItem(TRACE_STYLE_KEY); } catch (_) {}
     syncTraceStyleSelect();
-    // Track colours + style depend on the basemap — repaint.
+    // Track colours + style depend on the basemap; repaint.
     if (glowLayer) glowLayer.redraw();
   }
 
-  // Legend label per metric — the value gets converted via UNITS for the
+  // Legend label per metric; the value gets converted via UNITS for the
   // distance / speed / temp / altitude rows so the units match the rest of UI.
   const TRACE_UNIT_KIND = { speed: "speed", gpsspeed: "speed", temp: "temp", altitude: "alt", distance: "dist" };
   const TRACE_STATIC_UNIT = { pwm: "%", power: "W", current: "A", torque: "Nm", phase: "A", battery: "%", voltage: "V" };
@@ -1168,7 +1168,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateTraceLegend(key, min, max, labels) {
     if (!legendEl) return;
     if (!key || key === "solid") { legendEl.classList.add("hidden"); return; }
-    // Set backgroundImage, not the `background` shorthand — the shorthand
+    // Set backgroundImage, not the `background` shorthand; the shorthand
     // resets background-repeat to `repeat`, which re-introduces the red fleck
     // the .legend-bar CSS (background-repeat: no-repeat) exists to prevent.
     legendEl.querySelector(".legend-bar").style.backgroundImage = legendGradientCss(key);
@@ -1280,7 +1280,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const cumKm = getCumDistPts(allTracks[selectedIdx])[bestIdx] || 0;
 
     // When GPS speed is present, the wheel value is "Wheel speed" / GPS is
-    // "GPS speed" — same wording the inspector and detail rows use.
+    // "GPS speed", same wording the inspector and detail rows use.
     const speedLabel = gpsSpeed ? "Wheel speed" : "Speed";
     let html = `<i class="clr" style="background:#66bb6a"></i>Dist: <b>${UNITS.dist(cumKm).toFixed(2)}</b> ${UNITS.distUnit}`;
     html += `<br><i class="clr" style="background:#00e5ff"></i>${speedLabel}: <b>${UNITS.speed(speed).toFixed(1)}</b> ${UNITS.speedUnit}`;
@@ -1295,7 +1295,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     tooltip.innerHTML = html;
     tooltip.classList.remove("hidden");
-    // Clamp inside the viewport — at the right/bottom edge the tooltip would
+    // Clamp inside the viewport; at the right/bottom edge the tooltip would
     // otherwise be clipped off-screen.
     {
       const w = tooltip.offsetWidth, h = tooltip.offsetHeight;
@@ -1418,7 +1418,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // each track once the parser hands them back. Cleared as soon as it's
   // been consumed so a regular drag-and-drop afterwards doesn't inherit it.
   let pendingDropboxMap = null;
-  // Same idea for the source tag — "dropbox" so the Recents row can show
+  // Same idea for the source tag: "dropbox" so the Recents row can show
   // the little badge instead of the literal filename giving it away.
   let pendingSource = null;
 
@@ -1517,7 +1517,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       // Show the trip list immediately so the post-parse IDB write doesn't
-      // look like the parser hung at "trip N of N" — for 100+ trips the
+      // look like the parser hung at "trip N of N"; for 100+ trips the
       // synchronous JSON.stringify + IDB put can take several seconds.
       setProgressMarquee("Almost ready, finishing up…");
       loadTracks(append ? [...allTracks, ...parsedTracks] : parsedTracks);
@@ -1660,7 +1660,7 @@ document.addEventListener("DOMContentLoaded", function () {
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error || new Error("Failed to open recent files database"));
         // If another tab still holds the DB at the old version, the upgrade
-        // would hang silently — surface it so the user can close the other tab.
+        // would hang silently; surface it so the user can close the other tab.
         request.onblocked = () => reject(new Error("Another tab is holding an older database version. Close other tabs to this site and reload."));
       }).catch((error) => {
         recentDbPromise = null;
@@ -1855,12 +1855,12 @@ document.addEventListener("DOMContentLoaded", function () {
   // The Wheel Forensics button awaits `pendingSessionWrite` so it doesn't
   // start a duplicate transaction behind the one already in flight from
   // saveTracks(). For a 169-trip library each round trip is ~15 MB of IDB
-  // serialization — serialising them was making "Preparing…" take 5–10 s.
+  // serialization; serialising them was making "Preparing…" take 5–10 s.
   let pendingSessionWrite = Promise.resolve();
   function saveTracks(tracks) {
     const data = JSON.stringify(tracks);
     // Best-effort localStorage. For libraries > ~5 MB this throws
-    // QuotaExceededError — if it does, wipe any old smaller payload that
+    // QuotaExceededError; if it does, wipe any old smaller payload that
     // would otherwise survive and get loaded back on refresh as "1 trip".
     try {
       localStorage.setItem("dbb_tracks", data);
@@ -1945,7 +1945,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // into a hash token:
   //   #d-<fileId>-<base36(YYYYMMDDHHMMSS)>-<rlkey>
   // The timestamp digits are treated as an opaque number (never parsed as a
-  // date — the filename is wall-clock local time). Anything that deviates
+  // date; the filename is wall-clock local time). Anything that deviates
   // from the template (extra params like st=, other hosts, other filenames,
   // uppercase ids) must NOT be compressed; callers fall back to ?file=.
   // Full grammar + rationale: SHORTLINK.md.
@@ -2014,7 +2014,7 @@ document.addEventListener("DOMContentLoaded", function () {
       panel.classList.remove("hidden");
       updateGlow();
     } else if (hash === "#view") {
-      // IndexedDB is the source of truth — for libraries > ~5 MB the
+      // IndexedDB is the source of truth; for libraries > ~5 MB the
       // localStorage cache silently truncated (or got wiped) and would
       // otherwise show a stale 1-trip remnant on refresh.
       loadSessionTracks().then((idbTracks) => {
@@ -2081,7 +2081,7 @@ document.addEventListener("DOMContentLoaded", function () {
     selectedIdx = -1;
     trackVisible = new Set(tracks.map((_, i) => i));
     updateGlow();
-    // No fitAll() here — the auto-select below zooms to track 0. Calling both
+    // No fitAll() here; the auto-select below zooms to track 0. Calling both
     // raced two zoom animations and could leave the map un-zoomed on start.
 
     panelTabText.textContent = `Trip Explorer (${tracks.length})`;
@@ -2173,7 +2173,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!footer) return;
     const exportBtn = footer.querySelector(".export-btn");
     if (exportBtn) renderExportButton(exportBtn);
-    // Update selected summary — hide if all or none selected
+    // Update selected summary; hide if all or none selected
     const selSummary = footer.querySelector(".selected-summary");
     if (selSummary) {
       const selCount = trackVisible.size;
@@ -2472,7 +2472,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const t = allTracks[i];
     if (!t || !t.dropboxPath) return;
     const DS = window.DropboxSource;
-    // Spinner on the row's share icon while the link is minted — this is the
+    // Spinner on the row's share icon while the link is minted; this is the
     // feedback for both the icon itself and the tools-menu share items (which
     // close the menu, then trigger this).
     const btn = document.querySelector(`.trip-item[data-idx="${i}"] .share-btn`);
@@ -2524,7 +2524,7 @@ document.addEventListener("DOMContentLoaded", function () {
     buildTripList();
     appToast(t._archive ? "Marked for archive." : "Archive mark removed.");
   }
-  // Remove a trip from the loaded library (local only — the source file, and
+  // Remove a trip from the loaded library (local only: the source file, and
   // any Dropbox copy, are untouched). Mirrors the batch editor's Remove.
   function removeTrip(i) {
     const t = allTracks[i];
@@ -2584,7 +2584,7 @@ document.addEventListener("DOMContentLoaded", function () {
     updateGlow();
   }
   // Custom trip name (stored on the track like the wheel). Blank clears it,
-  // falling back to the date/time. Only the label changes — points/stats are
+  // falling back to the date/time. Only the label changes; points/stats are
   // untouched, so the cached geometry stays valid (no new array needed).
   function renameTrip(i, name) {
     const t = allTracks[i];
@@ -2689,7 +2689,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     return true;
   }
-  // The one Dropbox dialog for the whole app — the upload screen's Dropbox
+  // The one Dropbox dialog for the whole app; the upload screen's Dropbox
   // buttons (source-hints.js) call this too, so there's a single shared UI.
   window.eucViewerOpenDropbox = openDropboxSyncDialog;
 
@@ -2742,7 +2742,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (path) localPaths.add(path);
       // Archive wins over every other state: a superseded source (an extended
       // piece or a split original) is on its way out, so even a local rename
-      // ("changed") shouldn't tempt an upload — it gets moved out instead.
+      // ("changed") shouldn't tempt an upload; it gets moved out instead.
       let cat = "synced";
       if (t._archive) cat = "archive";
       else if (!path) cat = "new";
@@ -2766,7 +2766,7 @@ document.addEventListener("DOMContentLoaded", function () {
     remote: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5h6a3 3 0 0 0 .3-5.97A4.5 4.5 0 0 0 2.5 7.7a2.7 2.7 0 0 0 2 3.8z"/><path d="M8 8v4"/><path d="M6 10l2 2 2-2"/></svg>',
     archive: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4.5" width="12" height="9" rx="1"/><path d="M1.5 4.5 3 2h10l1.5 2.5"/><path d="M6.3 8h3.4"/></svg>',
   };
-  const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here", archive: "Superseded — moves to /trips/archive and leaves here" };
+  const DBX_TAG_TIP = { new: "Not on Dropbox yet", edited: "Changed, its file will be updated", synced: "In sync", remote: "On Dropbox, not loaded here", archive: "Superseded; moves to /trips/archive and leaves here" };
   // Local status shows in the meta text; the in-sync state is carried by its
   // (disabled) button instead, so it isn't said twice.
   const DBX_META = { new: "New", edited: "Changed", archive: "Archive" };
@@ -3035,7 +3035,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Archive superseded source trips: move each Dropbox file into /trips/archive
   // (out of EUC Planet's /trips listing) and drop it from the local library.
-  // Trips with no Dropbox origin just leave locally — there's nothing to move.
+  // Trips with no Dropbox origin just leave locally; there's nothing to move.
   async function runArchive(archiveTracks, ui) {
     const DS = window.DropboxSource;
     const main = ui.main;
@@ -3244,7 +3244,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // The parser stores dateStart/dateEnd as naive local wall-clock ISO
   // strings (no Z) and reads them back with Date.parse (browser-local).
   // Re-derived pieces must match that convention, so format with LOCAL
-  // components — toISOString() would round-trip through UTC and shift hours.
+  // components; toISOString() would round-trip through UTC and shift hours.
   function _localIso(ms) {
     const d = new Date(ms), p = (n, w) => String(n).padStart(w || 2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T` +
@@ -3288,7 +3288,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Merge tracks (passed oldest->newest) into one continuous track. The
   // global clock preserves real wall-time gaps between rides; per-track
   // mileage accumulates across (never the straight-line hop between one
-  // ride's end and the next's start — that's distance nobody rode); the
+  // ride's end and the next's start; that's distance nobody rode); the
   // result is re-downsampled to the 500-row cap.
   function mergeTracksInTime(tracks, name) {
     const full = [];
@@ -3316,7 +3316,7 @@ document.addEventListener("DOMContentLoaded", function () {
     full.sort((a, b) => a[0] - b[0]);
     // Mileage was assigned in ride order; the clock sort keeps it monotonic
     // for adjacent rides, but combining time-overlapping rides (a trip plus
-    // its own split parts) would interleave rows — clamp to non-decreasing.
+    // its own split parts) would interleave rows; clamp to non-decreasing.
     let mx = 0;
     for (const r of full) { if (r[8] < mx) r[8] = mx; else mx = r[8]; }
     const dsTs = _downsampleTs(full, currentGraphRes());
@@ -3406,7 +3406,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Highlight a freshly created trip (extend / split). buildTripList renders
-  // cards in async idle chunks, so the row may not exist yet — poll a few
+  // cards in async idle chunks, so the row may not exist yet; poll a few
   // frames for it, then optionally select it (zooms the map, opens its group,
   // scrolls it in) and run the one-shot .trip-flash fade.
   function highlightNewTrip(track, doSelect) {
@@ -3544,19 +3544,19 @@ document.addEventListener("DOMContentLoaded", function () {
     // Chronological order (oldest -> newest). Extend spans a range around
     // "this trip": the From combo reaches BACK into older rides, the To
     // combo reaches FORWARD into newer ones, and "this trip" is the anchor
-    // in both. Any span that includes this trip is valid — older→this,
+    // in both. Any span that includes this trip is valid: older→this,
     // this→newer, or older→newer.
     //
     // Hard guard against re-merging already-merged data. Two rules, both
     // filtering the picker's candidates (so no range can sweep them up either):
-    //   1. Overlap: hide trips whose time overlaps THIS trip — the pieces
+    //   1. Overlap: hide trips whose time overlaps THIS trip: the pieces
     //      already inside an extended trip, or the extended trip when the
     //      anchor is a piece.
     //   2. Containment: hide trips strictly inside a container that is ITSELF
-    //      still selectable (doesn't overlap the anchor) — that's the combined
+    //      still selectable (doesn't overlap the anchor); that's the combined
     //      parent of an unrelated third trip's range. When you split a trip the
     //      original overlaps every piece, so it's excluded by rule 1 and its
-    //      pieces stay selectable — you can still recombine them even though the
+    //      pieces stay selectable; you can still recombine them even though the
     //      original is loaded.
     // Real rides never overlap in time, so this only removes combine/split
     // leftovers. Strict containment keeps duplicate-span imports from both
@@ -3658,7 +3658,7 @@ document.addEventListener("DOMContentLoaded", function () {
     header.innerHTML = "";
 
     // Summary. Trips marked for archive are superseded (a combined trip's
-    // pieces, or a split original) so they'd double-count — leave them out of
+    // pieces, or a split original) so they'd double-count; leave them out of
     // every total, including the count.
     let totalKm = 0, totalSec = 0, topSpeed = 0, activeTrips = 0;
     for (const t of allTracks) {
@@ -3941,7 +3941,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
       }
 
-      // Quick share icon (Dropbox trips) — copies the viewer link; the tools
+      // Quick share icon (Dropbox trips): copies the viewer link; the tools
       // menu's "Share with viewer" is the same action, kept as an extra.
       const shareBtn = li.querySelector(".share-btn");
       if (shareBtn) {
@@ -4314,7 +4314,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Trip name + wheel identity as Extra-column pairs, so a user's custom name
   // and wheel ride inside the CSV/XLSX itself and survive an export or Dropbox
-  // round-trip (the parser reads them back — no separate metadata file).
+  // round-trip (the parser reads them back; no separate metadata file).
   function extraMetaPairs(track) {
     const clean = (v) => String(v).replace(/[,"\r\n]+/g, " ").trim();
     const out = [];
@@ -4356,7 +4356,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Minimal GPX 1.1: one trkseg, every point with optional time / ele / speed.
-  // Drops rows without lat/lon — euc.world's first samples often lack a fix.
+  // Drops rows without lat/lon; euc.world's first samples often lack a fix.
   function trackToGPX(track) {
     const xmlEsc = (s) => String(s).replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c]));
     const name = xmlEsc(track.name || "trip");
@@ -4465,7 +4465,7 @@ document.addEventListener("DOMContentLoaded", function () {
       alert("Export library not loaded. Please refresh and try again.");
       return;
     }
-    // Always a .zip — even for a single trip (the raw single-file formats
+    // Always a .zip, even for a single trip (the raw single-file formats
     // live on their own chips). Plain .zip: phones and desktops open it
     // natively, and unzipping straight into Dropbox/Apps/EUC Planet/trips
     // just works. The importer accepts .dbb and .zip alike.
@@ -4498,7 +4498,7 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   // GPS speed (timeseries index 12) rides on the speed line's axis as a dashed
-  // companion. Absent on legacy tracks — every read of it is guarded.
+  // companion. Absent on legacy tracks; every read of it is guarded.
   const GPS_SPEED_IDX = 12;
   const GPS_SPEED_COLOR = "#80d8ff";
   function trackHasGpsSpeed(ts) {
@@ -4598,7 +4598,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   let liveDetailIdx = -1;
 
-  // Builds the detail rows for a trip — each shows a min–max range (total for
+  // Builds the detail rows for a trip; each shows a min–max range (total for
   // distance, start–end for time). Rows with no data are omitted.
   function buildDetailHtml(t) {
     const ts = t.timeseries || [];
@@ -4669,7 +4669,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const label = (hasGps && r.key === "speed") ? "Wheel speed" : r.label;
       // The colour is exposed as the `--c` custom property so the toggled-off
       // swatch can swap fill for border with pure CSS. Distance and Time have
-      // no swatch (not chart series) — a transparent placeholder keeps their
+      // no swatch (not chart series); a transparent placeholder keeps their
       // labels aligned with the rest.
       const dot = r.color
         ? `<i class="clr" style="--c:${r.color}"></i>`
@@ -4960,7 +4960,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const span = max - min || 1;
       ranges[s.key] = { min: min - span * 0.05, max: max + span * 0.05 };
     }
-    // GPS speed present but no wheel-speed series — give it a standalone axis.
+    // GPS speed present but no wheel-speed series; give it a standalone axis.
     if (hasGpsSpeed && !ranges.speed) {
       let min = Infinity, max = -Infinity;
       for (const row of ts) {
@@ -4983,7 +4983,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (s.key === "current") {
         // 2-colour line: regen green where current is < 0, amber otherwise.
         // Segments that cross 0 are split at the zero point so each colour
-        // stops cleanly at the baseline — no green spilling into +A and vice
+        // stops cleanly at the baseline; no green spilling into +A and vice
         // versa.
         const yZero = pad.top + ch - ((0 - r.min) / rSpan) * ch;
         for (let i = 1; i < ts.length; i++) {
@@ -5019,7 +5019,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     ctx.globalAlpha = 1;
 
-    // GPS-speed companion line — dashed, on the wheel-speed axis.
+    // GPS-speed companion line: dashed, on the wheel-speed axis.
     if (hasGpsSpeed && ranges.speed) {
       const r = ranges.speed;
       const rSpan = r.max - r.min || 1;
@@ -5179,7 +5179,7 @@ document.addEventListener("DOMContentLoaded", function () {
     canvas._hoverLatLon = (lat && lon) ? [lat, lon] : null;
   });
 
-  // Click on chart centers map — keep current zoom level
+  // Click on chart centers map; keep current zoom level
   document.addEventListener("click", (e) => {
     const canvas = e.target.closest(".trip-chart");
     if (!canvas || !canvas._hoverLatLon) return;
@@ -5225,7 +5225,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // When a group holding the selected trip is collapsed, the trip is no longer
-  // on screen — drop the selection so the map matches the list. Only real
+  // on screen; drop the selection so the map matches the list. Only real
   // collapse gates count: month groups always gate; a year group gates only in
   // the multi-year layout (it then wraps a .year-body), never the single-year
   // wrapper which has no header and stays open.
@@ -5255,7 +5255,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     updateGlow();
     fitTrack(idx);
-    // Auto-select on load doesn't want to pop the panel open on portrait —
+    // Auto-select on load doesn't want to pop the panel open on portrait;
     // it just wants the first track highlighted on the map. Other callers
     // (tooltip click, list click, search) leave keepPanelClosed unset so
     // the panel still opens like before.
@@ -5388,7 +5388,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // --- Programmatic data injection (used by EvenDarkerBot Android app) ---
   // Accepts a base64-encoded .dbb (ZIP) or .csv file and loads it.
-  // Does NOT save to recents or cache — keeps the viewer clean for embedded use.
+  // Does NOT save to recents or cache; keeps the viewer clean for embedded use.
   window.loadFileFromBase64 = async function (base64String, filename) {
     filename = filename || "import.dbb";
     // (zip and dbb are the same container; both accepted below)
@@ -5417,7 +5417,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return { success: false, error: "No trip data found" };
       }
 
-      // Load directly — no saveRecentFile, no saveTracks
+      // Load directly: no saveRecentFile, no saveTracks
       loadTracks(parsedTracks);
       return { success: true };
     } catch (e) {
@@ -5509,7 +5509,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Init ---
   const initParams = new URLSearchParams(location.search);
   const sharedFileUrl = initParams.get("file");
-  // `#d-…` short share token — the compressed form of ?file= (SHORTLINK.md).
+  // `#d-…` short share token: the compressed form of ?file= (SHORTLINK.md).
   const shortLinkUrl = decodeShortLink(location.hash.slice(1));
   const isEmbedded = initParams.has("embedded");
   if (sharedFileUrl) {

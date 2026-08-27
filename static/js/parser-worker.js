@@ -18,7 +18,7 @@ function parseDateParts(str) {
       (m[4] !== undefined ? `T${m[4]}:${m[5]}:${m[6]}.${(m[7] || '000').padEnd(3, '0')}` : 'T00:00:00.000');
     return { ms: new Date(iso).getTime(), iso };
   }
-  // Naive ISO-like "YYYY-MM-DD HH:MM:SS[.SSS]" — preserve the wall-clock so
+  // Naive ISO-like "YYYY-MM-DD HH:MM:SS[.SSS]": preserve the wall-clock so
   // the displayed time matches what the rider actually saw at ride time. Going
   // via Date.parse + toISOString would round-trip through UTC and shift hours
   // when the browser timezone differs from the ride timezone. A trailing
@@ -415,7 +415,7 @@ function buildTrackFromRows(rows, displayName) {
     // so regen stays negative).
     let power = safeFloat(row.Power);
     if (power === 0 && volt !== 0 && current !== 0) power = volt * current;
-    // Optional columns — absent on most wheels / older exports (safeFloat → 0).
+    // Optional columns, absent on most wheels / older exports (safeFloat → 0).
     // "Ext GPS speed" is deliberately ignored: it has been folded into "GPS speed".
     const gpsSpeed = safeFloat(row["GPS speed"]);
     const gForce = safeFloat(row["G-Force"]);
@@ -608,7 +608,7 @@ function parseGpxText(text, name) {
       roundTo(alt, 1),
       hasGps ? roundTo(lat, 6) : 0,
       hasGps ? roundTo(lon, 6) : 0,
-      0, // mileage delta — derived from haversine below for stats
+      0, // mileage delta, derived from haversine below for stats
       0, // pwm
       0, // current
       0, // power
@@ -654,7 +654,7 @@ function parseGpxText(text, name) {
     downsampled = sampled;
   }
 
-  // GPX has no Total mileage column — derive distance purely from GPS haversine.
+  // GPX has no Total mileage column; derive distance purely from GPS haversine.
   let dist = 0;
   for (let i = 1; i < points.length; i += 1) {
     dist += haversine(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);

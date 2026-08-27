@@ -120,7 +120,7 @@
   // DATE_RE so the trip still displays as the date, the time (in the
   // ride's own timezone via tzId, not the laptop's) disambiguates rides,
   // and the wheel prefix lets the viewer's per-wheel filter attribute the
-  // trip. No colon — Windows treats it as drive separator.
+  // trip. No colon; Windows treats it as drive separator.
   function filenameFor(tour, ui) {
     const bits = wheelBitsFor(tour, ui);
     let prefix = "";
@@ -138,7 +138,7 @@
     try {
       parts = new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: tz }, opts)).formatToParts(d);
     } catch (_) {
-      // Invalid tzId — fall back to laptop-local time.
+      // Invalid tzId; fall back to laptop-local time.
       parts = new Intl.DateTimeFormat("en-GB", opts).formatToParts(d);
     }
     const get = (type) => (parts.find((p) => p.type === type) || {}).value || "00";

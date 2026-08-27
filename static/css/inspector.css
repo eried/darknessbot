@@ -33,7 +33,7 @@ html, body {
     border-bottom: 1px solid rgba(0, 229, 255, 0.15);
 }
 /* The metrics live in their own row so the collapse button never sits on
-   top of them — it's a separate flex item pinned to the right. */
+   top of them; it's a separate flex item pinned to the right. */
 .dash-scroll {
     flex: 1;
     min-width: 0;
@@ -41,7 +41,7 @@ html, body {
     align-items: center;
     gap: 18px;
 }
-/* Collapse toggle — only shown on narrow screens (wired in the media query).
+/* Collapse toggle: only shown on narrow screens (wired in the media query).
    Kept visually identical to the graphs collapse-all button (.ct-iconbtn). */
 .dash-toggle {
     display: none;
@@ -184,7 +184,7 @@ html, body {
     text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 }
 
-/* G-Force — circle on the left, "G-FORCE" label on top with the value below
+/* G-Force: circle on the left, "G-FORCE" label on top with the value below
    on the right, matching the readout pattern (label-on-top / value-below). */
 .gauge-gforce {
     flex-direction: row;
@@ -314,11 +314,11 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 5px;
-    flex: 0 0 auto;        /* fixed height — never squished, panel scrolls */
+    flex: 0 0 auto;        /* fixed height: never squished, panel scrolls */
     overflow: hidden;
 }
 
-/* Header — click to collapse. Holds the label and min / value / max stats. */
+/* Header: click to collapse. Holds the label and min / value / max stats. */
 .chart-head {
     display: flex;
     align-items: center;
@@ -349,7 +349,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 .ch-label.ch-sub { font-weight: 600; font-size: 0.66rem; }
 .chart-head-speed .ch-label { width: 78px; }
 
-/* min | value | max — value centred and bright (with the unit), min/max
+/* min | value | max: value centred and bright (with the unit), min/max
    small and dim and unit-less. The trio hugs the right edge of the header. */
 .ch-statline {
     margin-left: auto;
@@ -393,7 +393,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 }
 .ch-row-diff .ch-val { color: #ffd740; font-size: 0.76rem; }
 
-/* Body — the canvas. Hidden when the block is collapsed. */
+/* Body: the canvas. Hidden when the block is collapsed. */
 .chart-body {
     height: 116px;
     padding: 0 6px 6px;
@@ -465,12 +465,12 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 
 /* "Hide all metrics" only earns its keep on phones, where the charts panel
    shares the screen with the map. On desktop the sidebar is a fixed column,
-   so hiding just leaves a black gap — keep the metrics always visible there.
+   so hiding just leaves a black gap; keep the metrics always visible there.
    Both the button and the collapse effect are gated to the phone layout
    (see the max-width: 900px block). */
 #charts-collapse-all { display: none; }
 
-/* The toolbar "collapse all" hides every graph so the map gets the room —
+/* The toolbar "collapse all" hides every graph so the map gets the room;
    individual per-graph collapse still lives in each header. Only the sticky
    toolbar stays, and #charts shrinks to it (map grid row grows to fill).
    Phone-only: on desktop the class is inert so widening never blacks out. */
@@ -1083,7 +1083,7 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     }
     .clock { padding-right: 2px; }
 
-    /* Collapsed: a tiny bar — speed, battery and the clock only. */
+    /* Collapsed: a tiny bar with speed, battery and the clock only. */
     #inspector.dash-collapsed #dash { padding: 5px 12px; }
     #inspector.dash-collapsed .dash-scroll { gap: 14px; overflow: hidden; justify-content: center; }
     #inspector.dash-collapsed .trip-title,

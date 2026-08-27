@@ -297,7 +297,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     flex-wrap: wrap;
 }
 /* Shared sizing so the cyan Upload trips pill and the dark Dropbox split
-   look like a matched pair — same height, same minimum width. */
+   look like a matched pair: same height, same minimum width. */
 #upload-label,
 .dropbox-split {
     height: 46px;
@@ -622,13 +622,13 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     overflow: hidden;
 }
 
-/* Panel header — fixed at top */
+/* Panel header, fixed at top */
 #panel-header {
     flex-shrink: 0;
     background: rgba(10, 10, 15, 0.95);
 }
 
-/* Panel footer — fixed at bottom */
+/* Panel footer, fixed at bottom */
 #panel-footer {
     flex-shrink: 0;
     border-top: 1px solid rgba(0, 229, 255, 0.15);
@@ -803,7 +803,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 .tm-actions .tm-danger { border-color: rgba(255, 90, 90, 0.4); color: #ffb3b3; background: rgba(255, 90, 90, 0.07); }
 .tm-actions .tm-danger:not(:disabled):hover { background: rgba(255, 90, 90, 0.16); }
 
-/* Trip tool dialogs (Change wheel / Split / Extend) — reuse the tm look */
+/* Trip tool dialogs (Change wheel / Split / Extend): reuse the tm look */
 #trip-tool-modal { position: fixed; inset: 0; z-index: 1400; }
 #trip-tool-modal.hidden { display: none; }
 .ttmod-panel { width: min(460px, 94vw); }
@@ -1312,7 +1312,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     backdrop-filter: blur(4px);
 }
 
-/* Color indicator squares — the colour is sourced from inline style="--c:…"
+/* Color indicator squares: the colour is sourced from inline style="--c:…"
    on detail rows so .series-off can swap fill for outline via CSS. The map
    hover tooltip still uses inline style="background:…" which wins as before. */
 .clr {
@@ -1379,7 +1379,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 .add-more-btn:hover, .add-more-btn.dragover,
 .main-screen-btn:hover { background: rgba(0, 229, 255, 0.06); }
 
-/* Wheel Forensics button — opens analytics.html */
+/* Wheel Forensics button: opens analytics.html */
 /* Forensics: compact button sharing the wheel-filter row; the selector
    on its left IS the scope it opens with. */
 .forensics-btn {
@@ -1431,7 +1431,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 }
 .export-btn:hover { background: rgba(255, 160, 0, 0.06); }
 
-/* Sync with Dropbox — footer button mirroring the "Export all .zip" row:
+/* Sync with Dropbox, a footer button mirroring the "Export all .zip" row:
    a centered label plus a chip (here the Dropbox brand). */
 .dbx-save-btn {
     display: block;
@@ -1461,7 +1461,7 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
 }
 .dbx-save-btn:hover .dbx-sync-chip { background: rgba(0, 97, 255, 0.2); color: #fff; }
 
-/* Sync-with-Dropbox modal — mirrors the load dialog (whose styles are scoped
+/* Sync-with-Dropbox modal: mirrors the load dialog (whose styles are scoped
    to #source-instructions, inside the hidden upload overlay) so it reads as
    the same dialog: same card, collapsible connection summary, row table and
    Dropbox-blue buttons. */
@@ -1880,8 +1880,8 @@ body.src-modal-open #upload-box #source-instructions { pointer-events: auto; }
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     /* Without this the gradient tiles (default repeat) and the rounded corner
-       anti-aliases into the neighbouring tile — whose edge is the red 100%
-       stop — leaving a red fleck at the blue (left) end. */
+       anti-aliases into the neighbouring tile, whose edge is the red 100%
+       stop, leaving a red fleck at the blue (left) end. */
     background-repeat: no-repeat;
 }
 .legend-scale {

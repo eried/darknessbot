@@ -2764,6 +2764,7 @@
           id: e.pointerId, x0: e.clientX, y0: e.clientY,
           v0: viewT0, v1: viewT1, axis: null, moved: false,
           grabHead: Math.abs(e.clientX - headX) <= 24,
+          resumeAfter: false,
         };
       }
     });
@@ -2793,6 +2794,12 @@
       }
       if (solo.axis === "y") return;           // vertical: let the list scroll
       e.preventDefault();
+      // Playback would fight the finger, so hold it for the drag and pick it
+      // up again on release.
+      if (!solo.moved && playing) {
+        solo.resumeAfter = true;
+        setPlayingState(false);
+      }
       solo.moved = true;
       const span = solo.v1 - solo.v0;
       if (isZoomed() && !solo.grabHead) {
@@ -2811,7 +2818,11 @@
       if (pointers.size < 2) prevDist = 0;
       if (solo && e.pointerId === solo.id) {
         if (tap && !solo.moved) setCurrentTime(timeFromClientX(c.canvas, e.clientX));
+        const resume = solo.resumeAfter;
         solo = null;
+        // startPlayback resets the frame clock and restarts the rAF loop, so
+        // resuming never jumps the playhead by the length of the drag.
+        if (resume) startPlayback(false);
       }
     };
     c.canvas.addEventListener("pointerup", (e) => endSolo(e, true));

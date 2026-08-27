@@ -2961,7 +2961,9 @@
     const fmtPct = (a, b) => ((b - a) / a) * 100;
 
     // Range drift, ideally on temp-normalized values so a winter/summer mix
-    // doesn't masquerade as battery health.
+    // doesn't masquerade as battery health. This normalization is always on
+    // when a temp fit exists, independent of the "Norm 20" checkbox (that one
+    // only controls the charts), so the copy says it is for this comparison.
     const useNorm = !!tempFit;
     const rangeGetter = (m) => {
       if (m.estRangeKm == null) return null;
@@ -2978,7 +2980,7 @@
         html: `Estimated range ${pct >= 0 ? "up" : "down"} <b>${Math.abs(pct).toFixed(0)}%</b> ` +
               `from your first third of trips (<b>${dispA.toFixed(1)} ${UNITS.distUnit}</b>) ` +
               `to your last third (<b>${dispB.toFixed(1)} ${UNITS.distUnit}</b>)` +
-              (useNorm ? `, normalized to ${UNITS.temp(20).toFixed(0)} ${UNITS.tempUnit}.` : ". Add weather to factor out temperature."),
+              (useNorm ? `, normalized to ${UNITS.temp(20).toFixed(0)} ${UNITS.tempUnit} for this comparison.` : ". Add weather to factor out temperature."),
       });
     }
 

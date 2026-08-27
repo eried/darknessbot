@@ -146,9 +146,9 @@ body::before {
 /* Weather card: capsule on top, status underneath, so a status string that
    grows / shrinks never widens the row and shoves its neighbours. */
 .tb-weather { align-items: flex-start; min-width: 150px; }
-/* Tools card pushes its buttons to the bottom so the row of Print + layout
-   lines up with the weather capsule and the analysis controls. */
-.tb-output .calc-btn { margin-top: auto; }
+/* Tools buttons sit right under the title. No bottom-alignment here: the
+   calc button un-hides once the model is ready, and an auto top margin made
+   the whole card jump down at that moment. */
 .tb-weather #weather-status { max-width: 220px; }
 
 /* Output card: Range calc on top, Print + layout toggle on the row below.

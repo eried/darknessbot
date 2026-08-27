@@ -2754,7 +2754,17 @@
         const rect = rectOf();
         pinchAnchorT = viewT0 + ((mid - rect.left) / rect.width) * (viewT1 - viewT0);
       } else if (pointers.size === 1) {
-        solo = { id: e.pointerId, x0: e.clientX, y0: e.clientY, v0: viewT0, v1: viewT1, axis: null, moved: false };
+        // Grabbing on or near the playhead drags it; grabbing anywhere else
+        // pans the zoom window. Same split the position bar already uses, so
+        // a zoomed chart can still be scrubbed by touch.
+        const rect = rectOf();
+        const span = (viewT1 - viewT0) || 1;
+        const headX = rect.left + ((currentTime - viewT0) / span) * rect.width;
+        solo = {
+          id: e.pointerId, x0: e.clientX, y0: e.clientY,
+          v0: viewT0, v1: viewT1, axis: null, moved: false,
+          grabHead: Math.abs(e.clientX - headX) <= 24,
+        };
       }
     });
     c.canvas.addEventListener("pointermove", (e) => {
@@ -2785,11 +2795,12 @@
       e.preventDefault();
       solo.moved = true;
       const span = solo.v1 - solo.v0;
-      if (isZoomed()) {
+      if (isZoomed() && !solo.grabHead) {
         let a = solo.v0 - (dx / rectOf().width) * span; // drag right → earlier
         a = Math.max(0, Math.min(duration - span, a));
         setView(a, a + span);
       } else {
+        // Dragging the playhead itself, or scrubbing on an unzoomed chart.
         setCurrentTime(timeFromClientX(c.canvas, e.clientX));
       }
     });

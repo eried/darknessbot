@@ -3031,7 +3031,7 @@
           try { grip.releasePointerCapture(e.pointerId); } catch (_) {}
           const moved = started && curIdx !== startIdx;
           // Land in a single non-animated frame: freeze transitions, reorder,
-          // drop transforms, reflow, then restore — otherwise the neighbours
+          // drop transforms, reflow, then restore. Otherwise the neighbours
           // animate back to origin and re-settle after the DOM reorders.
           rows.forEach((r) => { r.style.transition = "none"; });
           row.classList.remove("cd-dragging");

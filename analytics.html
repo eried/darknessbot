@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=54" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=56" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -18,101 +18,101 @@
 <body data-layout="tabs">
     <div id="analytics">
         <header id="topbar">
-            <div class="page-title">
+            <div class="tb-title">
                 <div id="page-name">Wheel Forensics</div>
                 <div id="page-subtitle">&hellip;</div>
             </div>
-            <button type="button" id="scope-toggle" class="scope-toggle" title="Narrow the analyses to a sub-range of your history.">
-                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="3.5" cy="8" r="1.6"/>
-                    <circle cx="12.5" cy="8" r="1.6"/>
-                    <line x1="5.1" y1="8" x2="10.9" y2="8"/>
-                </svg>
-                <span>Scope</span>
-            </button>
 
-            <div class="controls">
-                <div class="ctrl-group" data-group="binning">
-                    <label>
-                        <span>Group <span class="info-icon" title="How trips are grouped on the time axis. Week, month, quarter or year are calendar buckets. Every 250 km, 500 km, 1000 km, 10 h or 50 h step through your history by mileage or runtime instead.">i</span></span>
-                        <select id="group-select">
-                            <option value="week">Week</option>
-                            <option value="month" selected>Month</option>
-                            <option value="quarter">Quarter</option>
-                            <option value="year">Year</option>
-                            <option value="km250">Every 250 km</option>
-                            <option value="km500">Every 500 km</option>
-                            <option value="km1000">Every 1000 km</option>
-                            <option value="h10">Every 10 h</option>
-                            <option value="h50">Every 50 h</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>Min trips/bin <span class="info-icon" title="A group with fewer than this many trips is skipped. Stops one unusual ride from looking like a real trend in a quiet month.">i</span></span>
-                        <select id="minbin-select">
-                            <option value="1">1</option>
-                            <option value="2" selected>2</option>
-                            <option value="3">3</option>
-                            <option value="5">5</option>
-                        </select>
-                    </label>
+            <div class="tb-regions">
+                <!-- Analysis parameters: two fixed lines so they never reflow. -->
+                <div class="tb-region tb-params">
+                    <div class="tb-row tb-row-selects">
+                        <label class="tb-field">
+                            <span>Group <span class="info-icon" title="How trips are grouped on the time axis. Week, month, quarter or year are calendar buckets. Every 250 km, 500 km, 1000 km, 10 h or 50 h step through your history by mileage or runtime instead.">i</span></span>
+                            <select id="group-select">
+                                <option value="week">Week</option>
+                                <option value="month" selected>Month</option>
+                                <option value="quarter">Quarter</option>
+                                <option value="year">Year</option>
+                                <option value="km250">Every 250 km</option>
+                                <option value="km500">Every 500 km</option>
+                                <option value="km1000">Every 1000 km</option>
+                                <option value="h10">Every 10 h</option>
+                                <option value="h50">Every 50 h</option>
+                            </select>
+                        </label>
+                        <label class="tb-field">
+                            <span>Min trips/bin <span class="info-icon" title="A group with fewer than this many trips is skipped. Stops one unusual ride from looking like a real trend in a quiet month.">i</span></span>
+                            <select id="minbin-select">
+                                <option value="1">1</option>
+                                <option value="2" selected>2</option>
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                            </select>
+                        </label>
+                        <label class="tb-field">
+                            <span>Min batt&nbsp;use <span class="info-icon" title="Estimated range is only computed for trips that used at least this much battery. Tiny battery drops blow up into wild range numbers, so we skip them. Lower if your trips are short; raise if you actually drain the pack.">i</span></span>
+                            <select id="batt-min-select">
+                                <option value="5">5%</option>
+                                <option value="10" selected>10%</option>
+                                <option value="20">20%</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="tb-row tb-row-toggles">
+                        <button type="button" id="scope-toggle" class="scope-toggle" title="Narrow the analyses to a sub-range of your history.">
+                            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="3.5" cy="8" r="1.6"/><circle cx="12.5" cy="8" r="1.6"/><line x1="5.1" y1="8" x2="10.9" y2="8"/>
+                            </svg>
+                            <span>Scope</span>
+                        </button>
+                        <label class="check-label">
+                            <input type="checkbox" id="rolling-check" checked />
+                            <span>Smooth <span class="info-icon" title="Adds a dashed white line over each chart that averages every point with its two neighbours. Hides single-bin noise so the trend is easier to read.">i</span></span>
+                        </label>
+                        <label class="check-label">
+                            <input type="checkbox" id="normalize-check" disabled />
+                            <span>Norm 20&nbsp;&deg;C <span class="info-icon" title="Subtracts the temperature effect from range so a cold month doesn't look like battery aging. Needs weather data loaded and at least 10 trips with both battery and ambient temp.">i</span></span>
+                        </label>
+                    </div>
                 </div>
-                <div class="ctrl-group" data-group="filters">
-                    <label>
-                        <span>Min batt&nbsp;use <span class="info-icon" title="Estimated range is only computed for trips that used at least this much battery. Tiny battery drops blow up into wild range numbers, so we skip them. Lower if your trips are short; raise if you actually drain the pack.">i</span></span>
-                        <select id="batt-min-select">
-                            <option value="5">5%</option>
-                            <option value="10" selected>10%</option>
-                            <option value="20">20%</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="ctrl-group" data-group="overlays">
-                    <label class="check-label">
-                        <input type="checkbox" id="rolling-check" checked />
-                        <span>Smooth <span class="info-icon" title="Adds a dashed white line over each chart that averages every point with its two neighbours. Hides single-bin noise so the trend is easier to read.">i</span></span>
-                    </label>
-                    <label class="check-label">
-                        <input type="checkbox" id="normalize-check" disabled />
-                        <span>Norm 20&nbsp;&deg;C <span class="info-icon" title="Subtracts the temperature effect from range so a cold month doesn't look like battery aging. Needs weather data loaded and at least 10 trips with both battery and ambient temp.">i</span></span>
-                    </label>
-                </div>
-                <div class="ctrl-group" data-group="actions">
+
+                <!-- Weather region. -->
+                <div class="tb-region tb-weather">
                     <span class="weather-capsule">
                         <button type="button" id="weather-btn" title="Downloads historical daily temperatures from open-meteo.com for each trip's rounded location. Unlocks ambient-aware analyses (range vs temp, thermal vs ambient).">Add weather data</button>
                         <button type="button" id="weather-refresh-btn" class="weather-refresh" title="Try again for the trips not yet in the archive.">!</button>
                         <button type="button" id="weather-remove-btn" class="weather-remove" title="Stop using weather data. The cache stays so adding it again is instant.">&times;</button>
                     </span>
                     <span id="weather-status"></span>
-                    <button type="button" id="layout-toggle" class="layout-toggle-btn" title="Switch layout">
-                        <svg class="layout-icon-tabs" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                            <rect x="1" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
-                            <rect x="10" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
-                        </svg>
-                        <svg class="layout-icon-single" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                            <rect x="2" y="2" width="12" height="3" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
-                            <rect x="2" y="6.5" width="12" height="3" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
-                            <rect x="2" y="11" width="12" height="3" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
-                        </svg>
-                    </button>
+                </div>
+
+                <!-- Output region: range calculator + print / layout. -->
+                <div class="tb-region tb-output">
                     <button type="button" id="calc-btn" class="calc-btn hidden" title="Range calculator. Pick battery, distance, speed, climb, ambient and get a pessimistic, neutral, optimistic forecast based on your own history.">
                         <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="2.5" y="1.5" width="11" height="13" rx="0.5"/>
-                            <line x1="2.5" y1="5" x2="13.5" y2="5"/>
-                            <line x1="5" y1="8" x2="5" y2="12"/>
-                            <line x1="8" y1="8" x2="8" y2="12"/>
-                            <line x1="11" y1="8" x2="11" y2="12"/>
+                            <rect x="2.5" y="1.5" width="11" height="13" rx="0.5"/><line x1="2.5" y1="5" x2="13.5" y2="5"/><line x1="5" y1="8" x2="5" y2="12"/><line x1="8" y1="8" x2="8" y2="12"/><line x1="11" y1="8" x2="11" y2="12"/>
                         </svg>
                         <span>Range calc</span>
                     </button>
-                    <button type="button" id="print-btn" class="print-btn" title="Open the browser print dialog with a clean light-theme version of the report. Pick &quot;Save as PDF&quot; to export.">
-                        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <polyline points="4 5 4 2 12 2 12 5"/>
-                            <rect x="2" y="5" width="12" height="6" rx="1"/>
-                            <rect x="4" y="9" width="8" height="5"/>
-                        </svg>
-                        <span>Print</span>
-                    </button>
+                    <span class="tb-output-icons">
+                        <button type="button" id="layout-toggle" class="layout-toggle-btn" title="Switch layout">
+                            <svg class="layout-icon-tabs" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                                <rect x="1" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                                <rect x="10" y="2" width="5" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                            </svg>
+                            <svg class="layout-icon-single" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                                <rect x="2" y="2" width="12" height="3" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                                <rect x="2" y="6.5" width="12" height="3" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                                <rect x="2" y="11" width="12" height="3" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                            </svg>
+                        </button>
+                        <button type="button" id="print-btn" class="print-btn print-btn-icon" title="Open the browser print dialog with a clean light-theme version of the report. Pick &quot;Save as PDF&quot; to export." aria-label="Print / Save as PDF">
+                            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="4 5 4 2 12 2 12 5"/><rect x="2" y="5" width="12" height="6" rx="1"/><rect x="4" y="9" width="8" height="5"/>
+                            </svg>
+                        </button>
+                    </span>
                 </div>
             </div>
         </header>
@@ -538,10 +538,23 @@
         <header class="calc-header">
           <span class="calc-tag">PLAN</span>
           <h3>Range calculator</h3>
+          <button type="button" id="calc-dna-export" class="calc-hicon" title="Export this wheel's range model (Wheel DNA) as .json">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+          </button>
+          <button type="button" id="calc-dna-import" class="calc-hicon" title="Import a Wheel DNA .json (plan on another wheel's model)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
+          </button>
+          <input type="file" id="calc-dna-file" class="hidden" accept=".json,application/json" />
           <button type="button" class="calc-close" data-calc-close aria-label="Close">&times;</button>
         </header>
         <div class="calc-body">
           <div class="calc-inputs">
+            <div class="calc-dna-row hidden" id="calc-dna-row">
+              <span class="calc-dna-label">Model</span>
+              <button type="button" class="calc-dna-opt on" id="calc-dna-trips">Your trips</button>
+              <button type="button" class="calc-dna-opt" id="calc-dna-imported"></button>
+              <button type="button" class="calc-dna-clear" id="calc-dna-clear" title="Forget the imported Wheel DNA">&times;</button>
+            </div>
             <label class="calc-row">
               <span class="calc-name">Remaining battery</span>
               <input type="range" id="calc-batt" min="5" max="100" step="1" value="100" />
@@ -719,6 +732,17 @@
                   <option value="custom">Pick on map</option>
                 </select>
               </label>
+              <label>
+                <span>Source</span>
+                <select id="calc-weather-source" title="Forecast model, all keyless. Open-Meteo picks the best model for your location automatically; the rest force one specific model so you can compare.">
+                  <option value="best_match" selected>Open-Meteo</option>
+                  <option value="metno">MET Norway</option>
+                  <option value="ecmwf_ifs025">ECMWF</option>
+                  <option value="gfs_seamless">NOAA GFS</option>
+                  <option value="icon_seamless">DWD ICON</option>
+                  <option value="meteofrance_seamless">Meteo-France</option>
+                </select>
+              </label>
               <label class="calc-weather-custom hidden" id="calc-weather-custom-row">
                 <span>Lat / Lon</span>
                 <input type="text" id="calc-weather-latlon" placeholder="48.86, 2.34" />
@@ -737,6 +761,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=82"></script>
+    <script src="static/js/analytics.js?v=84"></script>
 </body>
 </html>

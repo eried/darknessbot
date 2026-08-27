@@ -67,12 +67,12 @@
       .replace(/meters of altitude gain per km/g, "feet of altitude gain per mi")
       .replace(/(\d+(?:\.\d+)?)\s*km\b/g, (_, n) => `${Math.round(n * 0.621371)} mi`);
     document.querySelectorAll(
-      ".sec-hint, .chart-explainer, .chart-title, #group-select option, .controls .check-label > span"
+      ".sec-hint, .chart-explainer, .chart-title, #group-select option, #topbar .check-label > span"
     ).forEach((el) => {
       if (el.children.length === 0) el.textContent = conv(el.textContent);
       else el.innerHTML = conv(el.innerHTML);
     });
-    document.querySelectorAll("#lifetime-bar .stat-card[title], .controls .info-icon[title]").forEach((el) => {
+    document.querySelectorAll("#lifetime-bar .stat-card[title], #topbar .info-icon[title]").forEach((el) => {
       el.setAttribute("title", conv(el.getAttribute("title") || ""));
     });
     const accelCard = document.getElementById("lf-accel40");
@@ -2604,6 +2604,17 @@
     };
   }
 
+  // ---------- Wheel DNA (portable range model) ----------
+  // The calculator's whole per-wheel brain (OLS fit + sigma + the in-ride
+  // cost-of-speed curve) serialised to a small .json. Exporting shares your
+  // wheel's measured behaviour; importing one drives the calculator without
+  // needing the trips, so you can plan a ride on a wheel you don't own.
+  let importedDna = null;
+  let dnaActive = false;
+  const DNA_STORE_KEY = "eucviewer-wheel-dna";
+  function activeFit() { return (dnaActive && importedDna) ? importedDna.model : multiFit; }
+  function activeCurve() { return (dnaActive && importedDna) ? (importedDna.speedCurve || null) : getSpeedCurve(); }
+
   function normalizedRange(m) {
     if (m.estRangeKm == null) return null;
     if (!normalizeCheck.checked || !tempFit || m.ambientC == null) return m.estRangeKm;
@@ -3853,9 +3864,11 @@
   };
   let calcWired = false;
   function calcModelSigmaKm() {
-    if (!multiFit) return 0;
-    const dof = Math.max(1, multiFit.n - 4);
-    return Math.sqrt(multiFit.rss / dof);
+    const fit = activeFit();
+    if (!fit) return 0;
+    if (fit.sigmaKm != null) return fit.sigmaKm; // imported DNA carries it precomputed
+    const dof = Math.max(1, fit.n - 4);
+    return Math.sqrt(fit.rss / dof);
   }
   // Cached in-ride cost curve for the hybrid range model. Rebuilt when the
   // scope changes (renderAll clears it). Points are band centers paired
@@ -3886,18 +3899,19 @@
   // pushing the speed slider past your data bends the estimate down with
   // drag instead of riding the positive linear speed term into fantasy.
   function calcRangeKm(sKmh, tC, climbMperKm) {
-    if (!multiFit) return null;
-    const lin = (s) => multiFit.intercept
-                     + multiFit.speedSlope * s
-                     + multiFit.tempSlope  * tC
-                     + multiFit.climbSlope * climbMperKm;
-    const curve = getSpeedCurve();
-    if (!curve || multiFit.sLoKmh == null) return lin(sKmh);
-    if (sKmh > multiFit.sHiKmh) {
-      return lin(multiFit.sHiKmh) + speedCurveRangeAt(curve, sKmh) - speedCurveRangeAt(curve, multiFit.sHiKmh);
+    const fit = activeFit();
+    if (!fit) return null;
+    const lin = (s) => fit.intercept
+                     + fit.speedSlope * s
+                     + fit.tempSlope  * tC
+                     + fit.climbSlope * climbMperKm;
+    const curve = activeCurve();
+    if (!curve || fit.sLoKmh == null) return lin(sKmh);
+    if (sKmh > fit.sHiKmh) {
+      return lin(fit.sHiKmh) + speedCurveRangeAt(curve, sKmh) - speedCurveRangeAt(curve, fit.sHiKmh);
     }
-    if (sKmh < multiFit.sLoKmh) {
-      return lin(multiFit.sLoKmh) + speedCurveRangeAt(curve, sKmh) - speedCurveRangeAt(curve, multiFit.sLoKmh);
+    if (sKmh < fit.sLoKmh) {
+      return lin(fit.sLoKmh) + speedCurveRangeAt(curve, sKmh) - speedCurveRangeAt(curve, fit.sLoKmh);
     }
     return lin(sKmh);
   }
@@ -3905,8 +3919,9 @@
   // envelope (2 km/h grace so the note doesn't nag at the boundary), i.e.
   // the prediction is riding the in-ride curve extension.
   function calcSpeedBeyondData(sKmh) {
-    if (!multiFit || multiFit.sLoKmh == null || !getSpeedCurve()) return false;
-    return sKmh > multiFit.sHiKmh + 2 || sKmh < multiFit.sLoKmh - 2;
+    const fit = activeFit();
+    if (!fit || fit.sLoKmh == null || !activeCurve()) return false;
+    return sKmh > fit.sHiKmh + 2 || sKmh < fit.sLoKmh - 2;
   }
   // Battery-used (pess / neut / opt) for a single leg of distance D km,
   // given internal-units inputs. Pessimistic = the worst (largest) battery
@@ -3936,7 +3951,7 @@
   function calcSpeedKmh(s){ return UNITS.imperial ? s / 0.621371 : s; }
   function calcTempC(t)   { return UNITS.imperial ? (t - 32) * 5 / 9 : t; }
   function updateCalculator(srcEvt) {
-    if (!calcEls.modal || !multiFit) return;
+    if (!calcEls.modal || !activeFit()) return;
     const B = Number(calcEls.batt.value);
     let dDisp = Number(calcEls.dist.value);
     const sDisp = Number(calcEls.speed.value);
@@ -4033,8 +4048,9 @@
     const noteEl = document.getElementById("calc-model-note");
     if (noteEl) {
       if (calcSpeedBeyondData(sKmh)) {
-        const loD = Math.round(UNITS.speed(multiFit.sLoKmh));
-        const hiD = Math.round(UNITS.speed(multiFit.sHiKmh));
+        const fitN = activeFit();
+        const loD = Math.round(UNITS.speed(fitN.sLoKmh));
+        const hiD = Math.round(UNITS.speed(fitN.sHiKmh));
         noteEl.innerHTML = `Your trips average ${loD}&ndash;${hiD} ${UNITS.speedUnit}. Beyond that the estimate follows your in-ride cost-of-speed curve, thinner data.`;
         noteEl.classList.remove("hidden");
       } else {
@@ -4054,7 +4070,7 @@
   // crosshair with battery, time, and range remaining at that distance.
   function drawCalcChart(B, distKm, sKmh, tC, climbMperKm, isRound) {
     const c = calcEls.canvas;
-    if (!c || !multiFit) return;
+    if (!c || !activeFit()) return;
     calcChartLastArgs = [B, distKm, sKmh, tC, climbMperKm, isRound];
     const dpr = window.devicePixelRatio || 1;
     const cssW = c.clientWidth || c.width;
@@ -4373,15 +4389,16 @@
     const dists  = dated.map((m) => m.distKm).filter((d) => d > 0);
     const temps  = dated.filter((m) => m.ambientC != null).map((m) => m.ambientC);
     const climbs = dated.filter((m) => m.climbM != null).map((m) => m.climbM);
-    const medS = speeds.length ? median(speeds) : 25;
+    const fitM = activeFit();
+    const medS = speeds.length ? median(speeds) : (fitM && fitM.medSpeedKmh != null ? fitM.medSpeedKmh : 25);
     const medD = dists.length  ? median(dists)  : 10;
-    const medT = temps.length  ? median(temps)  : 20;
+    const medT = temps.length  ? median(temps)  : (fitM && fitM.medTempC != null ? fitM.medTempC : 20);
     const maxD = dists.length ? percentile(dists, 0.99) * 1.5 : 50;
     const maxC = climbs.length ? Math.max(500, percentile(climbs.map(Math.abs), 0.95) * 1.5) : 500;
     // Speed ceiling: the fastest in-ride band with real data behind it
     // (hybrid model territory), not an arbitrary constant. Falls back to
     // 55 when there aren't enough bands to build the curve.
-    const curve = getSpeedCurve();
+    const curve = activeCurve();
     const sMin = 10, sMax = curve ? Math.max(30, curve.sMax) : 55, tMin = -15, tMax = 40;
     const sMinD = Math.round(UNITS.speed(sMin));
     const sMaxD = Math.round(UNITS.speed(sMax));
@@ -4471,12 +4488,23 @@
     };
     // Both `change` (date picker confirm, select choice) and `input`
     // (every keystroke in lat/lon) cover the typical interaction modes.
-    ["calc-weather-date", "calc-weather-loc", "calc-weather-latlon"].forEach((id) => {
+    ["calc-weather-date", "calc-weather-loc", "calc-weather-latlon", "calc-weather-source"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener("change", queueFetch);
       el.addEventListener("input", queueFetch);
     });
+    // Forecast source sticks per browser.
+    const weatherSrcSel = document.getElementById("calc-weather-source");
+    if (weatherSrcSel) {
+      try {
+        const s = localStorage.getItem("eucviewer-weather-source");
+        if (s && weatherSrcSel.querySelector(`option[value="${s}"]`)) weatherSrcSel.value = s;
+      } catch (_) {}
+      weatherSrcSel.addEventListener("change", () => {
+        try { localStorage.setItem("eucviewer-weather-source", weatherSrcSel.value); } catch (_) {}
+      });
+    }
     const weatherLoc = document.getElementById("calc-weather-loc");
     if (weatherLoc) weatherLoc.addEventListener("change", () => {
       // Once the user picks a location explicitly, don't auto-snap back
@@ -4889,12 +4917,39 @@
     status.textContent = "Fetching forecast…";
     try {
       const date = dateEl.value;
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m&start_date=${date}&end_date=${date}&timezone=auto`;
-      const r = await fetch(url);
-      const j = await r.json();
-      const times = (j.hourly && j.hourly.time) || [];
-      const temps = (j.hourly && j.hourly.temperature_2m) || [];
-      if (!temps.length) throw new Error("No hourly forecast for that date (max +14 days).");
+      // Forecast source: Open-Meteo's best_match (default) or a forced model
+      // via &models=; MET Norway is a separate API with its own shape. All
+      // keyless, mirroring the source combo in the EUC Planet app.
+      const srcSel = document.getElementById("calc-weather-source");
+      const src = srcSel ? srcSel.value : "best_match";
+      let times = [], temps = [];
+      if (src === "metno") {
+        const r = await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const j = await r.json();
+        // Times come in UTC; convert to browser-local so the hour grid lines
+        // up with the ride window (assumes you plan rides in your own zone).
+        for (const t of ((j.properties && j.properties.timeseries) || [])) {
+          const d = new Date(t.time);
+          const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
+          if (local.slice(0, 10) !== date) continue;
+          const det = t.data && t.data.instant && t.data.instant.details;
+          if (!det || det.air_temperature == null) continue;
+          times.push(local.slice(0, 13) + ":00");
+          temps.push(det.air_temperature);
+        }
+        if (!temps.length) throw new Error("MET Norway has no hourly data for that date (hourly ~3 days out, ~10 days total).");
+      } else {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&hourly=temperature_2m&start_date=${date}&end_date=${date}&timezone=auto` +
+          (src !== "best_match" ? `&models=${src}` : "");
+        const r = await fetch(url);
+        const j = await r.json();
+        const rawT = (j.hourly && j.hourly.time) || [];
+        const rawV = (j.hourly && j.hourly.temperature_2m) || [];
+        // A model that doesn't cover this point / date returns nulls; drop them.
+        for (let i = 0; i < rawV.length; i++) if (rawV[i] != null) { times.push(rawT[i]); temps.push(rawV[i]); }
+        if (!temps.length) throw new Error("No hourly forecast for that date from this source (max +14 days).");
+      }
       const [sh, sm] = startEl.value.split(":").map(Number);
       const [eh, em] = endEl.value.split(":").map(Number);
       const sMin = (sh || 0) * 60 + (sm || 0);
@@ -4918,7 +4973,8 @@
       }
       if (!n) { status.textContent = "Ride window outside forecast hours."; return; }
       const avg = sum / n;
-      pendingWeather = { ambientC: avg, label: `${date} ${startEl.value}–${endEl.value} @ ${locLabel} (avg ${avg.toFixed(1)} °C)` };
+      const SRC_NAMES = { best_match: "Open-Meteo", metno: "MET Norway", ecmwf_ifs025: "ECMWF", gfs_seamless: "NOAA GFS", icon_seamless: "DWD ICON", meteofrance_seamless: "Meteo-France" };
+      pendingWeather = { ambientC: avg, label: `${date} ${startEl.value}–${endEl.value} @ ${locLabel} (avg ${avg.toFixed(1)} °C, ${SRC_NAMES[src] || src})` };
       // Stash the cells so we can re-render highlighting without re-fetching.
       lastForecastCells = cells;
       renderForecastCells();
@@ -5000,25 +5056,149 @@
 
   function refreshCalcButton() {
     if (!calcEls.btn) return;
-    if (multiFit) {
+    syncDnaUi();
+    const fit = activeFit();
+    if (fit) {
       calcEls.btn.classList.remove("hidden");
       calcEls.btn.removeAttribute("disabled");
-      calcEls.btn.title = `Range calculator. Pessimistic, neutral, optimistic forecast from your own history (n=${multiFit.n}, R²=${multiFit.r2.toFixed(2)}).`;
+      calcEls.btn.title = (dnaActive && importedDna)
+        ? `Range calculator using imported Wheel DNA "${importedDna.wheel || "?"}" (n=${fit.n != null ? fit.n : "?"}, R²=${fit.r2 != null ? fit.r2.toFixed(2) : "?"}).`
+        : `Range calculator. Pessimistic, neutral, optimistic forecast from your own history (n=${fit.n}, R²=${fit.r2.toFixed(2)}).`;
       wireCalculator();
     } else {
-      // Keep the button visible so the user knows the feature exists,
-      // but disable it and explain what's missing. Avoids the silent
-      // disappearance that left users wondering where it went.
+      // Keep the button visible so the user knows the feature exists, but
+      // disable it and explain the *actual* blocker. The fit needs ambient
+      // temperature, which only exists once weather is loaded, so lead with
+      // that instead of a bare trip count that looks like "just ride more"
+      // (and never changes when you pick a wheel that lacks weather).
       calcEls.btn.classList.remove("hidden");
       calcEls.btn.setAttribute("disabled", "");
       const needed = 20;
-      const have = dated.filter((m) => m.estRangeKm != null
-        && m.avgMovingSpeed != null && m.avgMovingSpeed > 5
-        && m.ambientC != null && m.climbM != null && m.distKm >= 2).length;
-      calcEls.btn.title = `Range calculator unavailable: need ${needed} rides with range + speed + ambient + climb data, you have ${have}. Add weather (top right) so trips can contribute ambient temperature.`;
+      const hasRangeClimb = (m) => m.estRangeKm != null && m.avgMovingSpeed != null
+        && m.avgMovingSpeed > 5 && m.climbM != null && m.distKm >= 2;
+      const withoutAmbient = dated.filter(hasRangeClimb).length;
+      const have = dated.filter((m) => hasRangeClimb(m) && m.ambientC != null).length;
+      const anyAmbient = dated.some((m) => m.ambientC != null);
+      if (!anyAmbient) {
+        calcEls.btn.title = `Range calculator needs weather. Click "Add weather data" in the top bar so trips get an ambient temperature — then it unlocks once ${needed} rides have range + speed + climb + ambient (this scope has ${withoutAmbient} with range + speed + climb so far).`;
+      } else {
+        calcEls.btn.title = `Range calculator unavailable: ${have} of the ${needed} rides it needs have range + speed + ambient + climb data in this scope.` + (have < needed ? ` Need ${needed - have} more (add weather to trips missing ambient, or widen the scope).` : "");
+      }
       if (calcEls.modal) calcEls.modal.classList.add("hidden");
     }
   }
+
+  // ---------- Wheel DNA export / import wiring ----------
+  function dnaWheelLabel() {
+    const gi = (wheelScopeSel && wheelScopeSel.value !== "") ? Number(wheelScopeSel.value) : -1;
+    if (gi >= 0 && wheelGroups[gi]) return wheelGroups[gi].label;
+    if (wheelGroups.length === 1) return wheelGroups[0].label;
+    return wheelGroups.length > 1 ? "All wheels" : "My wheel";
+  }
+  function buildWheelDna() {
+    if (!multiFit) return null;
+    let totalKm = 0;
+    for (const m of dated) totalKm += m.distKm;
+    const dof = Math.max(1, multiFit.n - 4);
+    return {
+      format: "eucviewer-wheel-dna",
+      version: 1,
+      wheel: dnaWheelLabel(),
+      generated: new Date().toISOString().slice(0, 10),
+      totalKm: Math.round(totalKm),
+      trips: dated.length,
+      // The trips-based model, always (never re-exports an imported DNA).
+      model: Object.assign({}, multiFit, { sigmaKm: Math.sqrt(multiFit.rss / dof) }),
+      speedCurve: getSpeedCurve(),
+    };
+  }
+  function syncDnaUi() {
+    const expBtn = document.getElementById("calc-dna-export");
+    if (expBtn) expBtn.disabled = !multiFit;
+    const row = document.getElementById("calc-dna-row");
+    if (!row) return;
+    row.classList.toggle("hidden", !importedDna);
+    if (!importedDna) { dnaActive = false; return; }
+    const tripsBtn = document.getElementById("calc-dna-trips");
+    const impBtn = document.getElementById("calc-dna-imported");
+    if (!multiFit) dnaActive = true; // nothing to fall back to
+    tripsBtn.disabled = !multiFit;
+    tripsBtn.title = multiFit ? "Use the model fitted from your own trips" : "Not enough usable trips in this scope for a trips-based model";
+    tripsBtn.classList.toggle("on", !dnaActive);
+    impBtn.classList.toggle("on", dnaActive);
+    impBtn.textContent = "\u{1F9EC} " + (importedDna.wheel || "Imported");
+    impBtn.title = `Wheel DNA: ${importedDna.wheel || "?"} · ${importedDna.totalKm != null ? importedDna.totalKm : "?"} km · ${importedDna.trips != null ? importedDna.trips : "?"} trips · exported ${importedDna.generated || "?"}`;
+  }
+  function persistDna() {
+    try {
+      if (importedDna) localStorage.setItem(DNA_STORE_KEY, JSON.stringify({ dna: importedDna, active: dnaActive }));
+      else localStorage.removeItem(DNA_STORE_KEY);
+    } catch (_) {}
+  }
+  (function setupWheelDna() {
+    // Restore a previously imported DNA so a friend's wheel stays plannable
+    // across reloads without re-importing the file.
+    try {
+      const s = JSON.parse(localStorage.getItem(DNA_STORE_KEY) || "null");
+      if (s && s.dna && s.dna.format === "eucviewer-wheel-dna" && s.dna.model) {
+        importedDna = s.dna;
+        dnaActive = !!s.active;
+      }
+    } catch (_) {}
+    const expBtn = document.getElementById("calc-dna-export");
+    const impBtn = document.getElementById("calc-dna-import");
+    const fileEl = document.getElementById("calc-dna-file");
+    if (expBtn) expBtn.addEventListener("click", () => {
+      const dna = buildWheelDna();
+      if (!dna) return;
+      const slug = (dna.wheel || "wheel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "wheel";
+      const blob = new Blob([JSON.stringify(dna, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${slug}-${dna.totalKm}km-${dna.generated.slice(0, 7)}.dna.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    if (impBtn && fileEl) {
+      impBtn.addEventListener("click", () => fileEl.click());
+      fileEl.addEventListener("change", () => {
+        const f = fileEl.files && fileEl.files[0];
+        fileEl.value = "";
+        if (!f) return;
+        const rd = new FileReader();
+        rd.onload = () => {
+          try {
+            const dna = JSON.parse(rd.result);
+            if (!dna || dna.format !== "eucviewer-wheel-dna" || !dna.model
+                || typeof dna.model.intercept !== "number") throw new Error("bad");
+            importedDna = dna;
+            dnaActive = true;
+            persistDna();
+            refreshCalcButton();
+            calcSetSliderRanges();
+            updateCalculator();
+          } catch (_) { alert("That doesn't look like a Wheel DNA file."); }
+        };
+        rd.readAsText(f);
+      });
+    }
+    const setActive = (on) => {
+      dnaActive = on;
+      persistDna();
+      refreshCalcButton();
+      calcSetSliderRanges();
+      updateCalculator();
+    };
+    const tripsBtn = document.getElementById("calc-dna-trips");
+    const impSel = document.getElementById("calc-dna-imported");
+    const clearBtn = document.getElementById("calc-dna-clear");
+    if (tripsBtn) tripsBtn.addEventListener("click", () => setActive(false));
+    if (impSel) impSel.addEventListener("click", () => setActive(true));
+    if (clearBtn) clearBtn.addEventListener("click", () => {
+      importedDna = null;
+      setActive(false);
+    });
+  })();
 
   // ---------- Render pipeline ----------
   function renderAll() {

@@ -41,10 +41,10 @@ body::before {
    are ~400 px tall and swallowed half the screen.) */
 #topbar {
     display: flex;
-    align-items: center;
-    gap: 14px;
+    align-items: stretch;
+    gap: 12px;
     flex-wrap: wrap;
-    padding: 10px 16px;
+    padding: 8px 14px;
     background: #0a0a12;
     border-bottom: 1px solid rgba(179, 136, 255, 0.22);
     box-shadow: 0 1px 0 rgba(0,0,0,0.6);
@@ -60,7 +60,7 @@ body::before {
 }
 .back-link:hover { background: rgba(0, 229, 255, 0.1); }
 
-.page-title { margin-right: 12px; }
+.tb-title { display: flex; flex-direction: column; justify-content: center; margin-right: auto; }
 #page-name {
     color: #fff;
     font-size: 1rem;
@@ -82,65 +82,75 @@ body::before {
     margin-top: 2px;
 }
 
-.controls {
+/* Top-bar regions: a few self-contained cards (params / weather / output)
+   so a changing weather status or the range-calc button toggling never
+   reshuffles the whole bar. Cards stretch to a common height. */
+.tb-regions {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: flex-end;
-    gap: 10px 4px;
+    gap: 10px;
     flex-wrap: wrap;
     margin-left: auto;
 }
-.ctrl-group {
+.tb-region {
     display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 0 12px;
-    position: relative;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    padding: 7px 11px;
+    border: 1px solid rgba(179, 136, 255, 0.16);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
 }
-.ctrl-group + .ctrl-group::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 1px;
-    background: rgba(255, 255, 255, 0.08);
-}
-.controls label {
+.tb-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.tb-row-toggles { align-items: center; }
+.tb-field {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    font-size: 0.68rem;
+    font-size: 0.62rem;
     color: #888;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
-.controls label.check-label {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    text-transform: none;
-    letter-spacing: 0;
-    font-size: 0.78rem;
-    color: #bbb;
-    cursor: pointer;
-}
-.controls label.check-label input[disabled] + span { color: #555; }
-.controls select {
+.tb-region select {
     background: rgba(255, 255, 255, 0.06);
     color: #e0e0e0;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 2px;
+    border-radius: 3px;
     padding: 4px 6px;
     font-size: 0.78rem;
     outline: none;
     color-scheme: dark;
 }
-.controls select option {
-    background: #1a1a1f;
-    color: #e0e0e0;
+.tb-region select:focus { border-color: rgba(179, 136, 255, 0.5); }
+.tb-region select option { background: #1a1a1f; color: #e0e0e0; }
+.check-label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #bbb;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
 }
-.controls select:focus { border-color: rgba(179, 136, 255, 0.5); }
+.check-label input[disabled] + span { color: #555; }
+
+/* Weather card: capsule on top, status underneath, so a status string that
+   grows / shrinks never widens the row and shoves its neighbours. */
+.tb-weather { align-items: flex-start; min-width: 150px; }
+.tb-weather #weather-status { max-width: 220px; }
+
+/* Output card: range calc beside the icon buttons, vertically centred. */
+.tb-output { flex-direction: row; align-items: center; gap: 8px; }
+.tb-output-icons { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Print collapses to a compact square icon button. */
+.print-btn.print-btn-icon { padding: 6px; }
+.print-btn.print-btn-icon svg { display: block; }
 
 .weather-capsule {
     display: inline-flex;
@@ -1236,6 +1246,67 @@ body.weather-loaded .forensic-tag.weather-tag {
 }
 .calc-close:hover { color: #fff; border-color: #69f0ae; }
 
+/* Wheel DNA: subtle export / import icons in the calculator title bar
+   (mirrors the Customize dialogs' title-bar icons). */
+#calc-modal .calc-close { margin-left: 6px; }
+.calc-hicon {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #789;
+    width: 26px;
+    height: 26px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.calc-hicon + .calc-hicon { margin-left: 2px; }
+.calc-hicon svg { width: 15px; height: 15px; }
+.calc-hicon:hover:not(:disabled) { color: #bfeef7; background: rgba(255, 255, 255, 0.06); }
+.calc-hicon:disabled { opacity: 0.35; cursor: default; }
+
+/* Model source row: which brain drives the calculator (your trips vs an
+   imported Wheel DNA). Hidden until a DNA is imported. */
+.calc-dna-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: #889;
+}
+.calc-dna-row.hidden { display: none; }
+.calc-dna-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.62rem; color: #778; }
+.calc-dna-opt {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #9ab;
+    font-size: 0.72rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.calc-dna-opt.on { color: #dff; background: rgba(105, 240, 174, 0.12); border-color: rgba(105, 240, 174, 0.5); }
+.calc-dna-opt:disabled { opacity: 0.4; cursor: default; }
+.calc-dna-clear {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #8a929a;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+.calc-dna-clear:hover { color: #ff6b6b; border-color: rgba(255, 90, 90, 0.4); }
+
 .calc-body {
     padding: 16px;
     display: grid;
@@ -1802,10 +1873,8 @@ body.weather-loaded .forensic-tag.weather-tag {
     /* On medium widths the Plan button stays text-visible — only the
        Print button label hides via .print-btn span (existing rules). */
 }
-@media (max-width: 640px) {
-    /* Compact: hide the "Plan" label, keep just the icon. */
-    .calc-btn span { display: none; }
-}
+/* The range-calc label now has room inside the output card at every width,
+   so it stays visible; only Print collapses to an icon. */
 
 /* === Print / PDF export ===
    A proper light-theme report: white background, dark text, clean
@@ -1830,7 +1899,7 @@ body.print-mode #topbar {
 body.print-mode #page-name { color: #1a1a1a !important; }
 body.print-mode #page-name::before { color: rgba(0, 0, 0, 0.35) !important; }
 body.print-mode #page-subtitle { color: #555 !important; }
-body.print-mode #topbar .controls,
+body.print-mode #topbar .tb-regions,
 body.print-mode #tab-bar,
 body.print-mode #date-range-panel,
 body.print-mode #scope-toggle,
@@ -1924,7 +1993,7 @@ body.print-mode .anomaly-row .anom-peak { color: #000 !important; }
     body, body.print-mode { background: #ffffff !important; }
     body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     body::before { display: none !important; }
-    #topbar .controls,
+    #topbar .tb-regions,
     #tab-bar,
     #date-range-panel,
     #scope-toggle,
@@ -1950,7 +2019,7 @@ body.print-mode .anomaly-row .anom-peak { color: #000 !important; }
 }
 
 @media (max-width: 700px) {
-    .controls { margin-left: 0; }
+    .tb-regions { margin-left: 0; }
     .chart-host { height: 240px; }
     .chart-host.tall { height: 300px; }
 
@@ -1967,18 +2036,16 @@ body.print-mode .anomaly-row .anom-peak { color: #000 !important; }
         font-size: 0.74rem;
         padding: 5px 9px;
     }
-    /* Stack the topbar contents so the controls don't elbow the title. */
+    /* Stack the topbar into full-width region cards so nothing elbows the
+       title and the cards never jump when a control changes. */
     #topbar { padding: 8px 10px; }
-    .page-title { width: 100%; }
-    .controls { width: 100%; gap: 8px; justify-content: flex-start; }
-    .controls label { flex-direction: row; align-items: center; gap: 6px; }
-    .controls label.check-label { font-size: 0.76rem; }
-    /* The vertical group separators turn into stray "|" marks once the
-       groups wrap onto their own rows — drop them and the side padding.
-       Every group wraps internally too, so a long weather capsule can't
-       push the Print button past the screen edge. */
-    .ctrl-group { padding: 0; flex-wrap: wrap; row-gap: 8px; }
-    .ctrl-group + .ctrl-group::before { display: none; }
+    .tb-title { width: 100%; }
+    .tb-regions { width: 100%; gap: 8px; justify-content: flex-start; }
+    .tb-region { flex: 1 1 100%; }
+    .tb-params .tb-field { flex-direction: row; align-items: center; gap: 6px; }
+    .tb-weather { min-width: 0; }
+    .tb-weather #weather-status { max-width: none; }
+    .check-label { font-size: 0.76rem; }
     .weather-capsule { max-width: 100%; }
     .weather-capsule #weather-btn { min-width: 0; }
     #weather-status { font-size: 0.68rem; }

@@ -225,6 +225,10 @@
   let viewT1 = duration;
   let loopOn = false;
   const isZoomed = () => viewT0 > 0.01 || viewT1 < duration - 0.01;
+  // Timestamp of the last touch gesture on a chart. The mouse scrub handlers
+  // ignore compatibility mouse events fired right after a touch, so a finger
+  // pan/pinch never doubles as a playhead scrub (ghost-click guard).
+  let lastTouchInteraction = -1e9;
   const sampleTimes = new Float64Array(ts.length);
   for (let i = 0; i < ts.length; i += 1) sampleTimes[i] = ts[i][SEC] - t0;
 
@@ -1600,7 +1604,7 @@
     attachZoomControls(cg);
     let dragging = false;
     const onMove = (clientX) => setCurrentTime(timeFromClientX(canvas, clientX));
-    canvas.addEventListener("mousedown", (e) => { dragging = true; onMove(e.clientX); e.preventDefault(); });
+    canvas.addEventListener("mousedown", (e) => { if (performance.now() - lastTouchInteraction < 600) return; dragging = true; onMove(e.clientX); e.preventDefault(); });
     window.addEventListener("mousemove", (e) => { if (dragging) onMove(e.clientX); });
     window.addEventListener("mouseup", () => { dragging = false; });
     return cg;
@@ -2151,6 +2155,7 @@
     const onWindowMove = e => { if (dragging) onMove(e.clientX); };
     const onWindowUp = () => { dragging = false; };
     c.canvas.addEventListener("mousedown", e => {
+      if (performance.now() - lastTouchInteraction < 600) return; // touch handled it
       dragging = true;
       onMove(e.clientX);
       e.preventDefault();
@@ -2728,49 +2733,79 @@
     }, { passive: false });
     c.canvas.addEventListener("dblclick", () => resetView());
 
-    // Touch pinch zoom via Pointer Events. Two-finger pinch on a chart
-    // narrows / widens the zoom window anchored on the midpoint between
-    // the two contacts. Single touch falls through to the existing scrub
-    // drag logic (which uses mousedown / window mousemove).
+    // Touch gestures (canvas is touch-action: pan-y, so vertical drags scroll
+    // the metrics list while these get the horizontal + pinch gestures):
+    //  - two fingers pinch the zoom window, anchored on the midpoint;
+    //  - one finger drags horizontally to pan the window when zoomed, or to
+    //    scrub the playhead when not; a tap scrubs.
     const pointers = new Map();
-    let prevDist = 0;
-    let pinchAnchorT = 0;
+    let prevDist = 0, pinchAnchorT = 0;
+    let solo = null; // one-finger gesture: { id, x0, y0, v0, v1, axis, moved }
+    const rectOf = () => c.canvas.getBoundingClientRect();
     c.canvas.addEventListener("pointerdown", (e) => {
       if (e.pointerType !== "touch") return;
+      lastTouchInteraction = performance.now();
       pointers.set(e.pointerId, e);
       if (pointers.size === 2) {
+        solo = null;
         const arr = Array.from(pointers.values());
         prevDist = Math.abs(arr[0].clientX - arr[1].clientX);
         const mid = (arr[0].clientX + arr[1].clientX) / 2;
-        const rect = c.canvas.getBoundingClientRect();
-        const xFrac = (mid - rect.left) / rect.width;
-        pinchAnchorT = viewT0 + xFrac * (viewT1 - viewT0);
+        const rect = rectOf();
+        pinchAnchorT = viewT0 + ((mid - rect.left) / rect.width) * (viewT1 - viewT0);
+      } else if (pointers.size === 1) {
+        solo = { id: e.pointerId, x0: e.clientX, y0: e.clientY, v0: viewT0, v1: viewT1, axis: null, moved: false };
       }
     });
     c.canvas.addEventListener("pointermove", (e) => {
       if (!pointers.has(e.pointerId)) return;
+      lastTouchInteraction = performance.now();
       pointers.set(e.pointerId, e);
-      if (pointers.size !== 2) return;
-      e.preventDefault();
-      const arr = Array.from(pointers.values());
-      const dist = Math.abs(arr[0].clientX - arr[1].clientX);
-      if (prevDist > 4 && dist > 4) {
-        const factor = prevDist / dist;
-        const span = Math.max(0.5, Math.min(duration, (viewT1 - viewT0) * factor));
-        const ratio = span / (viewT1 - viewT0);
-        setView(pinchAnchorT - (pinchAnchorT - viewT0) * ratio,
-                pinchAnchorT + (viewT1 - pinchAnchorT) * ratio);
+      if (pointers.size === 2) {
+        e.preventDefault();
+        const arr = Array.from(pointers.values());
+        const dist = Math.abs(arr[0].clientX - arr[1].clientX);
+        if (prevDist > 4 && dist > 4) {
+          const factor = prevDist / dist;
+          const span = Math.max(0.5, Math.min(duration, (viewT1 - viewT0) * factor));
+          const ratio = span / (viewT1 - viewT0);
+          setView(pinchAnchorT - (pinchAnchorT - viewT0) * ratio,
+                  pinchAnchorT + (viewT1 - pinchAnchorT) * ratio);
+        }
+        prevDist = dist;
+        return;
       }
-      prevDist = dist;
+      if (pointers.size !== 1 || !solo || e.pointerId !== solo.id) return;
+      const dx = e.clientX - solo.x0, dy = e.clientY - solo.y0;
+      if (!solo.axis) {
+        if (Math.hypot(dx, dy) < 8) return;   // wait until the intent is clear
+        solo.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (solo.axis === "y") return;           // vertical: let the list scroll
+      e.preventDefault();
+      solo.moved = true;
+      const span = solo.v1 - solo.v0;
+      if (isZoomed()) {
+        let a = solo.v0 - (dx / rectOf().width) * span; // drag right → earlier
+        a = Math.max(0, Math.min(duration - span, a));
+        setView(a, a + span);
+      } else {
+        setCurrentTime(timeFromClientX(c.canvas, e.clientX));
+      }
     });
-    const dropPointer = (e) => {
+    const endSolo = (e, tap) => {
       if (!pointers.has(e.pointerId)) return;
+      lastTouchInteraction = performance.now();
       pointers.delete(e.pointerId);
       if (pointers.size < 2) prevDist = 0;
+      if (solo && e.pointerId === solo.id) {
+        if (tap && !solo.moved) setCurrentTime(timeFromClientX(c.canvas, e.clientX));
+        solo = null;
+      }
     };
-    c.canvas.addEventListener("pointerup", dropPointer);
-    c.canvas.addEventListener("pointercancel", dropPointer);
-    c.canvas.addEventListener("pointerleave", dropPointer);
+    c.canvas.addEventListener("pointerup", (e) => endSolo(e, true));
+    c.canvas.addEventListener("pointercancel", (e) => endSolo(e, false));
+    c.canvas.addEventListener("pointerleave", (e) => endSolo(e, false));
   }
   charts.forEach(attachZoomControls);
   // Combined graphs wire their own scrub/zoom inside makeCombinedGraph().

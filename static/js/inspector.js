@@ -2246,6 +2246,18 @@
     timeMarker.textContent = timeMarkerText();
     timeMarker.classList.toggle("hidden", !(playing || scrubActive));
   }
+  // The zoom range pill and the time bubble share the same strip above the
+  // scrub bar, so they sit on top of each other while the playhead is being
+  // dragged. Fade the range out for the duration of the movement and bring it
+  // back shortly after the finger settles.
+  let playheadBusyTimer = null;
+  function markPlayheadActivity() {
+    const zi = document.getElementById("zoom-indicator");
+    if (!zi) return;
+    zi.classList.add("yielding");
+    clearTimeout(playheadBusyTimer);
+    playheadBusyTimer = setTimeout(() => zi.classList.remove("yielding"), 650);
+  }
   if (timeMarker && isFinite(tripStartMs)) {
     timeMarker.style.cursor = "pointer";
     timeMarker.title = "Click: elapsed → time of day → both";
@@ -2333,6 +2345,7 @@
   scrub.addEventListener("input", e => {
     const t = (e.target.value / 1000) * duration;
     setCurrentTime(t);
+    markPlayheadActivity();
   });
   // Show the time bubble while dragging the scrub, hide it on release
   // (unless playback keeps it up).
@@ -2855,8 +2868,11 @@
         });
       } else {
         // Dragging the playhead itself, or scrubbing on an unzoomed chart.
+        // Raise the same time bubble the scrub bar shows, so the position is
+        // readable while dragging on a chart too.
+        if (!solo.scrubbing) { solo.scrubbing = true; scrubActive = true; }
         const t = timeFromClientX(c.canvas, e.clientX);
-        queueDragUpdate(() => setCurrentTime(t));
+        queueDragUpdate(() => { setCurrentTime(t); markPlayheadActivity(); });
       }
     });
     const endSolo = (e, tap) => {
@@ -2867,6 +2883,7 @@
       if (solo && e.pointerId === solo.id) {
         if (tap && !solo.moved) setCurrentTime(timeFromClientX(c.canvas, e.clientX));
         const resume = solo.resumeAfter;
+        if (solo.scrubbing) { scrubActive = false; updateTimeMarker(); }
         solo = null;
         // startPlayback resets the frame clock and restarts the rAF loop, so
         // resuming never jumps the playhead by the length of the drag.

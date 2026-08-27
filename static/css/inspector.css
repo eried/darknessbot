@@ -770,6 +770,15 @@ body.sidebar-resizing * { cursor: col-resize !important; }
 }
 .zoom-indicator:hover { background: rgba(255, 160, 0, 0.32); }
 .zoom-indicator.hidden { display: none; }
+/* Steps aside while the playhead is being dragged: the time bubble occupies
+   the same strip. Stays laid out so nothing shifts, and fades back in once
+   the finger settles. */
+.zoom-indicator.yielding {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.14s ease-out;
+}
+.zoom-indicator:not(.yielding) { transition: opacity 0.28s ease-in, background 0.18s; }
 
 /* Time bubble that rides above the playhead while playing or scrubbing. */
 .time-marker {

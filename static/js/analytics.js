@@ -593,20 +593,6 @@
       //            ground speed crashed and stayed low.
       //   LIFT   - everything else (pickup tests, brief GPS dropouts in
       //            tunnels / turns, momentary safety beeps).
-      // A real fall requires BOTH the apparent ride speed and proof that the
-      // motor was doing work in the pre-window. A logger that reports fake
-      // 60 km/h with current = 0 can no longer fake a fall.
-      let preFastCount = 0;
-      let preWorked = 0;
-      let prePeakGps = 0;
-      for (let k = Math.max(0, startI - 12); k < startI; k++) {
-        const w = ts[k][SPD] || 0, g = ts[k][GPSSPD];
-        if (typeof g === "number" && g >= preFallSpd && w >= preFallSpd) preFastCount++;
-        if (typeof g === "number" && g > prePeakGps) prePeakGps = g;
-        const cur = Math.abs(ts[k][CURRENT] || 0);
-        const pwr = Math.abs(ts[k][POWER] || 0);
-        if (cur >= motorActiveA || pwr >= motorActiveW) preWorked++;
-      }
       // Logger-glitch: nothing in the surrounding ±8 sample window was
       // actually driving the wheel: current and power were both flat.
       // This is a cascade of phantom readings, not a rider event.
@@ -621,35 +607,15 @@
           if (cur >= motorActiveA || pwr >= motorActiveW) { surroundingWorked = true; break; }
         }
       }
-      // Stricter pre-window check: a real fall happens AFTER the rider was
-      // genuinely cruising, not after a 12 km/h hop. Require at least half
-      // of the pre-window samples to show riding speed + motor work, AND a
-      // peak GPS speed that crosses the pre-fall threshold (not just a few
-      // borderline samples averaging up).
-      const PRE_REQUIRED = Math.max(6, Math.ceil((preFallSpd >= 20 ? 8 : 6)));
-      const preLooksLikeRiding = preFastCount >= PRE_REQUIRED
-        && (!hasMotorData || preWorked >= PRE_REQUIRED)
-        && prePeakGps >= preFallSpd + 5;
-      // Stricter post-window: stay still for a sustained stretch (default
-      // 12 samples, roughly 40-60 s on most loggers). Real falls don't
-      // recover that fast. The old "scanned >= 6" fallback was too loose
-      // and let brief 4-5 sample GPS dropouts count.
-      const POST_REQUIRED = Math.max(postStopStreak, 12);
-      let postCrashed = false;
-      if (preLooksLikeRiding) {
-        // Look further ahead too: 40 samples = ~3 minutes on a 4 s logger.
-        let lowStreak = 0;
-        for (let k = endI + 1; k < Math.min(ts.length, endI + 41); k++) {
-          const g = ts[k][GPSSPD];
-          if (typeof g === "number" && g < 3) lowStreak++; else lowStreak = 0;
-          if (lowStreak >= POST_REQUIRED) { postCrashed = true; break; }
-        }
-      }
-      // Strict LIFT: GPS confirms the wheel didn't move AND the motor was
-      // idle (no current / power being delivered) for the bulk of the
-      // event AND it lasted long enough that a hand-spinning rider could
-      // have actually triggered it. Otherwise it's just a sensor blip
-      // during normal riding (GPS dropout, brief noise).
+      // The physical event is always the same: the wheel spins with no load.
+      // What separates the two rider events is what the wheel was doing
+      // around it. Free spin while moving is a fall; free spin from a
+      // standstill is a pickup / lift.
+      //
+      // Unloaded spin shows up two ways, and either is enough:
+      //   - near-zero current while the wheel turns (needs a current column)
+      //   - acceleration a loaded wheel cannot produce (needs only wheel speed,
+      //     so it still works on the many logs that carry no GPS or current)
       let gpsLow = 0, gpsTotal = 0, motorIdle = 0;
       const eventLen = endI - startI + 1;
       for (let k = startI; k <= endI; k++) {
@@ -660,20 +626,51 @@
         if (cur < motorActiveA && pwr < motorActiveW) motorIdle++;
       }
       const gpsStationaryRatio = gpsTotal > 0 ? gpsLow / gpsTotal : 0;
-      // No current column means motor idleness is unknown, so a lift is judged
-      // on GPS standstill alone rather than being blocked outright.
-      const motorIdleRatio = hasMotorData ? motorIdle / eventLen : 1;
-      // Fall events have to LOOK like a fall: the wheel reached freespin
-      // speed during the event (>= 20 km/h) AND the rider was clearly
-      // cruising before (peak GPS >= 18 km/h). A 6 km/h peak event isn't
-      // a fall, and a fall after a 12 km/h hop isn't credible either.
-      const peakLooksLikeFall = peakSpd >= 20 && prePeakGps >= 18;
+      const motorIdleRatio = hasMotorData ? motorIdle / eventLen : 0;
+      let peakAccel = 0;
+      for (let k = Math.max(1, startI); k <= endI; k++) {
+        const dtK = ts[k][SEC] - ts[k - 1][SEC];
+        if (dtK <= 0 || dtK > 5) continue;
+        const dv = ((ts[k][SPD] || 0) - (ts[k - 1][SPD] || 0)) / 3.6;
+        if (dv / dtK > peakAccel) peakAccel = dv / dtK;
+      }
+      // Current is the definitive test when the log has it: a hard launch on a
+      // racing wheel accelerates violently but pulls heavy amps, while a free
+      // spin pulls almost none. Only when there is no current column do we
+      // fall back to acceleration as a proxy for "no load".
+      const spunUpImpossiblyFast = peakAccel >= accelThresh;
+      const unloadedSpin = peakSpd >= freeSpinSpd
+        && (hasMotorData ? motorIdleRatio >= 0.7 : spunUpImpossiblyFast);
+      // Was the wheel actually travelling before / after? GPS answers it when
+      // present, otherwise fall back to whether the motor was pulling current.
+      const windowMoving = (from, to) => {
+        const gs = [], curs = [];
+        for (let k = Math.max(0, from); k <= Math.min(ts.length - 1, to); k++) {
+          const g = ts[k][GPSSPD];
+          if (typeof g === "number") gs.push(g);
+          curs.push(Math.abs(ts[k][CURRENT] || 0));
+        }
+        if (gs.length >= 3) {
+          gs.sort((a, b) => a - b);
+          return gs[gs.length >> 1] >= 3;
+        }
+        if (hasMotorData && curs.length) {
+          curs.sort((a, b) => a - b);
+          return curs[curs.length >> 1] >= motorActiveA;
+        }
+        return null; // nothing to judge with
+      };
+      const movingBefore = windowMoving(startI - 10, startI - 1);
+      const movingAfter = windowMoving(endI + 1, endI + 10);
       let kind;
       if (!surroundingWorked) {
         kind = "glitch";
-      } else if (preLooksLikeRiding && postCrashed && peakLooksLikeFall) {
+      } else if (unloadedSpin && movingBefore === true && movingAfter === false) {
+        // Spinning free after real travel, and the ground stayed still after.
         kind = "fall";
-      } else if (gpsStationaryRatio >= 0.7 && motorIdleRatio >= 0.7 && eventLen >= minEventLen) {
+      } else if (unloadedSpin && movingBefore === false && movingAfter !== true
+                 && eventLen >= minEventLen) {
+        // Spun up from a standstill and went back to one: a pickup test.
         kind = "lift";
       } else {
         kind = "spike";
@@ -683,8 +680,8 @@
         sec: ts[startI][SEC],
         peakSpd,
         durS,
-        preFastCount,
-        preWorked,
+        peakAccel,
+        motorIdleRatio,
       });
       i = j;
     }

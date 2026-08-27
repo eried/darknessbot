@@ -418,17 +418,23 @@
                 </details>
                 <div class="chart-takeaway" id="anomalies-takeaway"></div>
                 <div id="anomalies-list" class="anomalies-list"></div>
-                <p class="sec-hint">Events fall into four kinds:
+                <p class="sec-hint">The physical event is the same in both rider cases: the wheel spins with no load.
+                   We spot that from near-zero current while the wheel turns, or, on logs with no current column, from
+                   an acceleration a loaded wheel cannot produce. What separates the two is what the wheel was doing
+                   around it.
                    <br>
-                   <b>Lift</b>: pickup test or hand-spin. GPS shows the wheel didn't move and the motor stayed idle.
+                   <b>Lift</b>: free spin from a standstill, and back to a standstill. A pickup test or hand-spin.
                    <br>
-                   <b>Fall</b>: you were genuinely cruising before, the wheel either freespun fast or peaked above riding speed, then GPS dropped to zero and stayed there. Slow-speed blips don't qualify.
+                   <b>Fall</b>: free spin while you were travelling, and the ground speed stayed at zero afterwards.
                    <br>
-                   <b>Spike</b>: brief sensor blip during normal riding. GPS dropout in a tunnel, momentary wheel-side noise. Not a real lift.
+                   <b>Spike</b>: the wheel kept pulling current, so it was never free. A GPS dropout in a tunnel or a
+                   momentary sensor blip during normal riding.
                    <br>
-                   <b>Glitch</b>: cascade of phantom samples while the motor was idle for the whole surrounding window. Logger or firmware artifact, not a rider event.
+                   <b>Glitch</b>: cascade of phantom samples while the motor was idle for the whole surrounding window.
+                   Logger or firmware artifact, not a rider event.
                    <br><br>
-                   Tune the thresholds above if your wheel triggers too many false positives or misses real events.</p>
+                   A hard launch on a fast wheel accelerates violently but draws heavy current, so it stays a normal
+                   ride rather than a free spin. Tune the thresholds above if your wheel misses real events.</p>
             </section>
 
             <section class="chart-section" data-section="efficiency" data-tab="efficiency">
@@ -801,6 +807,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=102"></script>
+    <script src="static/js/analytics.js?v=104"></script>
 </body>
 </html>

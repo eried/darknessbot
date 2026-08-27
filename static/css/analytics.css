@@ -1355,7 +1355,7 @@ body.weather-loaded .forensic-tag.weather-tag {
     position: absolute;
     top: 44px;
     right: 40px;
-    width: min(300px, calc(100% - 28px));
+    width: min(340px, calc(100% - 28px));
     background: #12151c;
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 2px;
@@ -1414,18 +1414,29 @@ body.weather-loaded .forensic-tag.weather-tag {
 }
 .cmd-opt.on { color: #eafff4; }
 .cmd-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmd-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 5px 9px 3px;
+/* Loaded profile row: two lines, plus a quiet forget control. */
+.cmd-opt.cmd-opt-2l { align-items: flex-start; }
+.cmd-opt.cmd-opt-2l .cmd-mark { margin-top: 1px; }
+.cmd-lines { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.cmd-meta { font-size: 0.68rem; color: #8a97a0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-forget {
+    flex-shrink: 0;
+    color: #6d7780;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+}
+.cmd-forget:hover { color: #ff6b6b; }
+/* Import row is an action, not a choice, so its mark slot stays empty and
+   the row is separated from the two selectable models above it. */
+.cmd-opt.cmd-action {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     margin-top: 3px;
+    color: #9fb0bb;
 }
-.cmd-actions.hidden { display: none; }
-.cmd-link { background: none; border: none; color: #7a8a99; font-size: 0.7rem; cursor: pointer; padding: 2px; }
-.cmd-link:hover { color: #bfeef7; }
-.cmd-link.cmd-danger:hover { color: #ff6b6b; }
+.cmd-mark.cmd-mark-none { border: none; background: none; }
+.cmd-opt.hidden { display: none; }
 
 /* Wind mini-line in the forecast hour cells: rotated arrow + m/s. */
 .wh-wind { font-size: 0.6rem; color: #8fa7b0; display: flex; align-items: center; justify-content: center; gap: 2px; }

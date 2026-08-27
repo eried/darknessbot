@@ -6,7 +6,7 @@
     <title>Wheel Forensics &middot; EUC Planet</title>
     <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="static/css/analytics.css?v=69" />
+    <link rel="stylesheet" href="static/css/analytics.css?v=70" />
     <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -568,16 +568,20 @@
           <div class="cmd-menu">
             <button type="button" class="cmd-opt" id="cmd-trips">
               <span class="cmd-mark"></span>
-              <span class="cmd-label" id="cmd-trips-sub">Current model from your trips</span>
+              <span class="cmd-label" id="cmd-trips-sub">Empirical fit from the trip dataset</span>
             </button>
-            <button type="button" class="cmd-opt" id="cmd-dna">
+            <button type="button" class="cmd-opt cmd-opt-2l hidden" id="cmd-dna">
               <span class="cmd-mark"></span>
-              <span class="cmd-label" id="cmd-dna-sub">Load saved Wheel DNA&hellip;</span>
+              <span class="cmd-lines">
+                <span class="cmd-label" id="cmd-dna-sub"></span>
+                <span class="cmd-meta" id="cmd-dna-meta"></span>
+              </span>
+              <span class="cmd-forget" id="cmd-dna-forget" role="button" tabindex="0" title="Forget this Wheel DNA">&times;</span>
             </button>
-            <div class="cmd-actions hidden" id="cmd-dna-actions">
-              <button type="button" class="cmd-link" id="cmd-dna-replace">Replace&hellip;</button>
-              <button type="button" class="cmd-link cmd-danger" id="cmd-dna-forget">Forget</button>
-            </div>
+            <button type="button" class="cmd-opt cmd-action" id="cmd-import">
+              <span class="cmd-mark cmd-mark-none"></span>
+              <span class="cmd-label">Import Wheel DNA profile (.json)&hellip;</span>
+            </button>
           </div>
         </div>
         <div class="calc-body">
@@ -671,7 +675,7 @@
               </div>
             </div>
             <div class="calc-leg hidden" id="calc-leg-back">
-              <div class="calc-leg-title">Return leg <small>(same distance, climb reversed)</small></div>
+              <div class="calc-leg-title">Return leg <small>(same distance, climb and wind reversed)</small> <span class="info-icon" id="calc-rt-info">i</span></div>
               <div class="calc-grid">
                 <div class="calc-metric">
                   <span class="cm-label">Round-trip time</span>
@@ -793,6 +797,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=94"></script>
+    <script src="static/js/analytics.js?v=97"></script>
 </body>
 </html>

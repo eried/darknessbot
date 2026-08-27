@@ -4221,6 +4221,16 @@
     const sigma = calcModelSigmaKm();
     const timeH = sKmh > 0 ? distKm / sKmh : 0;
     const legCond = forecastLegConditions(timeH, tC, windMs);
+    // Say how the return leg got its conditions, since a locked forecast
+    // reads the real later hours while sliders alone can only flip the sign.
+    const rtInfo = document.getElementById("calc-rt-info");
+    if (rtInfo) {
+      const locked = weatherLocked && weatherLocked.cells && weatherLocked.cells.length;
+      const legMin = Math.round(timeH * 60);
+      rtInfo.title = locked
+        ? `Return leg reads the forecast hours after you arrive (about ${legMin} min out, then ${legMin} min back) and flips the bearing, so its temperature and wind follow the real time of day. Accuracy is then limited by the forecast itself.`
+        : `Without a locked forecast the return leg only flips the headwind sign and reuses the same temperature. Over about an hour of riding the real wind and temperature drift, so a long round trip is a rough estimate. Use "Use forecast" with a picked route for a per-leg calculation.`;
+    }
     const legA = calcLegBatt(distKm, sKmh, legCond.tA, climbMperKm, sigma, legCond.wA);
     if (!legA) { calcEls.verdict.textContent = "Model not ready."; return; }
     const fmtDur = (h) => {
@@ -5443,21 +5453,25 @@
     const tripsSub = document.getElementById("cmd-trips-sub");
     const dnaBtn = document.getElementById("cmd-dna");
     const dnaSub = document.getElementById("cmd-dna-sub");
-    const acts = document.getElementById("cmd-dna-actions");
+    const dnaMeta = document.getElementById("cmd-dna-meta");
     tripsBtn.disabled = !multiFit;
     tripsBtn.classList.toggle("on", !!multiFit && !dnaActive);
     tripsSub.textContent = multiFit
-      ? `Current model from your ${multiFit.n} trips`
-      : "No model from your trips yet";
-    tripsBtn.title = multiFit ? "" : "Not enough usable rides in this scope";
+      ? `Empirical fit from the trip dataset (n=${multiFit.n})`
+      : "Empirical fit unavailable in this scope";
+    tripsBtn.title = multiFit
+      ? `R² ${multiFit.r2 != null ? multiFit.r2.toFixed(2) : "?"}, ${multiFit.tier || "basic"} tier`
+      : "Not enough usable rides to fit a model here";
+    // The loaded profile is its own row; the import action below always stays,
+    // and a new file silently replaces whatever sits here.
+    dnaBtn.classList.toggle("hidden", !importedDna);
     dnaBtn.classList.toggle("on", !!importedDna && dnaActive);
-    dnaSub.textContent = importedDna
-      ? `${importedDna.wheel || "Wheel DNA"} (${importedDna.totalKm != null ? importedDna.totalKm + " km" : "?"})`
-      : "Load saved Wheel DNA…";
-    dnaBtn.title = importedDna
-      ? `Exported ${importedDna.generated || "?"} from ${importedDna.trips != null ? importedDna.trips : "?"} trips`
-      : "";
-    if (acts) acts.classList.toggle("hidden", !importedDna);
+    if (importedDna) {
+      dnaSub.textContent = `${importedDna.wheel || "Wheel DNA"}` +
+        (importedDna.totalKm != null ? ` · ${importedDna.totalKm} km` : "");
+      dnaMeta.textContent = `Wheel DNA v${importedDna.version || 1}` +
+        (importedDna.generated ? `, exported ${importedDna.generated}` : "");
+    }
   }
   function persistDna() {
     try {
@@ -5546,7 +5560,7 @@
     };
     const tripsOpt = document.getElementById("cmd-trips");
     const dnaOpt = document.getElementById("cmd-dna");
-    const replaceBtn = document.getElementById("cmd-dna-replace");
+    const importOpt = document.getElementById("cmd-import");
     const forgetBtn = document.getElementById("cmd-dna-forget");
     if (tripsOpt) tripsOpt.addEventListener("click", () => {
       if (!multiFit) return;
@@ -5554,13 +5568,15 @@
       closeDlg();
     });
     if (dnaOpt) dnaOpt.addEventListener("click", () => {
-      if (importedDna) { setActive(true); closeDlg(); return; }
-      if (fileEl) fileEl.click();
+      if (!importedDna) return;
+      setActive(true);
+      closeDlg();
     });
-    if (replaceBtn) replaceBtn.addEventListener("click", () => { if (fileEl) fileEl.click(); });
-    if (forgetBtn) forgetBtn.addEventListener("click", () => {
+    if (importOpt) importOpt.addEventListener("click", () => { if (fileEl) fileEl.click(); });
+    if (forgetBtn) forgetBtn.addEventListener("click", (e) => {
+      e.stopPropagation(); // don't also select the row we're removing
       importedDna = null;
-      setActive(false); // syncDnaUi refreshes the dialog rows, stays open
+      setActive(false); // syncDnaUi refreshes the rows, menu stays open
     });
   })();
 

@@ -404,8 +404,15 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     height: 100%;
     display: block;
     cursor: crosshair;
-    /* Horizontal drags + pinch are handled in JS (pan / zoom the window);
-       vertical drags still scroll the metrics list. */
+}
+/* Horizontal drags and pinch are handled in JS (pan / zoom the window);
+   vertical drags still scroll the metrics list. touch-action does NOT
+   inherit, so this has to name every descendant: a chart is barely 110 px
+   tall, so a two-finger spread lands fingers on headers, value labels and
+   the toolbar, and any element left at the default lets the browser zoom
+   the whole page instead of the chart. */
+#charts,
+#charts * {
     touch-action: pan-y;
 }
 

@@ -2694,29 +2694,26 @@
     }
     viewT0 = a;
     viewT1 = b;
+    // Every route into a new window enforces this, so nothing can strand the
+    // playhead off-screen: zoom, pan, the trim handles, a section drag. When
+    // the window would leave it behind, the playhead parks on the edge it
+    // left through. That shifts the moment under the cursor by a little, but
+    // a cursor you can still see and grab beats an exact one that is gone.
+    // Done before the redraw below so it costs no extra frame and cannot
+    // flicker (setCurrentTime only refreshes the dashboard, not the charts).
+    if (viewT1 - viewT0 < duration - 0.01) {
+      if (currentTime < viewT0) setCurrentTime(viewT0);
+      else if (currentTime > viewT1) setCurrentTime(viewT1);
+    }
     refreshSectionUi();
     drawAllCharts();
   }
 
   function resetView() { setView(0, duration); }
 
-  // Zooming anchors on the gesture, so the playhead can end up outside the
-  // window and vanish. Slide the window back over it rather than moving the
-  // playhead: nudging the time each frame meant two redraws per frame at
-  // slightly different positions, which read as a flicker at the border and
-  // could still round its way outside. Shifting the view keeps the moment
-  // under the cursor exactly where it was.
-  function keepPlayheadInView() {
-    if (!isZoomed()) return;
-    const span = viewT1 - viewT0;
-    if (currentTime < viewT0) {
-      const a = Math.max(0, currentTime);
-      setView(a, Math.min(duration, a + span));
-    } else if (currentTime > viewT1) {
-      const b = Math.min(duration, currentTime);
-      setView(Math.max(0, b - span), b);
-    }
-  }
+  // setView now guarantees the playhead stays inside the window, so this is
+  // just a name the zoom handlers can call for clarity.
+  function keepPlayheadInView() { /* enforced in setView */ }
 
   // Pan the zoom window without resizing it: clamped at the trip edges so
   // the span survives (setView alone would shrink it against an edge).
@@ -2875,10 +2872,13 @@
         // Carry the playhead with the window so it holds its place on screen
         // and the data slides under it, which makes lining a feature up with
         // the cursor easy. At the ends the window stops, so the head does too.
+        // Read the gesture's start time now: the update runs a frame later and
+        // the finger may already be up by then, with `solo` cleared.
         const shift = a - solo.v0;
+        const headAt = clampTime(solo.t0 + shift);
         queueDragUpdate(() => {
           setView(a, a + span);
-          setCurrentTime(clampTime(solo.t0 + shift));
+          setCurrentTime(headAt);
         });
       } else {
         // Dragging the playhead itself, or scrubbing on an unzoomed chart.

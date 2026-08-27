@@ -229,6 +229,20 @@
   // ignore compatibility mouse events fired right after a touch, so a finger
   // pan/pinch never doubles as a playhead scrub (ghost-click guard).
   let lastTouchInteraction = -1e9;
+  // Touch drags fire far faster than a complex trip can redraw, so collapse
+  // every move within one animation frame into a single update. Without this
+  // the finger runs ahead of the charts on long rides.
+  let dragFrame = 0, dragWork = null;
+  function queueDragUpdate(fn) {
+    dragWork = fn;
+    if (dragFrame) return;
+    dragFrame = requestAnimationFrame(() => {
+      dragFrame = 0;
+      const work = dragWork;
+      dragWork = null;
+      if (work) work();
+    });
+  }
   const sampleTimes = new Float64Array(ts.length);
   for (let i = 0; i < ts.length; i += 1) sampleTimes[i] = ts[i][SEC] - t0;
 
@@ -1667,10 +1681,17 @@
       const t = sampleTimes[i0] + (sampleTimes[i1] - sampleTimes[i0]) * f;
       return pad + (t - viewT0) / viewW * innerW;
     };
-    // Each series normalised to its own visible min/max so shapes compare.
+    // Each series normalised to its own whole-trip min/max, so shapes compare
+    // against each other and stay put when the view zooms or pans.
+    cg._ranges = cg._ranges || {};
     sel.forEach((a) => {
-      let mn = Infinity, mx = -Infinity;
-      for (let i = iLo; i <= iHi; i++) { const v = ts[i][a.idx]; if (typeof v === "number") { if (v < mn) mn = v; if (v > mx) mx = v; } }
+      let r = cg._ranges[a.key];
+      if (!r) {
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i < n; i++) { const v = ts[i][a.idx]; if (typeof v === "number") { if (v < lo) lo = v; if (v > hi) hi = v; } }
+        r = cg._ranges[a.key] = { lo, hi };
+      }
+      let mn = r.lo, mx = r.hi;
       if (!isFinite(mn)) { mn = 0; mx = 1; }
       if (mn === mx) mx = mn + 1;
       const range = mx - mn; mn -= range * 0.08; mx += range * 0.08;
@@ -1974,18 +1995,24 @@
     const iLo = Math.max(0, sampleAtTime(viewT0) - 1);
     const iHi = Math.min(n - 1, sampleAtTime(viewT1) + 1);
 
-    let minV = Infinity, maxV = -Infinity;
-    for (let i = iLo; i <= iHi; i++) {
-      const v = ts[i][idx];
-      if (v < minV) minV = v;
-      if (v > maxV) maxV = v;
-      // Fold the GPS-speed overlay into the speed chart's scale so both lines
-      // share one axis and the gap between them reads off directly.
-      if (c.extra) {
-        const e = ts[i][c.extra.idx];
-        if (typeof e === "number") { if (e < minV) minV = e; if (e > maxV) maxV = e; }
+    // Scale over the WHOLE trip, not the visible window, so zooming or
+    // panning never rescales the curve under you. A peak stays the same
+    // height whatever the zoom, which is what makes shapes comparable.
+    if (!c._fullRange) {
+      let a = Infinity, b = -Infinity;
+      for (let i = 0; i < n; i++) {
+        const v = ts[i][idx];
+        if (typeof v === "number") { if (v < a) a = v; if (v > b) b = v; }
+        // Fold the GPS-speed overlay into the speed chart's scale so both
+        // lines share one axis and the gap between them reads off directly.
+        if (c.extra) {
+          const e = ts[i][c.extra.idx];
+          if (typeof e === "number") { if (e < a) a = e; if (e > b) b = e; }
+        }
       }
+      c._fullRange = { min: a, max: b };
     }
+    let minV = c._fullRange.min, maxV = c._fullRange.max;
     if (!isFinite(minV)) { minV = 0; maxV = 1; }
     // The current chart always spans 0 so the regen / draw split stays visible.
     if (render === "current") { if (minV > 0) minV = 0; if (maxV < 0) maxV = 0; }
@@ -2763,7 +2790,8 @@
         solo = {
           id: e.pointerId, x0: e.clientX, y0: e.clientY,
           v0: viewT0, v1: viewT1, axis: null, moved: false,
-          grabHead: Math.abs(e.clientX - headX) <= 24,
+          grabHead: Math.abs(e.clientX - headX) <= 34,
+          t0: currentTime,
           resumeAfter: false,
         };
       }
@@ -2805,10 +2833,18 @@
       if (isZoomed() && !solo.grabHead) {
         let a = solo.v0 - (dx / rectOf().width) * span; // drag right → earlier
         a = Math.max(0, Math.min(duration - span, a));
-        setView(a, a + span);
+        // Carry the playhead with the window so it holds its place on screen
+        // and the data slides under it, which makes lining a feature up with
+        // the cursor easy. At the ends the window stops, so the head does too.
+        const shift = a - solo.v0;
+        queueDragUpdate(() => {
+          setView(a, a + span);
+          setCurrentTime(clampTime(solo.t0 + shift));
+        });
       } else {
         // Dragging the playhead itself, or scrubbing on an unzoomed chart.
-        setCurrentTime(timeFromClientX(c.canvas, e.clientX));
+        const t = timeFromClientX(c.canvas, e.clientX);
+        queueDragUpdate(() => setCurrentTime(t));
       }
     });
     const endSolo = (e, tap) => {

@@ -4163,7 +4163,7 @@
     if (!fitA) {
       // No model at all; the modal still opens so Import DNA stays reachable.
       calcEls.verdict.className = "calc-verdict";
-      calcEls.verdict.textContent = "No range model yet. Load a saved Wheel DNA (arrow icon in the title bar), or add weather data so your trips can train one.";
+      calcEls.verdict.textContent = "No range model yet. Use a saved Wheel DNA file (arrow icon in the title bar), or add weather data so trips telemetry can train one.";
       calcEls.battUse.textContent = "—";
       calcEls.battArr.textContent = "—";
       calcEls.time.textContent = "—";
@@ -4183,7 +4183,7 @@
     const fitHasWind = !!(fitA.beta && fitA.beta.w != null);
     if (calcEls.wind) {
       calcEls.wind.disabled = !fitHasWind;
-      calcEls.wind.title = fitHasWind ? "" : "No wind term in this model yet. Re-add weather data so trips pick up archive wind (needs about 90 usable rides), or import a Wheel DNA that has one.";
+      calcEls.wind.title = fitHasWind ? "" : "No wind term in this model yet. Re-add weather data so trips pick up archive wind (needs about 90 usable rides), or use a Wheel DNA file that has one.";
     }
     // Dynamic distance-slider ceiling: a bit beyond the optimistic max range
     // for the *current* battery + speed + temp + climb. We don't know the
@@ -5384,7 +5384,7 @@
       calcEls.btn.classList.remove("hidden");
       calcEls.btn.removeAttribute("disabled");
       calcEls.btn.title = (dnaActive && importedDna)
-        ? `Plan a ride on the imported Wheel DNA "${importedDna.wheel || "?"}".`
+        ? `Plan a ride using the Wheel DNA file "${importedDna.wheel || "?"}".`
         : `Plan a ride with the range model fitted from ${fit.n} of your rides.`;
       wireCalculator();
     } else {
@@ -5402,9 +5402,9 @@
       const have = dated.filter((m) => hasRangeClimb(m) && m.ambientC != null).length;
       const anyAmbient = dated.some((m) => m.ambientC != null);
       if (!anyAmbient) {
-        calcEls.btn.title = `No trips model yet: click "Add weather data" so rides get an ambient temperature, it unlocks at ${needed} rides with range + speed + climb + ambient (this scope has ${withoutAmbient} with range + speed + climb). You can also import a Wheel DNA .json inside.`;
+        calcEls.btn.title = `No trips model yet: click "Add weather data" so rides get an ambient temperature, it unlocks at ${needed} rides with range + speed + climb + ambient (this scope has ${withoutAmbient} with range + speed + climb). You can also use a saved Wheel DNA file inside.`;
       } else {
-        calcEls.btn.title = `No trips model yet: ${have} of the ${needed} rides it needs have range + speed + ambient + climb in this scope. You can also import a Wheel DNA .json inside.`;
+        calcEls.btn.title = `No trips model yet: ${have} of the ${needed} rides it needs have range + speed + ambient + climb in this scope. You can also use a saved Wheel DNA file inside.`;
       }
     }
   }
@@ -5457,8 +5457,8 @@
     tripsBtn.disabled = !multiFit;
     tripsBtn.classList.toggle("on", !!multiFit && !dnaActive);
     tripsSub.textContent = multiFit
-      ? `Empirical fit from the trip dataset (n=${multiFit.n})`
-      : "Empirical fit unavailable in this scope";
+      ? `Model from trips telemetry (n=${multiFit.n})`
+      : "No model from trips telemetry in this scope";
     tripsBtn.title = multiFit
       ? `R² ${multiFit.r2 != null ? multiFit.r2.toFixed(2) : "?"}, ${multiFit.tier || "basic"} tier`
       : "Not enough usable rides to fit a model here";

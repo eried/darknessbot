@@ -554,7 +554,7 @@
           <span class="calc-tag">PLAN</span>
           <h3>Range calculator</h3>
           <button type="button" id="calc-model-chip" class="calc-model-chip hidden" title="Model source. Click to change."></button>
-          <button type="button" id="calc-dna-import" class="calc-hicon" title="Choose the model: your trips or a saved Wheel DNA">
+          <button type="button" id="calc-dna-import" class="calc-hicon" title="Choose the model: trips telemetry or a saved Wheel DNA file">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10V2M4.5 5.5 8 2l3.5 3.5"/><path d="M2 10v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/></svg>
           </button>
           <button type="button" id="calc-dna-export" class="calc-hicon" title="Export this wheel's range model (Wheel DNA) as .json">
@@ -568,7 +568,7 @@
           <div class="cmd-menu">
             <button type="button" class="cmd-opt" id="cmd-trips">
               <span class="cmd-mark"></span>
-              <span class="cmd-label" id="cmd-trips-sub">Empirical fit from the trip dataset</span>
+              <span class="cmd-label" id="cmd-trips-sub">Model from trips telemetry</span>
             </button>
             <button type="button" class="cmd-opt cmd-opt-2l hidden" id="cmd-dna">
               <span class="cmd-mark"></span>
@@ -580,7 +580,7 @@
             </button>
             <button type="button" class="cmd-opt cmd-action" id="cmd-import">
               <span class="cmd-mark cmd-mark-none"></span>
-              <span class="cmd-label">Import Wheel DNA profile (.json)&hellip;</span>
+              <span class="cmd-label">Use saved Wheel DNA file&hellip;</span>
             </button>
           </div>
         </div>
@@ -797,6 +797,6 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="static/js/analytics.js?v=98"></script>
+    <script src="static/js/analytics.js?v=99"></script>
 </body>
 </html>

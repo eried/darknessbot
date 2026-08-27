@@ -2681,6 +2681,16 @@
 
   function resetView() { setView(0, duration); }
 
+  // Zooming anchors on the gesture, so the playhead can end up outside the
+  // window and vanish. Park it on whichever edge it left through, keeping a
+  // small inset so it stays visible rather than sitting under the border.
+  function keepPlayheadInView() {
+    if (!isZoomed()) return;
+    const inset = Math.min(0.25, (viewT1 - viewT0) * 0.02);
+    if (currentTime < viewT0) setCurrentTime(viewT0 + inset);
+    else if (currentTime > viewT1) setCurrentTime(viewT1 - inset);
+  }
+
   // Pan the zoom window without resizing it: clamped at the trip edges so
   // the span survives (setView alone would shrink it against an edge).
   function panView(shift) {
@@ -2757,6 +2767,7 @@
       const span = Math.max(0.5, Math.min(duration, newSpan));
       setView(anchor - (anchor - viewT0) * (span / (viewT1 - viewT0)),
               anchor + (viewT1 - anchor) * (span / (viewT1 - viewT0)));
+      keepPlayheadInView();
     }, { passive: false });
     c.canvas.addEventListener("dblclick", () => resetView());
 
@@ -2810,6 +2821,7 @@
           const ratio = span / (viewT1 - viewT0);
           setView(pinchAnchorT - (pinchAnchorT - viewT0) * ratio,
                   pinchAnchorT + (viewT1 - pinchAnchorT) * ratio);
+          keepPlayheadInView();
         }
         prevDist = dist;
         return;

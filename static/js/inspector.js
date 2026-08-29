@@ -2099,7 +2099,13 @@
     // Cached for cursor drawing
     c._px = px; c._py = py;
 
-    if (currentSampleIdx >= 0) drawCursor(c, fracIdxArg != null ? fracIdxArg : currentSampleIdx);
+    // The fraction between samples matters: dropping it parks the playhead on
+    // the previous whole sample, which is invisible at full zoom but is a
+    // second of error, so tens of pixels, once the window is a few seconds
+    // wide. The combined chart above already carries it.
+    if (currentSampleIdx >= 0) {
+      drawCursor(c, fracIdxArg != null ? fracIdxArg : (currentSampleIdx + sampleFraction));
+    }
   }
 
   function drawCursor(c, fracIdx) {
@@ -2709,8 +2715,12 @@
     // Done before the redraw below so it costs no extra frame and cannot
     // flicker (setCurrentTime only refreshes the dashboard, not the charts).
     if (viewT1 - viewT0 < duration - 0.01) {
-      if (currentTime < viewT0) setCurrentTime(viewT0);
-      else if (currentTime > viewT1) setCurrentTime(viewT1);
+      // Tolerance matters at deep zoom: a span of half a second leaves the
+      // head within rounding distance of an edge every frame, and snapping it
+      // there on a fp wobble is exactly the drift it is supposed to prevent.
+      const eps = Math.max(1e-6, (viewT1 - viewT0) * 1e-4);
+      if (currentTime < viewT0 - eps) setCurrentTime(viewT0);
+      else if (currentTime > viewT1 + eps) setCurrentTime(viewT1);
     }
     refreshSectionUi();
     drawAllCharts();
@@ -2731,6 +2741,18 @@
     if (playing) return gestureT;          // it is moving on its own
     if (viewT1 - viewT0 <= 0) return gestureT;
     return currentTime;                    // hold the studied moment still
+  }
+
+  // Rescale the window to `newSpan` while keeping `anchorT` on the same pixel.
+  // Computing the near edge from the anchor's fraction (rather than scaling
+  // each edge separately) keeps that exact at deep zoom, where the two edges
+  // are fractions of a second apart and rounding shows up as a visible slip.
+  function zoomToSpan(anchorT, newSpan) {
+    const span = viewT1 - viewT0;
+    const span2 = Math.max(0.5, Math.min(duration, newSpan));
+    const frac = span > 0 ? (anchorT - viewT0) / span : 0.5;
+    const a = anchorT - frac * span2;
+    setView(a, a + span2);
   }
 
   // Pan the zoom window without resizing it: clamped at the trip edges so
@@ -2805,10 +2827,7 @@
       const xFrac = (e.clientX - rect.left) / rect.width;
       const anchor = zoomAnchorTime(viewT0 + xFrac * (viewT1 - viewT0));
       const factor = e.deltaY < 0 ? 0.8 : 1.25;
-      const newSpan = (viewT1 - viewT0) * factor;
-      const span = Math.max(0.5, Math.min(duration, newSpan));
-      setView(anchor - (anchor - viewT0) * (span / (viewT1 - viewT0)),
-              anchor + (viewT1 - anchor) * (span / (viewT1 - viewT0)));
+      zoomToSpan(anchor, (viewT1 - viewT0) * factor);
       keepPlayheadInView();
     }, { passive: false });
     c.canvas.addEventListener("dblclick", () => resetView());
@@ -2859,10 +2878,7 @@
         const dist = Math.abs(arr[0].clientX - arr[1].clientX);
         if (prevDist > 4 && dist > 4) {
           const factor = prevDist / dist;
-          const span = Math.max(0.5, Math.min(duration, (viewT1 - viewT0) * factor));
-          const ratio = span / (viewT1 - viewT0);
-          setView(pinchAnchorT - (pinchAnchorT - viewT0) * ratio,
-                  pinchAnchorT + (viewT1 - pinchAnchorT) * ratio);
+          zoomToSpan(pinchAnchorT, (viewT1 - viewT0) * factor);
           keepPlayheadInView();
         }
         prevDist = dist;

@@ -2429,7 +2429,7 @@
     document.getElementById("volt-value").textContent = sampleAt(VOLT).toFixed(1);
     document.getElementById("temp-value").textContent = UNITS.temp(sampleAt(TEMP)).toFixed(1);
     document.getElementById("alt-value").textContent = UNITS.alt(sampleAt(ALT)).toFixed(0);
-    document.getElementById("clock-value").textContent = fmtTime(currentTime);
+    updateClock();
     updateGforceGauge();
 
     // Scrub
@@ -2586,7 +2586,28 @@
   // room to nudge handles past the boundary without losing the grip.
   let anyHandleDragging = false;
 
+  // Trimmed to a section, the clock counts the section, not the trip: where
+  // the section sits in the ride is already on the scrub pill, so repeating
+  // trip time here only invited comparing two clocks that mean different
+  // things. The label says which one is on show.
+  function updateClock() {
+    const zoomed = isZoomed();
+    const el = document.getElementById("clock-value");
+    const total = document.getElementById("clock-total");
+    const label = document.getElementById("clock-label");
+    if (zoomed) {
+      el.textContent = fmtTime(Math.max(0, currentTime - viewT0));
+      total.textContent = fmtTime(viewT1 - viewT0);
+      if (label) label.textContent = "Section";
+    } else {
+      el.textContent = fmtTime(currentTime);
+      total.textContent = fmtTime(duration);
+      if (label) label.textContent = "Time";
+    }
+  }
+
   function refreshSectionUi() {
+    updateClock();
     const zoomed = isZoomed() || anyHandleDragging;
     if (zoomed) {
       zoomIndicator.classList.remove("hidden");
@@ -2686,10 +2707,12 @@
   // Zooming keeps whatever sits at the anchor pinned to its place on screen,
   // so anchor on the playhead: it is the moment being studied and should hold
   // still while the trip expands and contracts around it, wherever it sits.
-  // Near the ends of the trip the window runs out of room and it drifts, and
-  // during playback the gesture wins because the head is moving on its own.
+  // Near the ends of the trip the window runs out of room and it drifts.
+  // Playback is not an exception. The page autoplays, so treating it as one
+  // meant the head was thrown to the window edge on almost every real zoom.
+  // The window is the playback section and the head lives inside it either
+  // way, so pinning holds just as well while it is moving.
   function zoomAnchorTime(gestureT) {
-    if (playing) return gestureT;          // it is moving on its own
     if (viewT1 - viewT0 <= 0) return gestureT;
     return currentTime;                    // hold the studied moment still
   }
@@ -2789,7 +2812,7 @@
     //  - one finger drags horizontally to pan the window when zoomed, or to
     //    scrub the playhead when not; a tap scrubs.
     const pointers = new Map();
-    let prevDist = 0, pinchAnchorT = 0;
+    let prevDist = 0, pinchAnchorT = 0, pinchResume = false;
     let solo = null; // one-finger gesture: { id, x0, y0, v0, v1, axis, moved }
     const rectOf = () => c.canvas.getBoundingClientRect();
     c.canvas.addEventListener("pointerdown", (e) => {
@@ -2803,6 +2826,10 @@
         const mid = (arr[0].clientX + arr[1].clientX) / 2;
         const rect = rectOf();
         pinchAnchorT = zoomAnchorTime(viewT0 + ((mid - rect.left) / rect.width) * (viewT1 - viewT0));
+        // Same deal as the one-finger drag: pinching in means "let me look at
+        // this", and a running playhead crosses a few-second window before the
+        // fingers are even up. Hold playback for the gesture, resume on release.
+        if (playing) { pinchResume = true; setPlayingState(false); }
       } else if (pointers.size === 1) {
         // Grabbing on or near the playhead drags it; grabbing anywhere else
         // pans the zoom window. Same split the position bar already uses, so
@@ -2879,6 +2906,10 @@
       lastTouchInteraction = performance.now();
       pointers.delete(e.pointerId);
       if (pointers.size < 2) prevDist = 0;
+      if (pointers.size === 0 && pinchResume) {
+        pinchResume = false;
+        startPlayback(false);
+      }
       if (solo && e.pointerId === solo.id) {
         if (tap && !solo.moved) setCurrentTime(timeFromClientX(c.canvas, e.clientX));
         const resume = solo.resumeAfter;

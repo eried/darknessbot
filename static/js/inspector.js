@@ -2715,6 +2715,21 @@
   // just a name the zoom handlers can call for clarity.
   function keepPlayheadInView() { /* enforced in setView */ }
 
+  // Zooming keeps whatever sits at the anchor pinned to its place on screen.
+  // When the playhead is already near the middle, make IT the anchor: that is
+  // the moment being studied, so it should hold still while the trip expands
+  // and contracts around it. Away from the middle the gesture wins, which is
+  // what you want when reaching for something else. Playback is excluded
+  // because the head is moving on its own and would fight the zoom.
+  const PIN_BAND = 0.1; // half-width, so the middle fifth of the window
+  function zoomAnchorTime(gestureT) {
+    if (playing) return gestureT;
+    const span = viewT1 - viewT0;
+    if (span <= 0) return gestureT;
+    const frac = (currentTime - viewT0) / span;
+    return (frac >= 0.5 - PIN_BAND && frac <= 0.5 + PIN_BAND) ? currentTime : gestureT;
+  }
+
   // Pan the zoom window without resizing it: clamped at the trip edges so
   // the span survives (setView alone would shrink it against an edge).
   function panView(shift) {
@@ -2785,7 +2800,7 @@
       e.preventDefault();
       const rect = c.canvas.getBoundingClientRect();
       const xFrac = (e.clientX - rect.left) / rect.width;
-      const anchor = viewT0 + xFrac * (viewT1 - viewT0);
+      const anchor = zoomAnchorTime(viewT0 + xFrac * (viewT1 - viewT0));
       const factor = e.deltaY < 0 ? 0.8 : 1.25;
       const newSpan = (viewT1 - viewT0) * factor;
       const span = Math.max(0.5, Math.min(duration, newSpan));
@@ -2814,7 +2829,7 @@
         prevDist = Math.abs(arr[0].clientX - arr[1].clientX);
         const mid = (arr[0].clientX + arr[1].clientX) / 2;
         const rect = rectOf();
-        pinchAnchorT = viewT0 + ((mid - rect.left) / rect.width) * (viewT1 - viewT0);
+        pinchAnchorT = zoomAnchorTime(viewT0 + ((mid - rect.left) / rect.width) * (viewT1 - viewT0));
       } else if (pointers.size === 1) {
         // Grabbing on or near the playhead drags it; grabbing anywhere else
         // pans the zoom window. Same split the position bar already uses, so

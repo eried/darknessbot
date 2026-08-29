@@ -2688,9 +2688,16 @@
     let a = clampTime(t0New);
     let b = clampTime(t1New);
     if (b - a < minSpan) {
-      const mid = (a + b) / 2;
-      a = Math.max(0, mid - minSpan / 2);
-      b = Math.min(duration, mid + minSpan / 2);
+      // At the zoom floor, grow the window around the playhead rather than the
+      // midpoint, so hitting the limit does not jerk the studied moment
+      // sideways. Falls back to the midpoint when the head is not in view.
+      const inView = currentTime >= a && currentTime <= b;
+      const pivot = inView ? currentTime : (a + b) / 2;
+      const frac = (b - a) > 0 ? (pivot - a) / (b - a) : 0.5;
+      a = pivot - minSpan * frac;
+      b = a + minSpan;
+      if (a < 0) { a = 0; b = minSpan; }
+      if (b > duration) { b = duration; a = Math.max(0, duration - minSpan); }
     }
     viewT0 = a;
     viewT1 = b;
@@ -2715,19 +2722,15 @@
   // just a name the zoom handlers can call for clarity.
   function keepPlayheadInView() { /* enforced in setView */ }
 
-  // Zooming keeps whatever sits at the anchor pinned to its place on screen.
-  // When the playhead is already near the middle, make IT the anchor: that is
-  // the moment being studied, so it should hold still while the trip expands
-  // and contracts around it. Away from the middle the gesture wins, which is
-  // what you want when reaching for something else. Playback is excluded
-  // because the head is moving on its own and would fight the zoom.
-  const PIN_BAND = 0.1; // half-width, so the middle fifth of the window
+  // Zooming keeps whatever sits at the anchor pinned to its place on screen,
+  // so anchor on the playhead: it is the moment being studied and should hold
+  // still while the trip expands and contracts around it, wherever it sits.
+  // Near the ends of the trip the window runs out of room and it drifts, and
+  // during playback the gesture wins because the head is moving on its own.
   function zoomAnchorTime(gestureT) {
-    if (playing) return gestureT;
-    const span = viewT1 - viewT0;
-    if (span <= 0) return gestureT;
-    const frac = (currentTime - viewT0) / span;
-    return (frac >= 0.5 - PIN_BAND && frac <= 0.5 + PIN_BAND) ? currentTime : gestureT;
+    if (playing) return gestureT;          // it is moving on its own
+    if (viewT1 - viewT0 <= 0) return gestureT;
+    return currentTime;                    // hold the studied moment still
   }
 
   // Pan the zoom window without resizing it: clamped at the trip edges so
@@ -2924,6 +2927,21 @@
     c.canvas.addEventListener("pointerleave", (e) => endSolo(e, false));
   }
   charts.forEach(attachZoomControls);
+  // touch-action stops Chrome zooming the page, but Safari on iOS honours it
+  // only for panning and will still pinch-zoom the whole document. The gesture
+  // has to be refused outright there: any multi-touch move inside the charts
+  // column belongs to the chart, and Safari's own gesture events are declined
+  // as well. Single-finger moves are untouched so the column still scrolls.
+  (function blockPageZoomOverCharts() {
+    const col = document.getElementById("charts");
+    if (!col) return;
+    col.addEventListener("touchmove", (e) => {
+      if (e.touches && e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    ["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
+      col.addEventListener(type, (e) => e.preventDefault());
+    });
+  })();
   // Combined graphs wire their own scrub/zoom inside makeCombinedGraph().
 
   // Dashboard collapse (portrait phones): shrink the top strip to just the

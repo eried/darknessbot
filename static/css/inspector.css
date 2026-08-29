@@ -1051,6 +1051,11 @@ body.sidebar-resizing * { cursor: col-resize !important; }
        block does not shrink, so it used to just grow and shove the gauges
        off to the right. Capped, it wraps onto another line instead. */
     .trip-title { max-width: 70vw; }
+    /* Each meaning group takes its own line here, so the block stays as
+       narrow as its widest group and the gauges keep their room. The
+       between-group separators and the desktop line break go with it. */
+    #trip-subtitle .ts-g { display: block; }
+    #trip-subtitle .ts-sep, #trip-subtitle br { display: none; }
     .dash-scroll {
         flex-wrap: nowrap;
         overflow-x: auto;

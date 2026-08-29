@@ -361,17 +361,18 @@
   if (track.customName && dateTitle !== tripTitle) nameEl.title = dateTitle;
   else if (track.name && track.name !== tripTitle) nameEl.title = track.name;
 
-  // Stats split over two lines: ride shape first, derived bits second.
-  const line1 = [], line2 = [];
+  // Stats in meaning groups: how far and how long, then how fast, then what
+  // the motor did. Desktop runs them over two lines; a phone gives each group
+  // its own line (CSS), so the header stays narrow instead of running off the
+  // side and related numbers sit together.
+  const gRide = [], gSpeed = [], gTorque = [], gPhase = [], gMeta = [];
   if (track.stats) {
-    if (track.stats.distanceKm) line1.push(UNITS.dist(track.stats.distanceKm).toFixed(2) + " " + UNITS.distUnit);
-    if (track.stats.maxSpeed) line1.push(UNITS.speed(track.stats.maxSpeed).toFixed(0) + " " + UNITS.speedUnit + " max");
+    if (track.stats.distanceKm) gRide.push(UNITS.dist(track.stats.distanceKm).toFixed(2) + " " + UNITS.distUnit);
     const durMin = Math.round(duration / 60);
-    if (durMin > 0) {
-      line1.push(durMin >= 60 ? Math.floor(durMin / 60) + "h " + (durMin % 60) + "m" : durMin + "m");
-      if (totalKm > 0) {
-        line2.push("avg " + UNITS.speed(totalKm / (duration / 3600)).toFixed(1) + " " + UNITS.speedUnit);
-      }
+    if (durMin > 0) gRide.push(durMin >= 60 ? Math.floor(durMin / 60) + "h " + (durMin % 60) + "m" : durMin + "m");
+    if (track.stats.maxSpeed) gSpeed.push(UNITS.speed(track.stats.maxSpeed).toFixed(0) + " " + UNITS.speedUnit + " max");
+    if (durMin > 0 && totalKm > 0) {
+      gSpeed.push("avg " + UNITS.speed(totalKm / (duration / 3600)).toFixed(1) + " " + UNITS.speedUnit);
     }
     // Torque / phase current (EUC Planet 0.19+): peak drive and peak regen
     // shown separately (both are bipolar), only when the trip records them.
@@ -390,18 +391,26 @@
     };
     const tqLabel = driveRegen(tqDrive, tqRegen, "Nm", 1);
     const phLabel = driveRegen(phDrive, phRegen, "A", 0);
-    if (tqLabel) line2.push(tqLabel);
-    if (phLabel) line2.push(phLabel);
-    line2.push((track.stats.rows || ts.length).toLocaleString() + " samples");
+    if (tqLabel) gTorque.push(tqLabel);
+    if (phLabel) gPhase.push(phLabel);
+    gMeta.push((track.stats.rows || ts.length).toLocaleString() + " samples");
   }
-  // Each stat is unbreakable and carries its own leading separator, so when
-  // the line is too long for a phone it breaks between stats and the dot
-  // travels down with the stat instead of dangling at the end of the line.
-  const renderStats = (items) => items
-    .map((t, i) => '<span class="ts-i">' + (i ? "\u00b7 " : "") + t + "</span>")
-    .join(" ");
+  // Every stat is unbreakable and carries its own leading separator, so a
+  // group wide enough to still wrap breaks between stats and the dot travels
+  // down with the stat instead of dangling at the end of the line.
+  const renderGroup = (items) => '<span class="ts-g">'
+    + items.map((t, i) => '<span class="ts-i">' + (i ? "· " : "") + t + "</span>").join(" ")
+    + "</span>";
+  const joinGroups = (gs) => gs.filter((g) => g.length).map(renderGroup)
+    .join('<span class="ts-sep"> · </span>');
+  // Without torque or phase current there is nothing to fill a second desktop
+  // line, so the sample count rides along on the first rather than sitting
+  // alone under it. On a phone every group is its own line regardless.
+  const hasMotorStats = gTorque.length > 0 || gPhase.length > 0;
+  const subTop = joinGroups(hasMotorStats ? [gRide, gSpeed] : [gRide, gSpeed, gMeta]);
+  const subRest = hasMotorStats ? joinGroups([gTorque, gPhase, gMeta]) : "";
   document.getElementById("trip-subtitle").innerHTML =
-    renderStats(line1) + (line2.length ? "<br>" + renderStats(line2) : "");
+    subTop + (subRest ? "<br>" + subRest : "");
   document.getElementById("clock-total").textContent = fmtTime(duration);
 
   function fmtTime(sec) {

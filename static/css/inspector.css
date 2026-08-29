@@ -81,6 +81,7 @@ html, body {
     font-size: 0.72rem;
     margin-top: 2px;
 }
+#trip-subtitle .ts-i { white-space: nowrap; }
 
 /* Gauges */
 .gauge {
@@ -1046,6 +1047,10 @@ body.sidebar-resizing * { cursor: col-resize !important; }
        collapse toggle that shrinks it to just the essentials. */
     .dash-toggle { display: flex; }
     #dash { padding: 8px 12px; }
+    /* A trip that logs torque has a stats line wider than the phone. The
+       block does not shrink, so it used to just grow and shove the gauges
+       off to the right. Capped, it wraps onto another line instead. */
+    .trip-title { max-width: 70vw; }
     .dash-scroll {
         flex-wrap: nowrap;
         overflow-x: auto;

@@ -394,8 +394,14 @@
     if (phLabel) line2.push(phLabel);
     line2.push((track.stats.rows || ts.length).toLocaleString() + " samples");
   }
+  // Each stat is unbreakable and carries its own leading separator, so when
+  // the line is too long for a phone it breaks between stats and the dot
+  // travels down with the stat instead of dangling at the end of the line.
+  const renderStats = (items) => items
+    .map((t, i) => '<span class="ts-i">' + (i ? "\u00b7 " : "") + t + "</span>")
+    .join(" ");
   document.getElementById("trip-subtitle").innerHTML =
-    line1.join(" \u00b7 ") + (line2.length ? "<br>" + line2.join(" \u00b7 ") : "");
+    renderStats(line1) + (line2.length ? "<br>" + renderStats(line2) : "");
   document.getElementById("clock-total").textContent = fmtTime(duration);
 
   function fmtTime(sec) {

@@ -652,43 +652,6 @@ body.sidebar-resizing * { cursor: col-resize !important; }
     .cd-danger { padding: 8px 14px; font-size: 0.8rem; }
 }
 
-/* Hover readout for the wheel-vs-GPS speed differential. */
-#chart-tip {
-    position: fixed;
-    z-index: 2500;
-    pointer-events: none;
-    padding: 6px 9px;
-    background: rgba(10, 12, 18, 0.95);
-    border: 1px solid rgba(0, 229, 255, 0.28);
-    border-radius: 6px;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-    font-size: 0.72rem;
-    line-height: 1.5;
-    color: #d7e4ea;
-    white-space: nowrap;
-}
-#chart-tip.hidden { display: none; }
-#chart-tip b { color: #fff; }
-#chart-tip .tip-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-#chart-tip .tip-row i {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    flex-shrink: 0;
-}
-#chart-tip .tip-diff {
-    display: block;
-    margin-top: 2px;
-    padding-top: 2px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    color: #ffd740;
-    font-weight: 700;
-}
-
 /* ---------- Playback ---------- */
 #playback {
     display: flex;

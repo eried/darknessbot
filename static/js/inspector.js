@@ -2142,32 +2142,6 @@
   }
 
   // Floating readout for the wheel-vs-GPS speed differential on hover.
-  const chartTip = document.createElement("div");
-  chartTip.id = "chart-tip";
-  chartTip.className = "hidden";
-  document.body.appendChild(chartTip);
-
-  // Place a floating tooltip near (mx, my), flipping or clamping so it always
-  // stays inside the viewport rather than getting cut off at the edge.
-  function positionTooltip(el, mx, my) {
-    const w = el.offsetWidth, h = el.offsetHeight;
-    const W = window.innerWidth, H = window.innerHeight;
-    const m = 6, gap = 16;
-    let left = mx + gap;
-    let top  = my + gap;
-    if (left + w + m > W) left = mx - w - gap;
-    if (top  + h + m > H) top  = my - h - gap;
-    if (left < m) left = m;
-    if (top  < m) top  = m;
-    el.style.left = left + "px";
-    el.style.top  = top + "px";
-  }
-
-  function sampleFromClientX(canvas, clientX) {
-    const rect = canvas.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return Math.round(ratio * (ts.length - 1));
-  }
   // Time under the cursor, honouring the current zoom window so click /
   // drag positions the playhead exactly where the mouse is even when
   // zoomed. Falls back to the full trip when the section is full width.
@@ -2195,29 +2169,6 @@
     });
     window.addEventListener("mousemove", onWindowMove);
     window.addEventListener("mouseup", onWindowUp);
-
-    // Speed chart only: hovering reveals the wheel-vs-GPS differential at
-    // that sample without disturbing playback.
-    if (c.extra) {
-      c.canvas.addEventListener("mousemove", e => {
-        const s = sampleFromClientX(c.canvas, e.clientX);
-        const row = ts[s];
-        const wheel = row[SPD];
-        const gps = row[c.extra.idx];
-        if (typeof gps !== "number") { chartTip.classList.add("hidden"); return; }
-        const wheelD = UNITS.speed(wheel), gpsD = UNITS.speed(gps);
-        const diff = wheelD - gpsD;
-        const sign = diff >= 0 ? "+" : "−";
-        chartTip.innerHTML =
-          '<b>' + fmtTime(row[SEC] - t0) + '</b>' +
-          '<span class="tip-row"><i style="background:#00e5ff"></i>Wheel speed <b>' + wheelD.toFixed(1) + '</b></span>' +
-          '<span class="tip-row"><i style="background:' + GPS_COLOR + '"></i>GPS speed <b>' + gpsD.toFixed(1) + '</b></span>' +
-          '<span class="tip-diff">Δ ' + sign + Math.abs(diff).toFixed(1) + ' ' + UNITS.speedUnit + '</span>';
-        chartTip.classList.remove("hidden");
-        positionTooltip(chartTip, e.clientX, e.clientY);
-      });
-      c.canvas.addEventListener("mouseleave", () => chartTip.classList.add("hidden"));
-    }
   });
 
   // ---------- Playback state ----------
